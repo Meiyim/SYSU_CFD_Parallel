@@ -1,8 +1,8 @@
-#include "dataProcess.h"
+#include "MPIStructure.h"
 using namespace std;
 
 
-int DataGroup::init(RootProcess& root){ //collcetive
+int DataPartition::init(RootProcess& root){ //collcetive
 
 	MPI_Barrier(comm);
 
@@ -64,7 +64,23 @@ int DataGroup::init(RootProcess& root){ //collcetive
 }
 
 
-int DataGroup::fetchDataFrom(RootProcess& root){ //collective
+int DataPartition::deinit(){
+	printf("datagroup NO. %d died\n",comRank);
+	ierr = VecDestroy(&u);CHKERRQ(ierr);
+	ierr = VecDestroy(&bu);CHKERRQ(ierr);
+	ierr = MatDestroy(&Au);CHKERRQ(ierr);
+	ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
+	delete []Avals;
+	delete []Aposi;
+	delete []gridList;
+	Avals=NULL;
+	gridList=NULL;
+	Aposi=NULL;
+	return 0;
+};
+
+
+int DataPartition::fetchDataFrom(RootProcess& root){ //collective
 	int sourceRank=root.rank;
 
 	int destCount=0;
@@ -86,8 +102,8 @@ int DataGroup::fetchDataFrom(RootProcess& root){ //collective
 	destCount = nLocal;
 	ierr = VecGetArray(bu,&localArray);CHKERRQ(mpiErr); //fetch raw pointer of PetscVector;
 
-	mpiErr = MPI_Scatterv(root.rootuBuffer,sourceCount,offsets,MPI_DOUBLE,
-			localArray,destCount,MPI_DOUBLE,sourceRank,comm); CHECK(mpiErr)
+	//mpiErr = MPI_Scatterv(root.rootuBuffer,sourceCount,offsets,MPI_DOUBLE,
+	//		localArray,destCount,MPI_DOUBLE,sourceRank,comm); CHECK(mpiErr)
 	/*
 	if(comRank==root.rank)
 	for(int i=0;i!=nLocal;++i)	
@@ -97,31 +113,6 @@ int DataGroup::fetchDataFrom(RootProcess& root){ //collective
 	ierr = VecRestoreArray(bu,&localArray);CHKERRQ(mpiErr);
 
  	//*************************fetching Matrix A***************************	
-	
-	sourceCount[0] = gridList[0] * MAX_ROW;
-	for(int i=1;i!=nProcess;++i){
-		sourceCount[i] = gridList[i] * MAX_ROW; // preassume 5 nEntries
-		offsets[i] = offsets[i-1] + sourceCount[i];
-	}
-	destCount = nLocal * MAX_ROW;
-	localArray =  Avals[0];
-
-	mpiErr = MPI_Scatterv(root.rootABuffer,sourceCount,offsets,MPI_DOUBLE,
-			localArray,destCount,MPI_DOUBLE,sourceRank,comm); CHECK(mpiErr)
-	
-	localArray2 = Aposi[0];
-
-	mpiErr = MPI_Scatterv(root.rootAPosiBuffer,sourceCount,offsets,MPI_INT,
-			localArray2,destCount,MPI_INT,sourceRank,comm); CHECK(mpiErr)
-	/*	
-	if(comRank==root.rank){ 
-		for(int i=0;i!=nLocal;++i)
-			for(int j=0;j!=MAX_ROW;++j){
-			Aposi[i][j] = root.rootAPosiBuffer[i*MAX_ROW+j]; // root range from 0~nLocal
-			Avals[i][j] = root.rootABuffer[i*MAX_ROW+j];
-		}
-	}	
-	*/
 
 
 	delete offsets;
@@ -130,13 +121,13 @@ int DataGroup::fetchDataFrom(RootProcess& root){ //collective
 	return 0;
 }
 
-int DataGroup::pushDataTo(RootProcess& root){//collective reverse progress of the fetch function
+int DataPartition::pushDataTo(RootProcess& root){//collective reverse progress of the fetch function
 	MPI_Barrier(comm);
 	printf("begin pushing data to root\n");
 
 	root.allocate(this);
-	pushVectorToRoot(u,root.rootuBuffer,root.rank);
-	pushVectorToRoot(bu,root.rootbuBuffer,root.rank);
+	pushVectorToRoot(u,root.rootArrayBuffer,root.rank);
+	pushVectorToRoot(bu,root.rootArrayBuffer,root.rank);
 
 	printf("complete pushing data to root\n");
 	return 0;
@@ -145,7 +136,7 @@ int DataGroup::pushDataTo(RootProcess& root){//collective reverse progress of th
 //********last 2 parameter only significant at root, sending PETSC vector only!***********
 //			collective call
 //************************************************************************
-int DataGroup::pushVectorToRoot(const Vec& petscVec,double* rootBuffer,int rootRank){  
+int DataPartition::pushVectorToRoot(const Vec& petscVec,double* rootBuffer,int rootRank){
 	double* sendbuf = NULL;
 	int sendcount = 0;
 
@@ -180,7 +171,7 @@ int DataGroup::pushVectorToRoot(const Vec& petscVec,double* rootBuffer,int rootR
 
 }
 
-int DataGroup::buildMatrix(){ //local but should involked in each processes
+int DataPartition::buildMatrix(){ //local but should involked in each processes
 	PetscInt linecounter = 0;
 	int ibegin=0, iend=0;
 	PetscInt iInsert=0;
@@ -211,7 +202,7 @@ int DataGroup::buildMatrix(){ //local but should involked in each processes
 }
 
 
-int DataGroup::solveGMRES(double tol, int maxIter){
+int DataPartition::solveGMRES(double tol, int maxIter){
 	KSPConvergedReason reason;
 	int iters;
 	ierr = MatAssemblyEnd(Au,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);

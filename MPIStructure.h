@@ -4,6 +4,7 @@
 #include <string>
 #include <stdexcept>
 #include <petscksp.h>
+#include "NS/TerminalPrinter.h"
 #ifndef _DATA_PROCESS_H_
 #define _DATA_PROCESS_H_
 
@@ -23,7 +24,7 @@
  *  	a simple pack of u,v,w, etc.
  ******************************************************/
 class RootProcess;
-struct DataGroup{ 
+struct DataPartition{ 
 	Vec u;
 	Vec bu;
 	Mat Au;
@@ -42,7 +43,7 @@ struct DataGroup{
 	int* gridList;  //size of nGlobal , gridList[comRank] == nLocal;
 	double** Avals; //temp for file reading test;
 	int** Aposi; 
-	DataGroup():
+	DataPartition():
 		comm(MPI_COMM_WORLD),
 		nLocal(0),
 		nGlobal(0),
@@ -55,27 +56,19 @@ struct DataGroup{
 		mpiErr = MPI_Comm_rank(comm,&comRank);CHECK(mpiErr)
 		mpiErr = MPI_Comm_size(comm,&comSize);CHECK(mpiErr)
 	}
+	~DataPartition(){}
 	int init(RootProcess& root); // communicate to get local size on each processes , collective call
-	int deinit(){ // a normal deconstructor seems not working in MPI
-		printf("datagroup NO. %d died\n",comRank);
-		ierr = VecDestroy(&u);CHKERRQ(ierr);
-		ierr = VecDestroy(&bu);CHKERRQ(ierr);
-		ierr = MatDestroy(&Au);CHKERRQ(ierr);
-		ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
-		delete []Avals;
-		delete []Aposi;
-		delete []gridList;
-		Avals=NULL;
-		gridList=NULL;
-		Aposi=NULL;
-		return 0;
-	}
-	~DataGroup(){
-	}
+
+	int deinit(); // a normal deconstructor seems not working in MPI
+
 	int fetchDataFrom(RootProcess& root);
+
 	int pushDataTo(RootProcess& root);
+
 	int buildMatrix();
+
 	int solveGMRES(double tol,int maxIter); //return 0 if good solve, retrun 1 if not converge
+
 	int errorCounter;
 	void throwError(const std::string& msg){ // only check error when SHOULD_CHECK_MPI_ERROR is defined
 		char temp[256];
@@ -123,120 +116,66 @@ public:
 };
 
 
-
 /******************************************************
  *  	this class should work only in main processor
+ *  	FUNCITON: read, partition, reorder the mesh in root process
+ *  	FUNCTION: gather data and write output file
+ *  	controls all the I/O
  ******************************************************/
+struct InputElement{// this small structure is only used in this file
+	int type;
+	int tag[2];	//the length is fixed in order to send through MPI
+	int vertex[8];	
+};
+
+struct InputVert{
+	double x,y,z;	
+};
+
 class RootProcess{
 public:
 	int rank; //rank of the root;
 	/*******************this part should only own by ROOT*****/ 
-	int rootNGlobal;
-	double* rootuBuffer;
-	double* rootbuBuffer;
-	double* rootABuffer;
-	int* rootAPosiBuffer;
+	int rootNGlobal;	//size of a global vector
+	int rootNElement;  	//number of cells and bounds element
+	int rootNVert;
+	double* rootArrayBuffer; //used to collect data
+	InputElement* rootElems;   //used when partitioning
+	InputVert* rootVerts;
 	std::vector<int>* rootgridList;
+
+	TerminalPrinter* printer;
 	/*********************************************************/
 	RootProcess(int r):
 		rank(r),
 		rootNGlobal(-1),
-		rootuBuffer(NULL), //NULL if not root
-		rootbuBuffer(NULL),
-		rootABuffer(NULL),
-		rootAPosiBuffer(NULL),
-		rootgridList(NULL)
+		rootNVert(-1),
+		rootArrayBuffer(NULL), //NULL if not root
+		rootElems(NULL),
+		rootVerts(NULL),
+		rootgridList(NULL),
+		printer(NULL)
 	{}
 	~RootProcess(){
 		clean();
+		delete printer;
+		printer=NULL;
 	}
-	void allocate(DataGroup* dg){ //prepare for gather;
-		if(dg->comRank!=rank) return; //only in root
-		rootuBuffer = new double[rootNGlobal];
-		rootbuBuffer = new double[rootNGlobal];
-	}
-	void clean(){
-		delete rootuBuffer;
-		delete rootbuBuffer;
-		delete []rootABuffer;
-		delete []rootAPosiBuffer;
-		rootuBuffer=rootABuffer=NULL;
-		rootAPosiBuffer = NULL;
-	}
+	void init(DataPartition* dg);
+	void allocate(DataPartition* dg); //prepare for gathering
+	void clean(); 			  //clean when partition is done;
 	/***************************************************
 	 * 	 this funciton should involk only in root process
 	 * *************************************************/
-	void read(DataGroup* dg){ 
-		if(dg->comRank!=rank) return; //only in root
-		printf("start reading in root\n");
-		char ctemp[256];
-		int itemp=0;
-		int maxRow = 0;
-		std::ifstream infile("Au.dat");
-		infile>>ctemp>>rootNGlobal;
-		infile>>ctemp>>itemp;
-		infile>>ctemp>>maxRow;
-
-		allocate(dg);
-		rootABuffer = new double[rootNGlobal*MAX_ROW];
-		rootAPosiBuffer = new int[rootNGlobal*MAX_ROW];
-
-		for(int i=0;i!=rootNGlobal*MAX_ROW;++i){
-			rootABuffer[i] = 0.0;
-			rootAPosiBuffer[i] = -1; //-1 means no zeros in mat;
-		}
-		for(int i=0;i!=rootNGlobal;++i){
-			size_t nCol = 0;
-			double dump;
-			double posi;
-			double vals;
-			double bVal;
-			infile>>nCol>>ctemp;
-			for(int j=0;j!=nCol;++j){
-				infile>>posi>>vals;
-				posi--;
-				rootABuffer[i*MAX_ROW+j] = vals;
-				rootAPosiBuffer[i*MAX_ROW+j] = posi;
-			}
-			infile>>ctemp>>bVal>>dump;
-			rootuBuffer[i] = bVal;
-		}
-		infile.close();
-		printf("complete reading in root\n");
-		printf("now the input array is \n");
-	}
+	void read(DataPartition* dg,const string& title);
 	/***************************************************
 	 * 	 this funciton should involk only in root process
 	 * *************************************************/
-	void partition(int N,DataGroup* dg){
-		if(dg->comRank!=rank) return;//only in root
-		printf("start partitioning in root \n");
-		/*****************DATA PARTITION*******************/
-		rootgridList = new std::vector<int>(N,0);
-		int n = rootNGlobal / N;
-		int counter = 0;
-		for(std::vector<int>::iterator it = rootgridList->begin(); it!=rootgridList->end()-1; ++it){
-			*it =  n;
-			counter+=n;
-		}
-		rootgridList->back() = rootNGlobal - counter;
-		/**************************************************/
-		printf("complete partitioning in root \n");
-	}
+	void partition(int N,DataPartition* dg);
 
 	/***************************************************
 	 * 	 writing result to root
 	 * *************************************************/
-	void write(DataGroup* dg){
-		if(dg->comRank!=rank) return; //only in root
-		printf("writing....");
-		std::ofstream outfile("result.dat");
-		char temp[256];
-		for(int i=0;i!=rootNGlobal;++i){
-			sprintf(temp,"%15d\tx:%15e\tb:%15e\n",i+1,rootuBuffer[i],rootbuBuffer[i]);
-			outfile<<temp;
-		}
-		outfile.close();
-	}
+	void write(DataPartition* dg);
 };
 #endif

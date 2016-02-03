@@ -7,6 +7,12 @@
 #include "tools.h"
 #include "terminalPrinter.h"
 
+
+//length of options pool
+#define BOOL_OPTION_NO 4
+#define INT_OPTION_NO  9
+#define DB_OPTION_NO  31
+
 using namespace std;
 
 void NavierStokesSolver::NSSolve( )
@@ -71,10 +77,34 @@ void NavierStokesSolver::NSSolve( )
 	//WriteBackupFile( );
 }
 
-void NavierStokesSolver::InitSolverParam( )
+
+/*******************************************************/
+//	fetch param and mesh Data From root
+//	collective
+/*******************************************************/
+void NavierStokesSolver::InitSolverParam(){
+
+}
+
+
+
+/*******************************************************/
+//	inition of MPI related variables
+//	the inition of Params can be overwritten by Command line option and input parameters
+//	this function is root ONLY
+/*******************************************************/
+void NavierStokesSolver::Init() 
 {
+	if(dataPartition->comRank != root.rank) return; //root ONLY
+
+
 	int i;
 	// default values, can be reset in initflow
+	
+
+	
+
+
 	MaxStep      = 10000 ;
 	MaxOuterStep = 50  ;
 	IfReadBackup = false;
@@ -121,7 +151,7 @@ void NavierStokesSolver::InitSolverParam( )
 	pout= 0.;
 
 	/*
-// specific problem parameters
+	// specific problem parameters
 	// cylinder
 	IfSteady     = true ;  dt=0.1;  TimeScheme=1;
 	SolveEnergy  = false ;
@@ -139,14 +169,14 @@ void NavierStokesSolver::InitSolverParam( )
 
 
 	// init parameters from param.in
+	
 	ReadParamFile( );
 
 	// some parameters check work, e.g. 
 }
 
 
-void NavierStokesSolver::InitFlowField( )
-{
+void NavierStokesSolver::InitFlowField( ){
 	int i;
 
 	if( IfReadBackup ) 
@@ -184,6 +214,7 @@ void NavierStokesSolver::InitFlowField( )
 	for( i=0;i<Nfac;i++ )
 		RUFace[i] = 0.;
 }
+
 
 void NavierStokesSolver::SaveTransientOldData( )
 {
@@ -234,13 +265,15 @@ void NavierStokesSolver::SaveTransientOldData( )
 	}
 }
 
-void OutArray2File(double arr[],int N, ofstream &of)
-{
+
+void OutArray2File(double arr[],int N, ofstream &of){
 	for(int i=0; i<N; i++ ){
 		of<<arr[i]<<"  ";
 		if( i%5==0 ) of<<endl;
 	}
 }
+
+
 void NavierStokesSolver::Output2Tecplot()
 {
 	int i,j;
@@ -418,14 +451,72 @@ void NavierStokesSolver::ReadBackupFile( )
 
 void NavierStokesSolver::OutputMoniter( )
 {
-    
 }
 
+
+/***********************************************/
+// 	CONSTRUCTOR !!!	
+/***********************************************/
+NavierStokesSolver::NavierStokesSolver():
+	outputCounter(0), 
+	printer(new TerminalPrinter),
+	dataPartition(new DataPartition),
+	root(0),			// the root rank is 0
+	bOptions(new bool[BOOL_OPTION_NO]),
+	iOptions(new int[INT_OPTION_NO]),
+	dbOptions(new double[DB_OPTION_NO]),
+	//option sets
+	//bool
+	IfReadBackup		(bOptions[0]),
+	IfSteady		(bOptions[1]),
+	SolveEnergy		(bOptions[2]),
+	SolveSpecies		(bOptions[3]),
+	//int
+	MaxOuterStep		(iOptions[0]),
+	TurModel		(iOptions[1]),
+	DensityModel		(iOptions[2]),
+	limiter			(iOptions[3]),
+	TimeScheme		(iOptions[4]),
+	noutput			(iOptions[5]),
+	outputFormat		(iOptions[6]),
+	Nspecies		(iOptions[7]),
+	cellPressureRef		(iOptions[8]),
+	//double
+	MaxStep			(dbOptions[0]),
+	PressureReference	(dbOptions[1]),
+	gama			(dbOptions[2]),
+	ga1			(dbOptions[3]),
+	cp			(dbOptions[4]),
+	cv			(dbOptions[5]),
+	prl			(dbOptions[6]),
+	prte			(dbOptions[7]),
+	Rcpcv			(dbOptions[8]),
+	TempRef			(dbOptions[9]),
+	total_time		(dbOptions[10]),
+	dt			(dbOptions[11]),
+	uin			(dbOptions[12]),
+	vin			(dbOptions[13]),
+	win			(dbOptions[14]),
+	roin			(dbOptions[15]),
+	Tin			(dbOptions[16]),
+	tein			(dbOptions[17]),
+	edin			(dbOptions[18]),
+	Twall			(dbOptions[19]),
+	pin			(dbOptions[20]),
+	pout			(dbOptions[21]),
+	gravity			(&dbOptions[22]), //gravity components: 22,23,24
+	URF			(&dbOptions[23])  //URF 	23~31
+{}
+
+
+/***********************************************/
+// 	DECONSTRUCTOR
+/***********************************************/
 NavierStokesSolver::~NavierStokesSolver()
 {
 	// output the result before error
-	// Output2Tecplot ( );
-
+	// Output2Tecplot ();
+	
 	cout<<"desturct object and free space"<<endl;
 	// delete variables
    	delete [] Rn;
@@ -451,6 +542,15 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] BPre;
 
 	delete [] RUFace;
+	/*****************THIS PART IS ADDED BY CHENXUYI*******************/
+	delete printer;
+	delete dataPartition;
+
+	delete bOptions;
+	delete iOptions;
+	delete dbOptions;
+	printer = NULL;
+	dataPartition = NULL;
 
 	/*
         V_Destr ( &bs );

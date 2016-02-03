@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include "tools.h"
 #include "terminalPrinter.h"
+#include "../MPIStructure.h"
 
 #define SMALL 1.e-16
+
+
 // geometry, face & cell data
 typedef struct 
 {
@@ -62,48 +65,79 @@ typedef struct
 class NavierStokesSolver
 {
 public:
-	NavierStokesSolver():outputCounter(0),printer(new TerminalPrinter){
-	};
+	NavierStokesSolver();
 	~NavierStokesSolver();
     
 	// this zone is added by CHENXUYI
+	
+	//main data sets;
 	size_t outputCounter;
 	TerminalPrinter* printer;
+	DataPartition* dataPartition;	
+	RootProcess root;
+
+	//option Sets
+	bool* bOptions;
+	int* iOptions;           //handles for integer option pool
+	double* dbOptions;	//handles for double option pool
+
+	/******Length - 4***********/
+	bool& IfReadBackup;
+	bool& IfSteady;
+	bool& SolveEnergy;
+	bool& SolveSpecies;
+
+	/******Length - 9***********/
+	int& MaxOuterStep;
+	int& TurModel;		// TurModel=0: laminar flow; =1: k-epsilon; =2: wait to implement
+	int& DensityModel;       // DensityModel=0: constant density; =1: perfect gas ro=p/(RT); =2: wait to implement
+	int& limiter;
+	int& TimeScheme;   	// TimeScheme=1, Euler (default) ;  =2, BDF 2nd
+	int& noutput;		// output step
+	int& outputFormat;	// 0 for tec; 1 for vtk
+	int& Nspecies;
+	int& cellPressureRef;
+
+	/******Length - 31***********/
+	double& MaxStep;      
+	double& PressureReference; 
+	double& gama;
+	double& ga1;
+	double& cp;
+	double& cv;
+	double& prl;
+	double& prte;
+	double& Rcpcv;
+	double& TempRef;
+	double& total_time;
+	double& dt;
+	double& uin,vin,win,roin,Tin,tein,edin, Twall, pin,pout; //input parameters ,simple implementation
+	double *gravity;// length of 3
+	double *URF; 	//numerical scheme relaxation factor , currently length 8
+	
+
+
 	// above is added by CHENXUYI
+
+
 	char   GridFileName[100];
-    // control param
-    bool   IfSteady,IfReadBackup,  SolveEnergy,SolveSpecies;
-	int    TurModel,DensityModel, TimeScheme;
-	    // TurModel=0: laminar flow; =1: k-epsilon; =2: wait to implement
-		// DensityModel=0: constant density; =1: perfect gas ro=p/(RT); =2: wait to implement
-		// TimeScheme=1, Euler (default) ;  =2, BDF 2nd
-    double gama,ga1, cp,cv,prl,prte,Rcpcv, TempRef, gravity[3];
-	double PressureReference;
-	int    cellPressureRef;
 
-	// --- numerical scheme
-	// relaxation factor
-	double URF[8];
-	int    limiter, MaxOuterStep;  // Maximum step at outer iteration
-
-    // --- time evolution
-	int    step,MaxStep;
-    double dt, cur_time,total_time, Residual[10],ResidualSteady;
+    	// --- time evolution
+	int    step;
+    	double cur_time, Residual[10],ResidualSteady;
 	double initvalues[100];
 
-	// --- post process
-	int    noutput,outputFormat;
 
-    // geometry
-    int          Nvrt, Ncel, Nfac, Nbnd;
-    double       **Vert; // coordinate x,y,z
-    FaceData     *Face;
-    CellData     *Cell;
-    BoundaryData *Bnd;
+    	// geometry, local, build from mesh files
+    	
+	int          Nvrt, Ncel, Nfac, Nbnd; // the local size of the mesh ,build from mesh files
+	double       **Vert; // coordinate x,y,z
+    	FaceData     *Face;
+   	CellData     *Cell;
+    	BoundaryData *Bnd;
 
-    // physical variables at cell center
-	double  *Rn, *Un, *Vn, *Wn,  *Pn, *Tn, *TE, *ED;     // primitive vars
-	int     Nspecies;
+    	// physical variables at cell center, all local
+	double  *Rn, *Un, *Vn, *Wn,  *Pn, *Tn, *TE, *ED;     // primitive vars CXY: this vars is to be replaced by DataPartition
 	double  **RSn;                             // species density
 	double  *VisLam, *VisTur;
 	double  **dPdX, **dUdX,**dVdX,**dWdX, *Apr, **dPhidX;
@@ -111,10 +145,9 @@ public:
 	double  *RUFace;   // RUFace[Nfac]
 	// Boundary faces values
 	double  *BRo,*BU,*BV,*BW,*BPre, *BTem,**BRS, *BTE,*BED;
-	int     rtable[100];
-	double  uin,vin,win,roin,Tin,tein,edin, Twall, pin,pout;
+	int     rtable[100]; 				// preset rtables only used with debugging
    	
-       //CXY: should upgrade to PETSC	
+        //CXY: should upgrade to PETSC	
 	// laspack library work array 
 	//QMatrix As,Ap;                // As for non-sysmmetric, Ap for sysmmetric matrix
 	//Vector  bs,bu,bv,bw,bp, xsol; // right-hand-side vector
@@ -122,6 +155,13 @@ public:
 	// dual time unsteady simulation backup data, p = previous
 	double  *Rnp, *Unp,  *Vnp,  *Wnp,  *Tnp,  *TEp,  *EDp, **RSnp,    // Euler
 		    *Rnp2,*Unp2, *Vnp2, *Wnp2, *Tnp2, *TEp2, *EDp2,**RSnp2;   // BDF 2nd
+
+/********************************************	
+ *	   METHODS
+*******************************************/
+//CXY:
+   void Init();
+   void readAndPartition();
 
 // Geometry
     int  ReadGridFile    ( );
@@ -133,7 +173,7 @@ public:
 
 // Init flow field
     // read solver param, material, post, everything except 
-    void InitSolverParam( );
+    void InitSolverParam();
 	void ReadParamFile   ( );
     void InitFlowField  ( );
 	
@@ -154,7 +194,7 @@ public:
 	// scalar. temperature, other passive variables
 	// void ScalarTranport   ( double *Phi, double *BPhi, double *DiffCoef, double *source );
 	void BuildScalarMatrix(int iSca,double *Phi, double *BPhi, double *DiffCoef, double *source, double *App);
-	     // iSca= 1:temperature; =2: ke; =3: ed;  = 4-larger: species concentration
+	     // iSca= 1:temperature; =2: ke; =3: ed;  = 4-larger: species concentration , CXY: the difference is at bound?
 	void UpdateEnergy     ( );
 	void UpdateSpecies    ( );
 	void UpdateTurKEpsilon( );
@@ -191,12 +231,12 @@ namespace TurKEpsilonVar
 	const double 
 	kappa    = 0.419 ,
 	Cmu      = 0.09  ,
-    Ceps1    = 1.44  ,
+	Ceps1    = 1.44  ,
 	Ceps2    = 1.92  ,
-    LenSc    = 0.1   ,
-    Sigma_k  = 1.0   ,    //! turbulence diff. coef. factors
-    Sigma_e  = 1.3   ,    //! ie. turbulent Prandtl numbers
-    Sigma_s  = 0.9   ;
+	LenSc    = 0.1   ,
+	Sigma_k  = 1.0   ,    //! turbulence diff. coef. factors
+	Sigma_e  = 1.3   ,    //! ie. turbulent Prandtl numbers
+	Sigma_s  = 0.9   ;
 }
 
 extern class NavierStokesSolver NSSolver;

@@ -4,18 +4,29 @@
 #include <math.h>
 #include <stdlib.h>
 #include "navier.h"
+#include "petscsys.h"
 
 void NavierStokesSolver::ReadParamFile( )
 {
 	int i,j, ikey;
 	ifstream fin;
+	char 	  _commandlinetitle[128];
+	std::string*	  title = NULL;
+	PetscBool flg;
 	char      *keyw[20];
 	std::string str;
 
+	PetscOptionsGetString(NULL,"-param",_commandlinetitle,sizeof(_commandlinetitle),&flg);
+	if(flg){
+		title = new string(_commandlinetitle);
+	}else{
+		title = new string("param.in");
+	}	
+
 	for( i=0; i<20; i++ )
 		keyw[i] = new char[30];
-
-	fin.open("param.in");
+	
+	fin.open(title->c_str());
 	if( ! fin.is_open( ) ){
 		cout<<"param file does not exist!"<<endl;
 		exit(0);
@@ -212,4 +223,5 @@ void NavierStokesSolver::ReadParamFile( )
 		SolveEnergy = true;
 
 	fin.close( );
+	delete title;
 }

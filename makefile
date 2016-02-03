@@ -7,7 +7,9 @@ BIN		 = ./bin/
 NSSRC		 = ./NS/
 
 OBJSFILE		 :=$(BIN)main.o 
-OBJSFILE		 +=$(BIN)dataProcess.o 
+OBJSFILE		 +=$(BIN)MPIStruct.o
+OBJSFILE		 +=$(BIN)RootStruct.o
+
 OBJSFILE		 +=$(BIN)navier.o 
 OBJSFILE		 +=$(BIN)readparam.o
 OBJSFILE		 +=$(BIN)tools.o
@@ -16,6 +18,7 @@ OBJSFILE		 +=$(BIN)bc.o
 OBJSFILE		 +=$(BIN)pressure.o
 OBJSFILE		 +=$(BIN)gradient.o
 OBJSFILE		 +=$(BIN)velocity.o
+OBJSFILE		 +=$(BIN)geo.o
 
 MYLINKER = mpicxx ${PCC_LINKER_FLAGS} ${CPPFLAGS}
 
@@ -38,7 +41,10 @@ cycas2:  $(OBJSFILE) chkopts
 $(BIN)main.o: main.cpp 
 	$(PETSC_CXXCOMPILE) -o $@ $^ 
 
-$(BIN)dataProcess.o: dataProcess.cpp
+$(BIN)MPIStruct.o: MPIStructure.cpp
+	$(PETSC_CXXCOMPILE) -o $@ $^ 
+
+$(BIN)RootStruct.o: RootStructure.cpp
 	$(PETSC_CXXCOMPILE) -o $@ $^ 
 
 $(BIN)navier.o: $(NSSRC)navier.cpp
@@ -63,6 +69,9 @@ $(BIN)gradient.o: $(NSSRC)navier_gradient.cpp
 	$(PETSC_CXXCOMPILE) -o $@ $^ 
 
 $(BIN)velocity.o: $(NSSRC)navier_velocity.cpp
+	$(PETSC_CXXCOMPILE) -o $@ $^ 
+
+$(BIN)geo.o: $(NSSRC)geometry.cpp
 	$(PETSC_CXXCOMPILE) -o $@ $^ 
 
 

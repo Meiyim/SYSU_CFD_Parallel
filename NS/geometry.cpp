@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <math.h>
+#include <stdexcept>
 #include <cstdlib>
 #include <fstream>
 #include <cassert>
@@ -9,6 +10,27 @@
 
 using namespace std;
 
+/*******************************************************/
+//	read msh file, call Metis to partition, find boundary and connectivity of partitions
+//	1. read msh file
+//	2. partition with Metis, reorder cell
+//	3. reorder vertex , update vertex index in cell
+//	4. reoerder cell, align boundary cell	
+//
+//	root ONLY
+/*******************************************************/
+
+void NavierStokesSolver::readAndPartition(){
+	root.init(dataPartition);
+	root.read(dataPartition,string(GridFileName));
+	//root.partition
+	//root.reorder
+}
+
+
+/*******************************************************/
+//	original msh reading function
+/*******************************************************/
 int NavierStokesSolver::ReadGridFile( )
 {
     string   line;
@@ -18,8 +40,7 @@ int NavierStokesSolver::ReadGridFile( )
 		// bndType[10]={4,2,3,1,4,4,0}; // bndType change the tag in gmsh file to navier_bc types ( 4 types currently )
 
 	file.open (GridFileName);
-    if( ! file.is_open() )
-	{
+    	if( ! file.is_open() ){
 		cout<<"Grid file "<<GridFileName<<" cannot be opened. It does not exist or is busy!"<<endl;
 		exit(0);
 	}
@@ -632,12 +653,12 @@ int NavierStokesSolver::CheckAndAllocate()
 
 	
 	// laspack working array
-	V_Constr(&bs,   "rightU",    Ncel, Normal, True);
-	V_Constr(&bu,   "rightU",    Ncel, Normal, True);
-	V_Constr(&bv,   "rightU",    Ncel, Normal, True);
-	V_Constr(&bw,   "rightU",    Ncel, Normal, True);
-	V_Constr(&bp,   "rightU",    Ncel, Normal, True);
-	V_Constr(&xsol, "rightU",    Ncel, Normal, True);
+	//V_Constr(&bs,   "rightU",    Ncel, Normal, True);
+	//V_Constr(&bu,   "rightU",    Ncel, Normal, True);
+	//V_Constr(&bv,   "rightU",    Ncel, Normal, True);
+	//V_Constr(&bw,   "rightU",    Ncel, Normal, True);
+	//V_Constr(&bp,   "rightU",    Ncel, Normal, True);
+	//V_Constr(&xsol, "rightU",    Ncel, Normal, True);
 
 	cur_time = 0.;
 	return 1;

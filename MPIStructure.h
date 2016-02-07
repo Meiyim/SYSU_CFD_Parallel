@@ -123,6 +123,7 @@ public:
  *  	controls all the I/O
  ******************************************************/
 struct InputElement{// this small structure is only used in this file
+	int tag; //tag auxilary to sorting, reordering ,making boundary, etc;
 	int type;
 	int tag[2];	//the length is fixed in order to send through MPI
 	int vertex[8];	
@@ -138,7 +139,7 @@ public:
 	/*******************this part should only own by ROOT*****/ 
 	int rootNGlobal;	//size of a global vector
 	int rootNElement;  	//number of cells and bounds element
-	int rootNVert;
+	int rootNVert;		// upperbound of int on a 32 bit machine is 2 billion, which is enough
 	double* rootArrayBuffer; //used to collect data
 	InputElement* rootElems;   //used when partitioning
 	InputVert* rootVerts;
@@ -161,15 +162,15 @@ public:
 		delete printer;
 		printer=NULL;
 	}
-	void init(DataPartition* dg);
+	void init(DataPartition* dg); //init for patitioning
 	void allocate(DataPartition* dg); //prepare for gathering
 	void clean(); 			  //clean when partition is done;
 	/***************************************************
-	 * 	 this funciton should involk only in root process
+	 * 	 root Only
 	 * *************************************************/
 	void read(DataPartition* dg,const string& title);
 	/***************************************************
-	 * 	 this funciton should involk only in root process
+	 * 	 root Only
 	 * *************************************************/
 	void partition(int N,DataPartition* dg);
 

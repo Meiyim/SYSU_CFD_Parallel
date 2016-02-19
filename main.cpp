@@ -25,8 +25,9 @@ int main(int argc, char* argv[])try{
 	nsSolver->Init();	     	//root only : read param.in and check
 	nsSolver->readAndPartition();	//root only : read msh and partition
 
-	nsSolver->InitSolverParam(); 	//collective fetch param from root
-	nsSolver->ReadGridFile();    	//read& buid CellData , BoundaryData
+	//nsSolver->InitSolverParam(); 	//collective fetch param from root
+	//nsSolver->ReadGridFile();    	//collective fetch geometry from root, 
+					//and buid CellData , BoundaryData like it is in the serial version
 
 	ierr = PetscFinalize(); CHKERRQ(ierr);
 

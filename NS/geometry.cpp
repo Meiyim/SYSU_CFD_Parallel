@@ -13,23 +13,25 @@ using namespace std;
 /*******************************************************/
 //	read msh file, call Metis to partition, find boundary and connectivity of partitions
 //	1. read msh file
-//	2. partition with Metis, reorder cell
-//	3. reorder vertex , update vertex index in cell
-//	4. reoerder cell, align boundary cell	
-//
+//	2. partition with Metis
+//	3. reorder cell
+//	4. create nodes pool and interface info
+//	
 //	root ONLY
 /*******************************************************/
 
 void NavierStokesSolver::readAndPartition(){
 	root.init(dataPartition);
 	root.read(dataPartition,string(GridFileName));
-	//root.partition
+	root.partition(dataPartition, dataPartition->comSize);
+
 	//root.reorder
 }
 
 
 /*******************************************************/
 //	original msh reading function
+//	local
 /*******************************************************/
 int NavierStokesSolver::ReadGridFile( )
 {

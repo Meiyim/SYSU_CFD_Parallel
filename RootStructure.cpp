@@ -3,11 +3,13 @@
 #include"metis.h"
 #include"MPIStructure.h"
 
+#define NCOMMON 3
 using namespace std;
 void RootProcess::init(DataPartition* dg){
 	 //only root may init
 	if(dg->comRank!=rank) return;
 	printer = new TerminalPrinter;
+	//other initiation stuff 
 }
 
 
@@ -20,8 +22,10 @@ void RootProcess::allocate(DataPartition* dg){ //prepare for gather;
 void RootProcess::clean(){
 	delete rootElems;
 	delete rootVerts;
+	delete nodesPool;
 	rootElems = NULL;
 	rootVerts = NULL;
+	nodesPool = NULL;
 }
 
 
@@ -57,7 +61,6 @@ void RootProcess::read(DataPartition* dg,const string& title){
 		      >>rootVerts[i].x
 		      >>rootVerts[i].y
 		      >>rootVerts[i].z;
-		rootVerts[i].tag = i;// tag is the original order of the vertex
 	}
 
 	infile>>line;
@@ -76,7 +79,6 @@ void RootProcess::read(DataPartition* dg,const string& title){
 		for(int j=0;j!=ntag;++j)
 			infile>>rootElems[i].tag[j];	
 		infile>>ntag;
-		nVertSum += nv; //record the sum of vertex in all element
 		for(int j=0 ; j != numberOfNodesInElementTypeOf[rootElems[i].type]; ++j)
 			infile>>rootElems[i].vertex[j];	//read all the vertex of the msh
 	}
@@ -95,6 +97,7 @@ struct _SortAccordingToPart{
 		return partid[i]<partid[j] ? true : false ;
 	}
 };
+/*
 struct _SortVertAccordingToPart{
 	InputVert* head;
 	idx_t* partid;
@@ -105,19 +108,20 @@ struct _SortVertAccordingToPart{
 	}
 };
 struct _AssigntoOriginIdx{
-	int*  /*stop here, restart tomorrow*/
+	int*  //stop here, restart tomorrow
 	int* originVertOrder;
 	void operator()(InputVert& vert){
-		oriv[vert.tag] = vert.tag;
+		originVertOrder[vert.tag] = vert.tag;
 	}
 };
-void RootProcess::partition(int N,DataPartition* dg){
+*/
+void RootProcess::partition(DataPartition* dg, int N){
 	if(dg->comRank!=rank) return;//only in root
 
 	printf("start partitioning in root \n");
 
 	/*****************DATA PARTITION*******************
-	 * 	data partition with METIS
+	 * 	phase2 :data partition with METIS
 	***************************************************/
 	int numberOfNodesInElementTypeOf[8] = {
 		0,2,3,4,4,8,6,5
@@ -138,21 +142,29 @@ void RootProcess::partition(int N,DataPartition* dg){
 	for(int i=0;i!=rootNElement;++i){
 		nv = numberOfNodesInElementTypeOf[rootElems[i].type];
 		for(int j=0;j!=nv;++j)
-			eind[eptr[i]+j] =  rootElems[i].vertex[j]
+			eind[eptr[i]+j] =  rootElems[i].vertex[j];
 		eptr[i+1]=eptr[i]+nv;
 	}
 	
 	//call metis
-	int ret = METIS_PartMeshDual(rootNElement,rootNVert,eptr,eind,
+	idx_t _ncommon = NCOMMON;
+	idx_t _ne = rootNElement;
+	idx_t _nv = rootNVert;
+	idx_t _np = N;
+	int ret = METIS_PartMeshDual(&_ne,&_nv,eptr,eind,
 			NULL,NULL,		/*no weight edge*/
-			3/*ncommon*/,	N/*npart*/,
-			NULL,NULL,		/*now wighit partition*/
+			&_ncommon,		/*ncommon*/
+			&_np,			/*npart*/
+			NULL,NULL,		/*no weight partition*/
 			&edgecut, epart, npart);
 
 	if(ret!=METIS_OK)throw runtime_error("METIS Partition error!\n");
-	printf("METIS return successfuly, partitioned into%d part\n",N);
+	printf("METIS return successfuly, partitioned into%d part, totally edgecut%lld \n",N,edgecut);
+
+	delete []eptr;delete eind; eptr=NULL;eptr=NULL;
+
 	/*****************DATA PARTITION*******************
-	 * 	reorder elements according to epart;
+	 * 	phase3 :reorder elements according to epart;
 	***************************************************/
 
 	for(int i=0;i!=N;++i)
@@ -163,11 +175,10 @@ void RootProcess::partition(int N,DataPartition* dg){
 	op.partid = epart;
 	std::sort(rootElems,rootElems + rootNElement, op); //sort according to npart;
 
-	
-
 	/*****************DATA PARTITION*******************
-	 * 	reorder vertex according to npart, update index in rootElems !!
+	 * 	phase4 :create nodes pool and interfaces info
 	***************************************************/
+	/*
 	_SortVertAccordingToPart op2;
 	op2.head = rootVerts;
 	op.partid = npart;
@@ -178,11 +189,43 @@ void RootProcess::partition(int N,DataPartition* dg){
 	op3.originVertOrder = originVertOrder;
 	std::for_each(rootVerts,rootVerts+rootNVert,op3);	
 	delete originVertOrder; originVertOrder = NULL;
+	*/
 
+	nodesPool = new map<int,unordered_set<int> >[N]; // one for each partition,<partID,nodesInthisParts>
+	//interfacesInfo = new map<int,int>[N]; 			//one for each partition,<partID,width>
+	int iE = 0;	
+	for(int i=0;i!=N;++i){ //each part
+		int nElementsPerPart = rootgridList->at(i);
+		//nodesPool[i].reserve(nElementsPerNode*4);
+		nodesPool[i][i].reserve(nElementsPerPart*4);
+		for(int j=0;j!=nElementsPerPart;++j){ //each elements
+			InputElement& _thisEle = rootElems[iE++];
+			nv = numberOfNodesInElementTypeOf[_thisEle.type]; 
+			for(int k=0;k!=nv;++k){	     //each vertex
+				int _thisVert = _thisEle.vertex[k];
+				int _partid = npart[_thisVert];
 
+				nodesPool[i][_partid].insert(  _thisVert ); //if vert exists, nothing will do
 
-	delete []etpr,eind,epart,npart;
+				if(_partid != i){ //if is a boundary
+					//interfacesInfo[i][_partid]++; //count the number of body & boundaries
+					//interfacesInfo[_partid][i]++; // update the part info on the other side of the boundary	
+					nodesPool[_partid][_partid].erase(_thisVert); //correct the nodesPool of the partition on the
+					nodesPool[_partid][i].insert( _thisVert );    // other side of the boundary
+				}
+			}	
+		}
+	}
+	
+	delete []epart;delete npart;
 	printf("complete partitioning in root \n");
+	printf("report partition result:\n");
+	for(int i=0;i!=N;++i){
+		printf("part: %d, elements: %d, interfaces:%lu",i,rootgridList->at(i),nodesPool[i].size());
+		for(auto it = nodesPool[i].begin();it!=nodesPool[i].end();++it){
+			printf("\t interfaces%d: %lu",it->first,it->second.size());	
+		}
+	}
 
 }
 
@@ -191,7 +234,7 @@ void RootProcess::write(DataPartition* dg){
 	if(dg->comRank!=rank) return; //only in root
 	printf("writing....");
 	std::ofstream outfile("result.dat");
-	char temp[256];
+	//char temp[256];
 	for(int i=0;i!=rootNGlobal;++i){
 		//sprintf(temp,"%15d\tx:%15e\tb:%15e\n",i+1,rootuBuffer[i],rootbuBuffer[i]);
 		//outfile<<temp;

@@ -6,10 +6,15 @@ FPPFLAGS         =
 BIN		 = ./bin/
 NSSRC		 = ./NS/
 
+#-Llibpath -llibname
+#libname is the lib filename without prefix "lib" .e.g 
+#libmylib.a --> -lmylib
+METIS_LIB	 = -lmetis
+
 OBJSFILE		 :=$(BIN)main.o 
 OBJSFILE		 +=$(BIN)MPIStruct.o
 OBJSFILE		 +=$(BIN)RootStruct.o
-
+# ORIGINAL CYCAS 2 OBJECTS
 OBJSFILE		 +=$(BIN)navier.o 
 OBJSFILE		 +=$(BIN)readparam.o
 OBJSFILE		 +=$(BIN)tools.o
@@ -36,7 +41,7 @@ cl:
 	${RM} $(BIN)*.o
 
 cycas2:  $(OBJSFILE) chkopts
-	-${MYLINKER} -o $@ $(OBJSFILE)  ${PETSC_LIB}
+	-${MYLINKER} -o $@ $(OBJSFILE)  ${PETSC_LIB} $(METIS_LIB)
 
 $(BIN)main.o: main.cpp 
 	$(PETSC_CXXCOMPILE) -o $@ $^ 

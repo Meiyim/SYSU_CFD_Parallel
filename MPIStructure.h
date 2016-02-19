@@ -1,6 +1,8 @@
 #include <fstream>
 #include <stdio.h>
 #include <vector>
+#include <map>
+#include <unordered_set>
 #include <string>
 #include <stdexcept>
 #include <petscksp.h>
@@ -41,16 +43,14 @@ struct DataPartition{
 	int nGlobal;
 	int nProcess;
 	int* gridList;  //size of nGlobal , gridList[comRank] == nLocal;
-	double** Avals; //temp for file reading test;
-	int** Aposi; 
+	//double** Avals; //temp for file reading test;
+	//int** Aposi; 
 	DataPartition():
 		comm(MPI_COMM_WORLD),
 		nLocal(0),
 		nGlobal(0),
 		nProcess(0),
 		gridList(NULL),
-		Avals(NULL), //preassume the size
-		Aposi(NULL),
 		errorCounter(0)
 	{
 		mpiErr = MPI_Comm_rank(comm,&comRank);CHECK(mpiErr)
@@ -123,7 +123,6 @@ public:
  *  	controls all the I/O
  ******************************************************/
 struct InputElement{// this small structure is only used in this file
-	int tag; //tag auxilary to sorting, reordering ,making boundary, etc;
 	int type;
 	int tag[2];	//the length is fixed in order to send through MPI
 	int vertex[8];	
@@ -136,15 +135,18 @@ struct InputVert{
 class RootProcess{
 public:
 	int rank; //rank of the root;
-	/*******************this part should only own by ROOT*****/ 
-	int rootNGlobal;	//size of a global vector
-	int rootNElement;  	//number of cells and bounds element
-	int rootNVert;		// upperbound of int on a 32 bit machine is 2 billion, which is enough
-	double* rootArrayBuffer; //used to collect data
-	InputElement* rootElems;   //used when partitioning
-	InputVert* rootVerts;
-	std::vector<int>* rootgridList;
+	/*******************owned by ROOT*****/ 
+	size_t rootNGlobal;		//size of a global vector
+	size_t rootNElement;  		//number of cells and bounds element
+	size_t rootNVert;			// upperbound of int on a 32 bit machine is 2 billion, which is enough
+	double* rootArrayBuffer; 	//used to collect data
 
+	/***************used when partitioning*************************/
+	InputElement* rootElems;   	
+	InputVert* rootVerts; 		
+	std::map<int, unordered_set<int> >* nodesPool ; //one for each partition, <partID,nodesPool>
+
+	std::vector<int>* rootgridList;
 	TerminalPrinter* printer;
 	/*********************************************************/
 	RootProcess(int r):
@@ -154,6 +156,7 @@ public:
 		rootArrayBuffer(NULL), //NULL if not root
 		rootElems(NULL),
 		rootVerts(NULL),
+		nodesPool(NULL),
 		rootgridList(NULL),
 		printer(NULL)
 	{}
@@ -162,17 +165,21 @@ public:
 		delete printer;
 		printer=NULL;
 	}
-	void init(DataPartition* dg); //init for patitioning
-	void allocate(DataPartition* dg); //prepare for gathering
-	void clean(); 			  //clean when partition is done;
+
+	void init(DataPartition* dg); 		//init for patitioning
+
+	void allocate(DataPartition* dg); 	//prepare for gathering
+
+	void clean(); 			  	//clean when partition is done;
 	/***************************************************
 	 * 	 root Only
 	 * *************************************************/
 	void read(DataPartition* dg,const string& title);
 	/***************************************************
 	 * 	 root Only
+	 * 	 the last two term is the input parameter and should be NULL;
 	 * *************************************************/
-	void partition(int N,DataPartition* dg);
+	void partition(DataPartition* dg, int N);
 
 	/***************************************************
 	 * 	 writing result to root

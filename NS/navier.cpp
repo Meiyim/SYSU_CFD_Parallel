@@ -11,7 +11,7 @@
 //length of options pool
 #define BOOL_OPTION_NO 4
 #define INT_OPTION_NO  9
-#define DB_OPTION_NO  31
+#define DB_OPTION_NO  33
 
 using namespace std;
 
@@ -100,11 +100,8 @@ void NavierStokesSolver::Init()
 
 	int i;
 	// default values, can be reset in initflow
-	
-
-	
-
-
+	root.printer = new TerminalPrinter;
+	printer->printStarter();
 	MaxStep      = 10000 ;
 	MaxOuterStep = 50  ;
 	IfReadBackup = false;
@@ -459,7 +456,7 @@ void NavierStokesSolver::OutputMoniter( )
 /***********************************************/
 NavierStokesSolver::NavierStokesSolver():
 	outputCounter(0), 
-	printer(new TerminalPrinter),
+	printer(NULL), //define in init
 	dataPartition(new DataPartition),
 	root(0),			// the root rank is 0
 	bOptions(new bool[BOOL_OPTION_NO]),
@@ -504,9 +501,26 @@ NavierStokesSolver::NavierStokesSolver():
 	Twall			(dbOptions[19]),
 	pin			(dbOptions[20]),
 	pout			(dbOptions[21]),
-	gravity			(&dbOptions[22]), //gravity components: 22,23,24
-	URF			(&dbOptions[23])  //URF 	23~31
-{}
+	gravity		(dbOptions+22), //gravity components: 22,23,24
+	URF			(dbOptions+25),  //URF 	25~32 //length 8
+
+	//all put NULL to avoid wild pointer
+	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL), 
+	Rn(NULL),Un(NULL),Vn(NULL),Wn(NULL),Pn(NULL),Tn(NULL),TE(NULL),ED(NULL),
+	RSn(NULL),
+
+	VisLam(NULL),VisTur(NULL),
+
+	dPdX(NULL),dUdX(NULL),dVdX(NULL),dWdX(NULL),Apr(NULL),dPhidX(NULL),
+
+	RUFace(NULL),
+
+	BRo(NULL),BU(NULL),BV(NULL),BW(NULL),BPre(NULL),BTem(NULL),BRS(NULL),BTE(NULL),BED(NULL),
+
+	Rnp(NULL),Unp(NULL),Vnp(NULL),Wnp(NULL),Tnp(NULL),TEp(NULL),EDp(NULL),RSnp(NULL),
+	Rnp2(NULL),Unp2(NULL),Vnp2(NULL),Wnp2(NULL),Tnp2(NULL),TEp2(NULL),EDp2(NULL),RSnp2(NULL)
+{
+}
 
 
 /***********************************************/
@@ -551,7 +565,7 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete dbOptions;
 	printer = NULL;
 	dataPartition = NULL;
-
+	delete printer;
 	/*
         V_Destr ( &bs );
 	V_Destr ( &bu );

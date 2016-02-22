@@ -8,7 +8,7 @@ using namespace std;
 void RootProcess::init(DataPartition* dg){
 	 //only root may init
 	if(dg->comRank!=rank) return;
-	printer = new TerminalPrinter;
+	//printer = new TerminalPrinter;
 	//other initiation stuff 
 }
 
@@ -73,14 +73,16 @@ void RootProcess::read(DataPartition* dg,const string& title){
 	rootElems = new InputElement[rootNElement];
 
 	int ntag=0;	
+	int _v=0;
 	for(int i=0;i!=rootNElement;++i){
 		infile>>itemp>>rootElems[i].type;
 		infile>>ntag;
 		for(int j=0;j!=ntag;++j)
 			infile>>rootElems[i].tag[j];	
-		infile>>ntag;
-		for(int j=0 ; j != numberOfNodesInElementTypeOf[rootElems[i].type]; ++j)
-			infile>>rootElems[i].vertex[j];	//read all the vertex of the msh
+		for(int j=0 ; j != numberOfNodesInElementTypeOf[rootElems[i].type]; ++j){
+			infile>>_v;
+			rootElems[i].vertex[j] = _v-1;	//read all the vertex of the msh
+		}
 	}
 
 	infile.close();
@@ -89,12 +91,8 @@ void RootProcess::read(DataPartition* dg,const string& title){
 
 /***************functor object used by partition routine*****************/
 struct _SortAccordingToPart{
-	InputElement* head;
-	idx_t* partid;
 	bool operator()(InputElement& lhs,InputElement& rhs){
-		int i=&lhs - head;
-		int j=&rhs - head;
-		return partid[i]<partid[j] ? true : false ;
+		return lhs.pid<rhs.pid ? true : false;
 	}
 };
 /*
@@ -132,8 +130,8 @@ void RootProcess::partition(DataPartition* dg, int N){
 		nv += numberOfNodesInElementTypeOf[rootElems[i].type];	
 
 	rootgridList = new std::vector<int>(N,0);
-	idx_t* eptr = new idx_t[rootNElement+1];
-	idx_t* eind = new idx_t[nv];
+	idx_t* eptr  = new idx_t[rootNElement+1];
+	idx_t* eind  = new idx_t[nv];
 	idx_t* epart = new idx_t[rootNElement]; //return value of the metis routine
 	idx_t* npart = new idx_t[rootNVert];
 	idx_t edgecut;
@@ -159,9 +157,13 @@ void RootProcess::partition(DataPartition* dg, int N){
 			&edgecut, epart, npart);
 
 	if(ret!=METIS_OK)throw runtime_error("METIS Partition error!\n");
-	printf("METIS return successfuly, partitioned into%d part, totally edgecut%lld \n",N,edgecut);
-
+	printf("METIS return successfuly, partitioned into %d part, totally edgecut%lld \n",N,edgecut);
+	//for(int i=0;i!=rootNVert;++i)
+	//	PetscPrintf(MPI_COMM_WORLD,"!!!!!!!!!!!!!!!!npart: %d , %lld\n",i,npart[i]);
 	delete []eptr;delete eind; eptr=NULL;eptr=NULL;
+
+	for(int i=0;i!=rootNElement;++i)
+		rootElems[i].pid = epart[i];
 
 	/*****************DATA PARTITION*******************
 	 * 	phase3 :reorder elements according to epart;
@@ -169,34 +171,25 @@ void RootProcess::partition(DataPartition* dg, int N){
 
 	for(int i=0;i!=N;++i)
 		rootgridList->at(i) = std::count(epart,epart + rootNElement,i);
-
+	delete []epart, epart = NULL;
 	_SortAccordingToPart op;
-	op.head = rootElems;
-	op.partid = epart;
 	std::sort(rootElems,rootElems + rootNElement, op); //sort according to npart;
+
+
+	//for(int i=0;i!=rootNElement;++i)
+	//	PetscPrintf(MPI_COMM_WORLD,"rootElems: pid %d, type %d\n",rootElems[i].pid,rootElems[i].type);
+	
 
 	/*****************DATA PARTITION*******************
 	 * 	phase4 :create nodes pool and interfaces info
 	***************************************************/
-	/*
-	_SortVertAccordingToPart op2;
-	op2.head = rootVerts;
-	op.partid = npart;
-	std::sort(rootVerts,rootVerts + rootNElement, op2);
-
-	int* originVertOrder = new int[rootNVert];
-	_AssigntoOriginIdx op3;	
-	op3.originVertOrder = originVertOrder;
-	std::for_each(rootVerts,rootVerts+rootNVert,op3);	
-	delete originVertOrder; originVertOrder = NULL;
-	*/
 
 	nodesPool = new map<int,unordered_set<int> >[N]; // one for each partition,<partID,nodesInthisParts>
 	//interfacesInfo = new map<int,int>[N]; 			//one for each partition,<partID,width>
 	int iE = 0;	
 	for(int i=0;i!=N;++i){ //each part
 		int nElementsPerPart = rootgridList->at(i);
-		//nodesPool[i].reserve(nElementsPerNode*4);
+
 		nodesPool[i][i].reserve(nElementsPerPart*4);
 		for(int j=0;j!=nElementsPerPart;++j){ //each elements
 			InputElement& _thisEle = rootElems[iE++];
@@ -221,9 +214,9 @@ void RootProcess::partition(DataPartition* dg, int N){
 	printf("complete partitioning in root \n");
 	printf("report partition result:\n");
 	for(int i=0;i!=N;++i){
-		printf("part: %d, elements: %d, interfaces:%lu",i,rootgridList->at(i),nodesPool[i].size());
+		printf("part: %d, elements: %d, interfaces:%lu\n",i,rootgridList->at(i),nodesPool[i].size());
 		for(auto it = nodesPool[i].begin();it!=nodesPool[i].end();++it){
-			printf("\t interfaces%d: %lu",it->first,it->second.size());	
+			printf("\t pid: %d: %lu\n",it->first,it->second.size());	
 		}
 	}
 

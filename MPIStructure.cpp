@@ -51,15 +51,7 @@ int DataPartition::init(RootProcess& root){ //collcetive
 	ierr = KSPCreate(comm,&ksp);
 
 	printf("datagrounp NO. %d init complete, dimension %d x %d = %d\n",comRank,nLocal,nProcess,nGlobal);
-	//-----test purpose
-	Avals = new double*[nLocal];
-	Aposi = new int*[nLocal];
-	Avals[0]  = new double[nLocal*MAX_ROW];
-	Aposi[0]  = new int[nLocal*MAX_ROW];
-	for(int i=1;i!=nLocal;++i){
-		Avals[i] = &Avals[0][i*MAX_ROW];
-		Aposi[i] = &Aposi[0][i*MAX_ROW];
-	}
+
 	return 0;
 }
 
@@ -70,12 +62,8 @@ int DataPartition::deinit(){
 	ierr = VecDestroy(&bu);CHKERRQ(ierr);
 	ierr = MatDestroy(&Au);CHKERRQ(ierr);
 	ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
-	delete []Avals;
-	delete []Aposi;
 	delete []gridList;
-	Avals=NULL;
 	gridList=NULL;
-	Aposi=NULL;
 	return 0;
 };
 
@@ -87,7 +75,6 @@ int DataPartition::fetchDataFrom(RootProcess& root){ //collective
 	int* sourceCount = new int[nProcess];
 	int* offsets = new int[nProcess];
 	double* localArray = NULL; 
-	int* localArray2 = NULL;
 
 	MPI_Barrier(comm);
 
@@ -182,9 +169,7 @@ int DataPartition::buildMatrix(){ //local but should involked in each processes
 	for(int i=0;i!=nLocal;++i){ //this loop should be optimized with local parallel, tbb , openMP, etc.
 		linecounter = 0;
 		for(int j=0;j!=MAX_ROW;++j){
-			if(Aposi[i][j]==-1) break;
-			jInsert[j] = Aposi[i][j]; //j is always global range!
-			vInsert[j] = Avals[i][j];
+			//matrix building!
 			linecounter++;
 		}
 		iInsert = ibegin + i;

@@ -8,7 +8,6 @@
 
 #undef __FUNCT__
 #define __FUNCT__
-static char help[256] = "CYCAS 2 Parallel Power by PETSC";
 #include<stdio.h>
 #include<iostream>
 #include<stdexcept>
@@ -18,20 +17,23 @@ static char help[256] = "CYCAS 2 Parallel Power by PETSC";
 int main(int argc, char* argv[])try{
 	PetscErrorCode ierr;
 
-	ierr = PetscInitialize(&argc,&argv,(char*)0,help); CHKERRQ(ierr);
+	ierr = PetscInitialize(&argc,&argv,NULL,NULL); CHKERRQ(ierr);
 
 	NavierStokesSolver* nsSolver = new NavierStokesSolver;
-	
+	//PetscPrintf(MPI_COMM_WORLD,"init\n");	
 	nsSolver->Init();	     	//root only : read param.in and check
+
+	//PetscPrintf(MPI_COMM_WORLD,"init complete\n");	
 	nsSolver->readAndPartition();	//root only : read msh and partition
 
+	//PetscPrintf(MPI_COMM_WORLD,"read\n");
 	//nsSolver->InitSolverParam(); 	//collective fetch param from root
 	//nsSolver->ReadGridFile();    	//collective fetch geometry from root, 
 					//and buid CellData , BoundaryData like it is in the serial version
-
+	//PetscPrintf(MPI_COMM_WORLD,"done\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	getchar();
 	ierr = PetscFinalize(); CHKERRQ(ierr);
-
-	delete nsSolver;
 	return 0;
 
 
@@ -40,12 +42,14 @@ int main(int argc, char* argv[])try{
 	std::cout<<err.what();
 	printf("!!!!!!!!!!!!!!!!System will Abort!!!!!!!!!!!!!!!!!\n");
 	getchar();
+	MPI_Abort(MPI_COMM_WORLD,0);
 	PetscFinalize();
 }catch(std::runtime_error& err){
 	printf("!!!!!!!!!!!!!!!!run time error occured!!!!!!!!!!!!!!!!!\n");
 	std::cout<<err.what();
 	printf("!!!!!!!!!!!!!!!!System will Abort!!!!!!!!!!!!!!!!!\n");
 	getchar();
+	MPI_Abort(MPI_COMM_WORLD,0);
 	PetscFinalize();
 }
 

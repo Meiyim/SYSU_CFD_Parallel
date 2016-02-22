@@ -24,6 +24,7 @@ void NavierStokesSolver::readAndPartition(){
 	root.init(dataPartition);
 	root.read(dataPartition,string(GridFileName));
 	root.partition(dataPartition, dataPartition->comSize);
+	PetscPrintf(MPI_COMM_WORLD,"done\n");
 
 	//root.reorder
 }
@@ -43,8 +44,9 @@ int NavierStokesSolver::ReadGridFile( )
 
 	file.open (GridFileName);
     	if( ! file.is_open() ){
-		cout<<"Grid file "<<GridFileName<<" cannot be opened. It does not exist or is busy!"<<endl;
-		exit(0);
+		char temp[256];
+		sprintf(temp,"Grid file: %s cannot be opened\n It doesnot exist or is busy\n",GridFileName);
+		throw std::logic_error(temp);
 	}
     // Skip some lines
     file >> line;

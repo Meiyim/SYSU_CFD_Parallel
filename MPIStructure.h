@@ -56,7 +56,9 @@ struct DataPartition{
 		mpiErr = MPI_Comm_rank(comm,&comRank);CHECK(mpiErr)
 		mpiErr = MPI_Comm_size(comm,&comSize);CHECK(mpiErr)
 	}
+	
 	~DataPartition(){}
+
 	int init(RootProcess& root); // communicate to get local size on each processes , collective call
 
 	int deinit(); // a normal deconstructor seems not working in MPI
@@ -124,6 +126,7 @@ public:
  ******************************************************/
 struct InputElement{// this small structure is only used in this file
 	int type;
+	int pid;
 	int tag[2];	//the length is fixed in order to send through MPI
 	int vertex[8];	
 };

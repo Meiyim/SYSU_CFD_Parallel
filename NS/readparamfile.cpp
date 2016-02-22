@@ -31,9 +31,11 @@ void NavierStokesSolver::ReadParamFile( )
 		cout<<"param file does not exist!"<<endl;
 		exit(0);
 	}
+	int _linecounter=0;
 	while( getline( fin,str ) )
 	{
-		printf("reading line%s\n",str.c_str()); //changed by CHENXUYI
+		_linecounter++;
+		//printf("reading line\t%s\n",str.c_str()); //changed by CHENXUYI
 		
 		// skip comment line
 		if( str[0]=='/' && str[1]=='/' ) continue;
@@ -89,8 +91,9 @@ void NavierStokesSolver::ReadParamFile( )
 				TimeScheme = 2;
 			else
 			{
-				cout<<"no such unsteady time scheme!:"<<keyw[3]<<endl;
-				exit(0);
+				char temp[256];
+				sprintf(temp,"Error in raading param.in\tline: %d\n unknown time scheme: %s\n",_linecounter,keyw[3]);
+				throw std::logic_error(temp);
 			}
 		}
 		else if( strcmp(keyw[0],"energy")==0 )
@@ -99,8 +102,11 @@ void NavierStokesSolver::ReadParamFile( )
 				SolveEnergy= true;
 			else if( strcmp(keyw[1],"off")==0 )
 				SolveEnergy= false;
-			else
-				ErrorStop("energy key word is wrong");
+			else{
+				char temp[256];
+				sprintf(temp,"Error in raading param.in\tline: %d\n unknown energy model\n",_linecounter);
+				throw std::logic_error(temp);
+			}
 		}
 		else if( strcmp(keyw[0],"density")==0 )
 		{
@@ -112,8 +118,11 @@ void NavierStokesSolver::ReadParamFile( )
 				TurModel= 0;
 			else if( strcmp(keyw[1],"ke")==0 )
 				TurModel= 1;
-			else
-				ErrorStop("turbulence key word is wrong");
+			else{
+				char temp[256];
+				sprintf(temp,"Error in raading param.in\tline: %d\n unknown turbulence model\n",_linecounter);
+				throw std::logic_error(temp);
+			}
 		}
 		else if( strcmp(keyw[0],"gravity")==0 )
 		{
@@ -144,8 +153,11 @@ void NavierStokesSolver::ReadParamFile( )
 				limiter = 2;
 			else if( strcmp(keyw[1],"WENO" )==0 )
 				limiter = 3;
-			else
-				ErrorStop("error in limiter definition");
+			else{
+				char temp[256];
+				sprintf(temp,"Error in raading param.in\tline: %d\n unknown limiter definition\n",_linecounter);
+				throw std::logic_error(temp);
+			}
 		}
 
 
@@ -156,8 +168,11 @@ void NavierStokesSolver::ReadParamFile( )
 				IfReadBackup = true;
 			else if( strcmp(keyw[1],"no" )==0 )
 				IfReadBackup = false;
-			else
-				ErrorStop("error in restart command");
+			else{
+				char temp[256];
+				sprintf(temp,"Error in raading param.in\tline: %d\n unknown restart command\n",_linecounter);
+				throw std::logic_error(temp);
+			}
 		}
 		else if( strcmp(keyw[0],"initflow")==0 )
 		{
@@ -195,8 +210,9 @@ void NavierStokesSolver::ReadParamFile( )
 				rtable[bid] = 4;
 			else
 			{
-				cout<<"unknown boundry type in bound"<<keyw[2]<<endl;
-				exit(0);
+				char temp[256];
+				sprintf(temp,"Error in reading param.in\t line: %d \nunknown boundary type:%s\n",_linecounter,keyw[2]);
+				throw std::logic_error(temp);
 			}
 		}
 
@@ -213,8 +229,9 @@ void NavierStokesSolver::ReadParamFile( )
 		}
 		else
 		{
-			cout<<"no such command, "<<keyw[0]<<endl;
-			exit(0);
+			char temp[256];
+			sprintf(temp,"Error in reading param.in\t line: %d \nno such command: %s\n",_linecounter,keyw[0]);
+			throw std::logic_error(temp);
 		}
 
 	}

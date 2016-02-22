@@ -98,7 +98,7 @@ public:
 	int& Nspecies;
 	int& cellPressureRef;
 
-	/******Length - 31***********/
+	/******Length - 33***********/
 	double& MaxStep;      
 	double& PressureReference; 
 	double& gama;
@@ -111,7 +111,7 @@ public:
 	double& TempRef;
 	double& total_time;
 	double& dt;
-	double& uin,vin,win,roin,Tin,tein,edin, Twall, pin,pout; //input parameters ,simple implementation
+	double& uin,&vin,&win,&roin,&Tin,&tein,&edin, &Twall, &pin,&pout; //input parameters ,simple implementation
 	double *gravity;// length of 3
 	double *URF; 	//numerical scheme relaxation factor , currently length 8
 	

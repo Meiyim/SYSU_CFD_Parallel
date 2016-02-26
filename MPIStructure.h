@@ -11,6 +11,7 @@
 #define _DATA_PROCESS_H_
 
 #define MAX_ROW 5
+#define ELEMENT_TAG_LEN 2
 
 #ifdef SHOULD_CHECK_MPI_ERROR 
 
@@ -39,15 +40,15 @@ struct DataPartition{
 	int mpiErr;
 	int comRank;
 	int comSize;
-	int nLocal;
-	int nGlobal;
-	int nProcess;
-	int* gridList;  //size of nGlobal , gridList[comRank] == nLocal;
+	int nLocal; 	// number of local cell, same as Ncel
+	int nGlobal;    // number of global cell
+	int nProcess;   // number of partitions
+	int* gridList;  //size of nProcess , gridList[comRank] == nLocal;
 	//double** Avals; //temp for file reading test;
 	//int** Aposi; 
 	DataPartition():
 		comm(MPI_COMM_WORLD),
-		nLocal(0),
+		//nLocal(0),
 		nGlobal(0),
 		nProcess(0),
 		gridList(NULL),
@@ -59,11 +60,11 @@ struct DataPartition{
 	
 	~DataPartition(){}
 
-	int init(RootProcess& root); // communicate to get local size on each processes , collective call
+	int initPetsc(); //build petsc vectors, collective call
 
 	int deinit(); // a normal deconstructor seems not working in MPI
 
-	int fetchDataFrom(RootProcess& root);
+	int fetchDataFrom(RootProcess& root);  //MPI_ScatterV
 
 	int pushDataTo(RootProcess& root);
 
@@ -124,11 +125,22 @@ public:
  *  	FUNCTION: gather data and write output file
  *  	controls all the I/O
  ******************************************************/
-struct InputElement{// this small structure is only used in this file
+class InputElement{// this small structure is only used in this file
+public:
 	int type;
-	int pid;
-	int tag[2];	//the length is fixed in order to send through MPI
-	int vertex[8];	
+	int pid; 	//use to sort, no need to send
+	int ntag; 
+	int* tag;	//the length is fixed in order to send through MPI
+	int* vertex;	
+	InputElement(int ty, int nt,int nv):type(ty),ntag(nt){
+		tag = new int[nt];
+		vertex = new int[nv];
+	}
+	~InputElement(){
+		delete []tag;
+		delete []vertex;
+	}
+
 };
 
 struct InputVert{
@@ -141,15 +153,17 @@ public:
 	/*******************owned by ROOT*****/ 
 	size_t rootNGlobal;		//size of a global vector
 	size_t rootNElement;  		//number of cells and bounds element
-	size_t rootNVert;			// upperbound of int on a 32 bit machine is 2 billion, which is enough
+	size_t rootNVert;		// upperbound of int on a 32 bit machine is 2 billion, which is enough
 	double* rootArrayBuffer; 	//used to collect data
 
 	/***************used when partitioning*************************/
-	InputElement* rootElems;   	
+	InputElement** rootElems;   	 //a pointer array //faster for sorting
 	InputVert* rootVerts; 		
-	std::map<int, unordered_set<int> >* nodesPool ; //one for each partition, <partID,nodesPool>
+	std::map<int, unordered_set<int> >* boundNodesPool ; //one for each partition, <partID,nodesPool>
+	std::map<int,int>* nodesPool;			     //one for each partition, <globalID, localID>;
 
-	std::vector<int>* rootgridList;
+	std::vector<int>* rootgridList;	// the element number of each parition
+	std::vector<int>* rootNCells;	// the cell number of each partition
 	TerminalPrinter* printer;
 	/*********************************************************/
 	RootProcess(int r):
@@ -159,6 +173,7 @@ public:
 		rootArrayBuffer(NULL), //NULL if not root
 		rootElems(NULL),
 		rootVerts(NULL),
+		boundNodesPool(NULL),
 		nodesPool(NULL),
 		rootgridList(NULL),
 		printer(NULL)
@@ -178,15 +193,39 @@ public:
 	 * 	 root Only
 	 * *************************************************/
 	void read(DataPartition* dg,const string& title);
+
 	/***************************************************
 	 * 	 root Only
-	 * 	 the last two term is the input parameter and should be NULL;
-	 * *************************************************/
+	 **************************************************/
 	void partition(DataPartition* dg, int N);
+
+
+	/*********************************************
+	 * 	build MPI transfer buffer for vertex  element interfaceinfo
+	 * 	
+	 * 	WARNING: this 3 function MUST be called in specifig sequence!
+	 * 	calling sequence :
+	 * 		getvertex[pid]
+	 * 		getelement[pid]
+	 * 		getinterface[pid]
+	 *
+	 * 	WARNING: it is the user's responsibility to free buffer return bu these functions
+	 *********************************************/
+	
+	int getElementSendBuffer(DataPartition* dg,int pid, int** buffer); 	 
+	int getVertexSendBuffer(DataPartition* dg,int pid, double** buffer);	
+	int getInterfaceSendBuffer(DataPartition* dg,int pid, int** buffer);   
+
+
 
 	/***************************************************
 	 * 	 writing result to root
 	 * *************************************************/
 	void write(DataPartition* dg);
+
+	void printTecplotHead(DataPartition* dg, std::ofstream& file);
+
+private:
+
 };
 #endif

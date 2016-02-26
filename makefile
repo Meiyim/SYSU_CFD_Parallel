@@ -24,6 +24,7 @@ OBJSFILE		 +=$(BIN)pressure.o
 OBJSFILE		 +=$(BIN)gradient.o
 OBJSFILE		 +=$(BIN)velocity.o
 OBJSFILE		 +=$(BIN)geo.o
+OBJSFILE 		 +=$(BIN)io.o
 
 MYLINKER = mpicxx ${PCC_LINKER_FLAGS} ${CPPFLAGS}
 
@@ -79,5 +80,7 @@ $(BIN)velocity.o: $(NSSRC)navier_velocity.cpp
 $(BIN)geo.o: $(NSSRC)geometry.cpp
 	$(PETSC_CXXCOMPILE) -o $@ $^ 
 
+$(BIN)io.o: $(NSSRC)navierIO.cpp
+	$(PETSC_CXXCOMPILE) -o $@ $^ 
 
 include ${PETSC_DIR}/lib/petsc/conf/test

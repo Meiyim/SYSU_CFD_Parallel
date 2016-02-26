@@ -3,15 +3,14 @@
 #include <fstream>
 #include <math.h>
 #include <stdlib.h>
+#include <sstream>
 #include "navier.h"
 #include "tools.h"
 #include "terminalPrinter.h"
 
 
 //length of options pool
-#define BOOL_OPTION_NO 4
-#define INT_OPTION_NO  9
-#define DB_OPTION_NO  33
+
 
 using namespace std;
 
@@ -80,10 +79,186 @@ void NavierStokesSolver::NSSolve( )
 
 /*******************************************************/
 //	fetch param and mesh Data From root
+//	MPI_Broadcast routine
 //	collective
 /*******************************************************/
-void NavierStokesSolver::InitSolverParam(){
+void NavierStokesSolver::broadcastSolverParam(){
+	PetscPrintf("begin broadcast basic parameter\n");
+	int sourceRank = root.rank;
 
+	MPI_Barrier(dataPartition->comm);
+
+	//------bool option pool
+	MPI_Bcast(iOptions,INT_OPTION_NO,MPI_INT,sourceRank,dataPartition->comm);
+
+	//------double option pool
+	MPI_Bcast(dbOptions,DB_OPTION_NO,MPI_DOUBLE,sourceRank,dataPartition->comm);
+
+
+	//------other constant, nProcess, gridList, nCell etc.
+	
+	dataPartition->gridList = new int[dataPartition->nProcess];
+	int* _sendbuf = NULL;
+
+	if(root.rootgridList!=NULL){//root only
+		dataPartition->nProcess = root.rootgridList->size();
+		dataPartition->nGlobal = root.rootNGlobal;
+		for(int i=0;i!=dataPartition->nProcess;++i)
+			dataPartition->gridList[i] = root.rootgridList->at(i);
+
+		_sendbuf = new int[dataPartition->nProcess];
+
+		for(int i=0;i!=dataPartition->nProcess;++i)
+			_sendbuf[i] = root.rootNCells->at(i);
+
+	}
+
+	MPI_Bcast(&(dataPartition->nProcess),1,MPI_INT,sourceRank,dataPartition->comm);//nProcess
+
+	MPI_Bcast(&(dataPartition->nGlobal),1,MPI_INT,sourceRank,dataPartition->comm);//nProcess
+
+	MPI_Bcast(dataPartition->gridList, dataPartition->nProcess, MPI_INT, sourceRank, dataPartition->comm);//gridlist
+
+	//scatter: senbuf, sendcount(number of element to EACH process), sendtype, recvbuf, recvcount, recvtype, rootrank, communicator
+	MPI_Scatter(_sendbuf,1, MPI_INT, &(this->Ncel), 1, MPI_INT,root.rank,dataPartition->comm  );//nCell
+
+	//some configuration...
+	int _nlocalElement = dataPartition->gridList[dataPartition->comRank];
+
+	this->Nbnd = _nlocalElement - Ncel;
+	dataPartition->nLocal = Ncel;
+
+	PetscPrintf("complete broadcast basic parameter\n");
+
+	/*
+	printf("check parameter\n");
+	printf("rank %d, nProcess %d, nLocal %d, nGlobal %d, nCell %d, nBnd %d\n",
+			dataPartition->comRank, dataPartition->nProcess, dataPartition->nLocal, dataPartition->nGlobal, Ncel, Nbnd);
+	*/
+}
+
+
+
+/*******************************************************/
+//	fetch param and mesh Data From root
+//	MPI_Broadcast routine
+//	collective
+/*******************************************************/
+#define SEND_TAG_ELEMENT 0
+#define SEND_TAG_VERTEX 1000
+#define SEND_TAG_INTERFACEINFO 2000
+void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer, int** interfaceBuffer){
+	//scatterv and multiple send operation are both good for this subroutine
+	MPI_Request* sendRequests = NULL;	
+	MPI_Request* recvRequtests = NULL;
+	double** buffer1       = NULL; //vertex send buffer
+	int** buffer2          = NULL; //elements send buffer
+	int** buffer3          = NULL; //interfaces send buffer
+	
+	int ierr = 0;
+	
+	int _size = 0;
+	int _sendSize[3] = {0,0,0};
+	int& _sendSize1 = _sendSize[0];
+	int& _sendSize2 = _sendSize[1];
+	int& _sendSize3 = _sendSize[2];
+	printf("begin scatter grid\n");
+
+	MPI_Barrier(dataPartition->comm);
+
+	if(dataPartition->comRank==root.rank){//root //sending side...
+		_size = dataPartition->nProcess;
+		sendRequests = new MPI_Request[ 3 * _size ];
+		buffer1 = new double* [_size];
+		buffer2 = new int* [_size];
+		buffer3 = new int* [_size];
+
+		for(int pid = 0;pid!=_size;++pid){
+			printf("root: sending geometry to grid: %d\n",pid);
+			_sendSize1 = root.getVertexSendBuffer(dataPartition, pid, buffer1 + pid);
+			_sendSize2 = root.getElementSendBuffer(dataPartition,pid, buffer2+pid);
+			_sendSize3 = root.getInterfaceSendBuffer(dataPartition, pid, buffer3 + pid);
+			printf("prepared\n");
+			MPI_Bsend(_sendSize,3,MPI_INT,pid,-1,dataPartition->comm);
+			//send vertex	
+			MPI_Issend(buffer1+pid, _sendSize1, MPI_DOUBLE,
+					pid,		     	     //dest
+					SEND_TAG_VERTEX,	     //send tag
+					dataPartition->comm,
+					sendRequests+3*pid+0); 	     //return request
+			//send elements
+			MPI_Issend(buffer2+pid, _sendSize2, MPI_INT,
+					pid,		      	     //dest
+					SEND_TAG_ELEMENT,	     //send tag
+					dataPartition->comm,
+					sendRequests+3*pid+1); 	     //return request
+
+			//send interfaceinfo
+			MPI_Issend(buffer3+pid, _sendSize3, MPI_INT,
+					pid,			     //dest
+					SEND_TAG_INTERFACEINFO,  //send tag
+					dataPartition->comm,
+					sendRequests+3*pid+2); 	     //return request
+		}			
+
+
+
+
+	} 
+
+	//receiveing side ...
+	//root is sending to itself...
+	printf("rank: %d is receiving geometry...\n",dataPartition->comRank);
+	recvRequtests = new MPI_Request[ 3 ];
+	MPI_Recv(&_sendSize,3,MPI_INT,root.rank,-1,dataPartition->comm,MPI_STATUS_IGNORE);
+
+	this->Nvrt = _sendSize2/3;//the number of vertex in each part can be preassume
+
+	//recv elements
+	MPI_Irecv(*vertexBuffer,_sendSize2, MPI_DOUBLE,
+			root.rank,			//source
+			SEND_TAG_VERTEX,
+			dataPartition->comm,
+			recvRequtests+0); 
+
+	MPI_Irecv(*elemBuffer,_sendSize2, MPI_INT,
+			root.rank,			//source
+			SEND_TAG_ELEMENT,		//tag
+			dataPartition->comm,
+			recvRequtests+1); 			//return value
+		//return value
+	MPI_Irecv(*interfaceBuffer,_sendSize3, MPI_INT,
+			root.rank,			//source
+			SEND_TAG_INTERFACEINFO,
+			dataPartition->comm,
+			recvRequtests+2); 			//return value
+
+	ierr = MPI_Waitall(3,recvRequtests,MPI_STATUS_IGNORE);
+	if(ierr!=MPI_SUCCESS){
+		char temp[256];
+		sprintf(temp,"MPI receive failure in geometry transfering\n");
+		throw runtime_error(temp);
+	}	
+	delete []recvRequtests;
+
+
+	if(dataPartition->comRank == root.rank){//check completion in root
+		ierr = MPI_Waitall(3*_size,sendRequests,MPI_STATUS_IGNORE);
+		if(ierr!=MPI_SUCCESS){
+			throw runtime_error("MPI send failure in geometry transfering!\n ");
+		}
+
+		delete []sendRequests;
+		for(int i=0;i!=_size;++i){
+			delete []buffer1[i];
+			delete []buffer2[i];
+			delete []buffer3[i];
+		}
+		delete []buffer1;
+		delete []buffer2;
+		delete []buffer3;
+	}
+	printf("complete scatter grid\n");
 }
 
 
@@ -93,7 +268,7 @@ void NavierStokesSolver::InitSolverParam(){
 //	the inition of Params can be overwritten by Command line option and input parameters
 //	this function is root ONLY
 /*******************************************************/
-void NavierStokesSolver::Init() 
+void NavierStokesSolver::initSolverParam() 
 {
 	if(dataPartition->comRank != root.rank) return; //root ONLY
 
@@ -263,193 +438,6 @@ void NavierStokesSolver::SaveTransientOldData( )
 }
 
 
-void OutArray2File(double arr[],int N, ofstream &of){
-	for(int i=0; i<N; i++ ){
-		of<<arr[i]<<"  ";
-		if( i%5==0 ) of<<endl;
-	}
-}
-
-
-void NavierStokesSolver::Output2Tecplot()
-{
-	int i,j;
-	double *tmp,nvar;
-	ofstream of;
-	char tecTitle[256];
-	sprintf(tecTitle,"res%04d.dat",int(this->outputCounter++));
-	of.open(tecTitle);
-	of<<"variables="<<"\"x\","<<"\"y\","<<"\"z\""
-		<<"\"p\","<<"\"u\","<<"\"v\","<<"\"w\","<<"\"ro\","<<"\"T\","
-		<<"\"Mach\","<<"\"mu\"";
-	nvar = 11;
-	if( TurModel==1 ){
-		of<<"\"te\""<<"\"ed\"";
-		nvar = 13;
-	}
-	of<<endl;
-	of<<"zone n="<<Nvrt<<", e="<<Ncel<<", VARLOCATION=([1-3]=NODAL,[4-"<<nvar<<"]=CELLCENTERED)"
-		<<"DATAPACKING=BLOCK, ZONETYPE=FEBRICK"
-		<<endl;
-	for( j=0; j<3; j++ ){
-		for( i=0; i<Nvrt; i++ ){
-			of<<Vert[i][j]<<" ";
-			if( i%5==0 ) of<<endl;
-		}
-	}
-	OutArray2File( Pn,Ncel,of );
-	OutArray2File( Un,Ncel,of );
-	OutArray2File( Vn,Ncel,of );
-	OutArray2File( Wn,Ncel,of );
-	OutArray2File( Rn,Ncel,of );
-	OutArray2File( Tn,Ncel,of );
-	tmp = new double[Ncel];
-	for( i=0; i<Ncel; i++ ){  // Mach / velocity magnitude
-		if( DensityModel==1 )
-			tmp[i]= sqrt( (Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i])/(gama*(Pn[i]+PressureReference)/Rn[i]) );
-		else
-			tmp[i]= sqrt( (Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]) ); 
-	}
-	OutArray2File( tmp,Ncel,of );
-	for( i=0; i<Ncel; i++ ){  // mu
-		tmp[i]= VisLam[i] + VisTur[i];
-	}
-	OutArray2File( tmp,Ncel,of );
-	if( TurModel==1 ){
-		OutArray2File( TE,Ncel,of );
-		OutArray2File( ED,Ncel,of );
-	}
-
-	for( i=0; i<Ncel; i++ ){
-		for( j=0;j<8;j++ )
-			of<<Cell[i].vertices[j]+1<<" ";
-		of<<endl;
-	}
-
-	of.close();
-	delete []tmp;
-}
-
-void outputVTKScalar( const char name[], double arr[],int N, ofstream &of)
-{
-	int i;
-	of<<"SCALARS "<<name<<" FLOAT"<<endl;
-	of<<"LOOKUP_TABLE default"<<endl;
-	for( i=0; i<N; i++ )
-		of<<float(arr[i])<<endl;
-}
-void NavierStokesSolver::Output2VTK( )
-{
-	int i,j;
-	double *tmp;
-	ofstream of;
-	of.open("res.vtk");
-	of<<"# vtk DataFile Version 2.0"<<endl;
-	of<<"Navier-Stokes solver result"<<endl;
-	of<<"ASCII"<<endl;
-	of<<"DATASET UNSTRUCTURED_GRID"<<endl;
-	of<<"POINTS "<<Nvrt<<" FLOAT "<<endl;
-	for( i=0; i<Nvrt; i++ ){
-		for(j=0;j<3;j++) of<<Vert[i][j]<<" ";
-		of<<endl;
-	}
-	of<<endl;
-
-	of<<"CELLS "<<Ncel<<" "<<Ncel*9<<endl;
-	for( i=0; i<Ncel; i++ ){
-		of<<8<<" ";
-		for(j=0;j<8;j++) of<<Cell[i].vertices[j]<<" ";
-		of<<endl;
-	}
-	of<<"CELL_TYPES "<<Ncel<<endl;
-	for( i=0; i<Ncel; i++ ){
-		of<<12<<" ";
-		if( (i+1)%8==0 ) of<<endl;
-	}
-	of<<endl;
-
-	of<<"CELL_DATA "<<Ncel<<endl;
-	
-	of<<"VECTORS velocity FLOAT"<<endl;
-	for( i=0; i<Ncel; i++ )
-		of<<Un[i]<<" "<<Vn[i]<<" "<<Wn[i]<<endl;
-	of<<endl;
-	
-	outputVTKScalar("P",Pn,Ncel,of);
-	of<<endl;
-	outputVTKScalar("ro"  ,Rn, Ncel,of);
-	of<<endl;
-	outputVTKScalar("T"   ,Tn, Ncel,of);
-	of<<endl;
-
-	tmp = new double[Ncel];
-	for( i=0; i<Ncel; i++ ){  // Mach / velocity magnitude
-		if( DensityModel==1 )
-			tmp[i]= sqrt( (Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i])/(gama*(Pn[i]+PressureReference)/Rn[i]) );
-		else
-			tmp[i]= sqrt( (Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]) ); 
-	}
-	outputVTKScalar("mach",tmp,Ncel,of);
-	of<<endl;
-
-	for( i=0; i<Ncel; i++ ){  // mu
-		tmp[i]= VisLam[i] + VisTur[i];
-	}
-	outputVTKScalar("mu"  ,tmp, Ncel,of);
-	of<<endl;
-
-	if( TurModel==1 ){
-	outputVTKScalar("te",TE,Ncel,of);
-	of<<endl;
-	outputVTKScalar("ed",ED,Ncel,of);
-	of<<endl;
-	}
-
-	for( i=0; i<Ncel; i++ )
-		tmp[i]= 2.0;
-	outputVTKScalar("Elemtype" ,tmp, Ncel,of);
-	of<<endl;
-
-	of.close();
-
-	delete []tmp;
-}
-
-void NavierStokesSolver::WriteBackupFile( )
-{
-	int i;
-	ofstream of;
-	cout<<"backup data..."<<endl;
-	of.open("res.sav");
-	for( i=0; i<Ncel; i++ )
-	{
-		of<<Rn[i]<<" "<<Un[i]<<" "<<Vn[i]<<" "<<Wn[i]
-		  <<" "<<Pn[i]<<" "<<Tn[i]<<" "<<Rn[i]<<" "<<VisLam[i]<<endl;
-		if( TurModel==1 )
-			of<<VisTur[i]<<" "<<TE[i]<<" "<<ED[i]<<endl;
-	}
-	of.close( );
-}
-void NavierStokesSolver::ReadBackupFile( )
-{
-	int i;
-	ifstream inf;
-	cout<<"read data from backup..."<<endl;
-	inf.open("res.sav");
-	for( i=0; i<Ncel; i++ )
-	{
-		inf>>Rn[i]>>Un[i]>>Vn[i]>>Wn[i]
-		   >>Pn[i]>>Tn[i]>>Rn[i]>>VisLam[i];
-		if( TurModel==1 )
-			inf>>VisTur[i]>>TE[i]>>ED[i];
-	}
-	inf.close( );
-}
-
-void NavierStokesSolver::OutputMoniter( )
-{
-}
-
 
 /***********************************************/
 // 	CONSTRUCTOR !!!	
@@ -459,50 +447,49 @@ NavierStokesSolver::NavierStokesSolver():
 	printer(NULL), //define in init
 	dataPartition(new DataPartition),
 	root(0),			// the root rank is 0
-	bOptions(new bool[BOOL_OPTION_NO]),
 	iOptions(new int[INT_OPTION_NO]),
 	dbOptions(new double[DB_OPTION_NO]),
 	//option sets
 	//bool
-	IfReadBackup		(bOptions[0]),
-	IfSteady		(bOptions[1]),
-	SolveEnergy		(bOptions[2]),
-	SolveSpecies		(bOptions[3]),
+	IfReadBackup		(iOptions[0]),
+	IfSteady		(iOptions[1]),
+	SolveEnergy		(iOptions[2]),
+	SolveSpecies		(iOptions[3]),
 	//int
-	MaxOuterStep		(iOptions[0]),
-	TurModel		(iOptions[1]),
-	DensityModel		(iOptions[2]),
-	limiter			(iOptions[3]),
-	TimeScheme		(iOptions[4]),
-	noutput			(iOptions[5]),
-	outputFormat		(iOptions[6]),
-	Nspecies		(iOptions[7]),
-	cellPressureRef		(iOptions[8]),
+	MaxOuterStep		(iOptions[4]),
+	TurModel		(iOptions[5]),
+	DensityModel		(iOptions[6]),
+	limiter			(iOptions[7]),
+	TimeScheme		(iOptions[8]),
+	noutput			(iOptions[9]),
+	outputFormat		(iOptions[10]),
+	Nspecies		(iOptions[11]),
+	cellPressureRef		(iOptions[12]),
+	MaxStep			(iOptions[13]),
 	//double
-	MaxStep			(dbOptions[0]),
-	PressureReference	(dbOptions[1]),
-	gama			(dbOptions[2]),
-	ga1			(dbOptions[3]),
-	cp			(dbOptions[4]),
-	cv			(dbOptions[5]),
-	prl			(dbOptions[6]),
-	prte			(dbOptions[7]),
-	Rcpcv			(dbOptions[8]),
-	TempRef			(dbOptions[9]),
-	total_time		(dbOptions[10]),
-	dt			(dbOptions[11]),
-	uin			(dbOptions[12]),
-	vin			(dbOptions[13]),
-	win			(dbOptions[14]),
-	roin			(dbOptions[15]),
-	Tin			(dbOptions[16]),
-	tein			(dbOptions[17]),
-	edin			(dbOptions[18]),
-	Twall			(dbOptions[19]),
-	pin			(dbOptions[20]),
-	pout			(dbOptions[21]),
-	gravity		(dbOptions+22), //gravity components: 22,23,24
-	URF			(dbOptions+25),  //URF 	25~32 //length 8
+	PressureReference	(dbOptions[0]),
+	gama			(dbOptions[1]),
+	ga1			(dbOptions[2]),
+	cp			(dbOptions[3]),
+	cv			(dbOptions[4]),
+	prl			(dbOptions[5]),
+	prte			(dbOptions[6]),
+	Rcpcv			(dbOptions[7]),
+	TempRef			(dbOptions[8]),
+	total_time		(dbOptions[9]),
+	dt			(dbOptions[10]),
+	uin			(dbOptions[11]),
+	vin			(dbOptions[12]),
+	win			(dbOptions[13]),
+	roin			(dbOptions[14]),
+	Tin			(dbOptions[15]),
+	tein			(dbOptions[16]),
+	edin			(dbOptions[17]),
+	Twall			(dbOptions[18]),
+	pin			(dbOptions[19]),
+	pout			(dbOptions[20]),
+	gravity			(dbOptions+21), //gravity components: 22,23,24
+	URF			(dbOptions+24),  //URF 	24~31 //length 8
 
 	//all put NULL to avoid wild pointer
 	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL), 
@@ -560,7 +547,6 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete printer;
 	delete dataPartition;
 
-	delete bOptions;
 	delete iOptions;
 	delete dbOptions;
 	printer = NULL;

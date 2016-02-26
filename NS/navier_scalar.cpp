@@ -10,11 +10,11 @@ using namespace std;
 //------------------------------
 void NavierStokesSolver::UpdateTurKEpsilon( )
 {
-	int i,Iter, rid,ic,iface;
-	double *dudx,*dvdx,*dwdx,
-		   s1,s2,s3,Dis, vol,coef,
-		   fact, IterRes,
-		   *Prod,*TESource,*EDSource,*VisTE,*VisED,*ApTE,*ApED,Pked,Dised;
+	int i,Iter=0, rid,ic,iface;
+	double *dudx=NULL,*dvdx=NULL,*dwdx=NULL,
+		   s1,s2,s3,Dis=0, vol=0,coef=0,
+		   fact=0, IterRes=0,
+		   *Prod=NULL,*TESource=NULL,*EDSource=NULL,*VisTE=NULL,*VisED=NULL,*ApTE=NULL,*ApED=NULL,Pked=0,Dised=0;
 	ofstream of;
 	using namespace TurKEpsilonVar;
 
@@ -222,8 +222,8 @@ of.close( );
 //-------------------------------------------------------
 void NavierStokesSolver::UpdateEnergy( )
 {
-	int i,Iter;
-	double *kcond,*ESource,*ApE,IterRes,coef;
+	int i,Iter=0;
+	double *kcond,*ESource,*ApE,IterRes=0,coef;
 
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
 	kcond  = new double[Ncel];
@@ -354,8 +354,8 @@ void NavierStokesSolver::UpdateEnergy( )
 //--------------------------------------------
 void NavierStokesSolver::UpdateSpecies( )
 {
-	int i,is,Iter;
-	double **DiffC, **ScSource,*ApS, IterRes,coef;
+	int i,is,Iter=0;
+	double **DiffC, **ScSource,*ApS, IterRes=0,coef;
 
 	ApS     = new double[Ncel]; 
 	DiffC   = new_Array2D<double>(Nspecies,Ncel);

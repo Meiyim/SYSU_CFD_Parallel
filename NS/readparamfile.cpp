@@ -35,7 +35,6 @@ void NavierStokesSolver::ReadParamFile( )
 	while( getline( fin,str ) )
 	{
 		_linecounter++;
-		//printf("reading line\t%s\n",str.c_str()); //changed by CHENXUYI
 		
 		// skip comment line
 		if( str[0]=='/' && str[1]=='/' ) continue;

@@ -8,8 +8,8 @@ using namespace std;
 
 int NavierStokesSolver::CalculateVelocity( )
 {
-    int    i,Iter;
-    double IterRes;
+    int    i,Iter=0;
+    double IterRes=0;
 	ofstream of;
 
 	for( i=0; i<10; i++ ) Residual[i]= 0.;

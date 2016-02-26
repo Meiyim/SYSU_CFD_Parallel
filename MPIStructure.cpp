@@ -1,35 +1,15 @@
+
 #include "MPIStructure.h"
 using namespace std;
 
 
-int DataPartition::init(RootProcess& root){ //collcetive
+int DataPartition::initPetsc(){ //collcetive
 
 	MPI_Barrier(comm);
 
 	printf("process %d initing\n",comRank);
-	nProcess = comSize;
-	if(comRank==root.rank) // in root processes
-		nProcess = root.rootgridList->size();
-
-	mpiErr = MPI_Bcast(&nProcess, 1, MPI_INT,
-			   root.rank, comm);CHECK(mpiErr);
-	gridList = new int[nProcess];
-
-	if(comRank==root.rank) // in root process;
- 	for(int i=0;i!=nProcess;++i)
-		gridList[i] = root.rootgridList->at(i);
-
-	mpiErr = MPI_Bcast(gridList, nProcess, MPI_INT,
-			   root.rank, comm);CHECK(mpiErr)
 		
-	//printf("process: %d gridlist: ",comRank);
-	nGlobal = 0;
-	for(int i=0;i!=nProcess;++i){
-		nGlobal+=gridList[i];
-	//	printf("%d",gridList[i]);
-	}
-	nLocal = gridList[comRank];
-	//printf("\n");
+	/*
 	//init PETSC vec
 	ierr = VecCreateMPI(comm,nLocal,nGlobal,&u);CHKERRQ(ierr); 
 	ierr = VecDuplicate(u,&bu);CHKERRQ(ierr);
@@ -49,7 +29,7 @@ int DataPartition::init(RootProcess& root){ //collcetive
 
 	//init KSP context
 	ierr = KSPCreate(comm,&ksp);
-
+	*/
 	printf("datagrounp NO. %d init complete, dimension %d x %d = %d\n",comRank,nLocal,nProcess,nGlobal);
 
 	return 0;
@@ -68,7 +48,13 @@ int DataPartition::deinit(){
 };
 
 
-int DataPartition::fetchDataFrom(RootProcess& root){ //collective
+
+
+/*****************************************************
+ *	MPI ScatterV / Send routine
+ *	scatter geometry data to each partition
+ *****************************************************/
+int DataPartition::fetchDataFrom(RootProcess& root){ //collective 
 	int sourceRank=root.rank;
 
 	int destCount=0;

@@ -8,8 +8,8 @@ using namespace std;
 
 int NavierStokesSolver::CalculatePressure( )
 {
-    int i,pIter;
-    double pIterRes,coef; //, roinv,Tem;
+    int i,pIter=0;
+    double pIterRes=0,coef=0; //, roinv,Tem;
 
 	if( DensityModel==0 ){
 //		Q_Constr(&Ap,   "matrix",    Ncel, True,  Rowws, Normal, True);

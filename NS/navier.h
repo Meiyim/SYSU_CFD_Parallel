@@ -6,6 +6,10 @@
 
 #define SMALL 1.e-16
 
+#define INT_OPTION_NO 14 
+#define DB_OPTION_NO  32
+#define TECPLOT_NVAR 13
+
 
 // geometry, face & cell data
 typedef struct 
@@ -77,17 +81,17 @@ public:
 	RootProcess root;
 
 	//option Sets
-	bool* bOptions;
-	int* iOptions;           //handles for integer option pool
-	double* dbOptions;	//handles for double option pool
+	int* iOptions; 	  //len 13       //handles for integer & bool option pool, for bool, 0 = false, 1 = true
+	double* dbOptions;//len 33	//handles for double option pool
 
+	//original bools
 	/******Length - 4***********/
-	bool& IfReadBackup;
-	bool& IfSteady;
-	bool& SolveEnergy;
-	bool& SolveSpecies;
+	int& IfReadBackup;
+	int& IfSteady;
+	int& SolveEnergy;
+	int& SolveSpecies;
 
-	/******Length - 9***********/
+	/******Length - 10***********/
 	int& MaxOuterStep;
 	int& TurModel;		// TurModel=0: laminar flow; =1: k-epsilon; =2: wait to implement
 	int& DensityModel;       // DensityModel=0: constant density; =1: perfect gas ro=p/(RT); =2: wait to implement
@@ -97,9 +101,9 @@ public:
 	int& outputFormat;	// 0 for tec; 1 for vtk
 	int& Nspecies;
 	int& cellPressureRef;
+	int& MaxStep;      
 
-	/******Length - 33***********/
-	double& MaxStep;      
+	/******Length - 32***********/
 	double& PressureReference; 
 	double& gama;
 	double& ga1;
@@ -160,36 +164,37 @@ public:
  *	   METHODS
 *******************************************/
 //CXY:
-   void Init();
-   void readAndPartition();
-
+	void readAndPartition();
+	int  ReadGridFile    (int*,double*,int*);//read geometry from a buffer
 // Geometry
-    int  ReadGridFile    ( );
+
 	void OutputGrid      ( );
-    int  CreateFaces     ( );
-    void FindFace( int, int,int,int,int, int&, int*,int** );
-    int  CellFaceInfo    ( );
+	int  CreateFaces     ( );
+	void FindFace( int, int,int,int,int, int&, int*,int** );
+	int  CellFaceInfo    ( );
 	int  CheckAndAllocate( );
 
 // Init flow field
     // read solver param, material, post, everything except 
-    void InitSolverParam();
-	void ReadParamFile   ( );
-    void InitFlowField  ( );
+	void initSolverParam(); 		//CXY: root ONLY	
+	void broadcastSolverParam();	//CXY: now a MPI BROADCAST routine
+	void scatterGridFile(int** elemBuffer,double** vertexBuffer,int** interfaceBuffer);		//CXY: a MPI ScatterV routine
+
+	void InitFlowField  ( );
 	
 
 
 // Fluid calculation
-    void NSSolve ( );
+	void NSSolve ( );
 
     // velocity
-    int  CalculateVelocity( );
+	int  CalculateVelocity( );
 	void BuildVelocityMatrix( );
 	void CalRUFace ( );
 	void CalRUFace2( );
 	// pressure
-    int  CalculatePressure( );
-    void BuildPressureMatrix( );
+	int  CalculatePressure( );
+	void BuildPressureMatrix( );
 	void CorrectRUFace2(double*);
 	// scalar. temperature, other passive variables
 	// void ScalarTranport   ( double *Phi, double *BPhi, double *DiffCoef, double *source );
@@ -203,9 +208,9 @@ public:
     // gradients and divergence
 	int  Gradient    ( double*, double*, double** );
     // int  Divergence  ( double*, double*, double*, double*, double*, double*, double* );
-    int  Limiter_MLP  (double[],double **);
+	int  Limiter_MLP  (double[],double **);
 	int  Limiter_Barth(double[],double **);
-    int  Limiter_WENO (double[],double **);
+	int  Limiter_WENO (double[],double **);
 
 	// Boundary condition. one defact is arrays cost too much memory, especially 2D
 	void SetBCVelocity( double*br,double*bu,double*bv,double*bw );
@@ -216,14 +221,19 @@ public:
 	void SetBCKEpsilon( double *TESource,double *EDSource,double *ApTE,double*ApED,double *Prod);
 
 // Post process
-    void OutputMoniter  ( );
-    void Output2Tecplot ( );
+	void OutputMoniter  ( );
+	void Output2Tecplot ( );
 	void Output2VTK     ( );
 	void WriteBackupFile( );
 	void ReadBackupFile ( );
 
 private:
-
+	//backup
+	void writeGeometryBackup(int* ebuffer, double* vbuffer,int* ibuffer); //local binary backup of the grid
+	//initiation
+	void ReadParamFile   ( );
+	//post process
+	void writeTecZoneParallel(const string& title); //collective on MPI
 };
 
 namespace TurKEpsilonVar

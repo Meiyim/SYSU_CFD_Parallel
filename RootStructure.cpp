@@ -20,12 +20,17 @@ void RootProcess::allocate(DataPartition* dg){ //prepare for gather;
 
 
 void RootProcess::clean(){
-	delete rootElems;
-	delete rootVerts;
-	delete nodesPool;
+	for(int i=0;i!=rootNElement;++i){
+		delete rootElems[i];
+	}
+	delete []rootElems;
+	delete []rootVerts;
+	delete []nodesPool;
+	delete []boundNodesPool;
 	rootElems = NULL;
 	rootVerts = NULL;
 	nodesPool = NULL;
+	boundNodesPool = NULL;
 }
 
 
@@ -70,19 +75,23 @@ void RootProcess::read(DataPartition* dg,const string& title){
 	infile>>rootNElement;
 	if(rootNElement<=0) throw logic_error("elements of the mesh file less than 0\n");
 
-	rootElems = new InputElement[rootNElement];
+	rootElems = new InputElement* [rootNElement];
 
-	int ntag=0;	
+	int _type;
+	int _ntag;
 	int _v=0;
+	rootNGlobal = 0;
 	for(int i=0;i!=rootNElement;++i){
-		infile>>itemp>>rootElems[i].type;
-		infile>>ntag;
-		for(int j=0;j!=ntag;++j)
-			infile>>rootElems[i].tag[j];	
-		for(int j=0 ; j != numberOfNodesInElementTypeOf[rootElems[i].type]; ++j){
+		infile>>itemp>>_type>>_ntag;
+		rootElems[i] = new InputElement(_type,_ntag,numberOfNodesInElementTypeOf[_type]);
+
+		for(int j=0;j!=_ntag;++j)
+			infile>>rootElems[i]->tag[j];	
+		for(int j=0 ; j != numberOfNodesInElementTypeOf[_type]; ++j){
 			infile>>_v;
-			rootElems[i].vertex[j] = _v-1;	//read all the vertex of the msh
+			rootElems[i]->vertex[j] = _v-1;	//read all the vertex of the msh
 		}
+		if(rootElems[i]->type > 3) ++rootNGlobal; 
 	}
 
 	infile.close();
@@ -91,8 +100,8 @@ void RootProcess::read(DataPartition* dg,const string& title){
 
 /***************functor object used by partition routine*****************/
 struct _SortAccordingToPart{
-	bool operator()(InputElement& lhs,InputElement& rhs){
-		return lhs.pid<rhs.pid ? true : false;
+	bool operator()(InputElement* lhs,InputElement* rhs){
+		return lhs->pid<rhs->pid ? true : false;
 	}
 };
 /*
@@ -127,20 +136,22 @@ void RootProcess::partition(DataPartition* dg, int N){
 
 	int nv=0;
 	for(int i=0;i!=rootNElement;++i)
-		nv += numberOfNodesInElementTypeOf[rootElems[i].type];	
+		nv += numberOfNodesInElementTypeOf[rootElems[i]->type];	
 
 	rootgridList = new std::vector<int>(N,0);
+	rootNCells = new std::vector<int>(N,0);
 	idx_t* eptr  = new idx_t[rootNElement+1];
 	idx_t* eind  = new idx_t[nv];
 	idx_t* epart = new idx_t[rootNElement]; //return value of the metis routine
 	idx_t* npart = new idx_t[rootNVert];
+
 	idx_t edgecut;
 
 	eptr[0]=0;
 	for(int i=0;i!=rootNElement;++i){
-		nv = numberOfNodesInElementTypeOf[rootElems[i].type];
+		nv = numberOfNodesInElementTypeOf[rootElems[i]->type];
 		for(int j=0;j!=nv;++j)
-			eind[eptr[i]+j] =  rootElems[i].vertex[j];
+			eind[eptr[i]+j] =  rootElems[i]->vertex[j];
 		eptr[i+1]=eptr[i]+nv;
 	}
 	
@@ -161,9 +172,8 @@ void RootProcess::partition(DataPartition* dg, int N){
 	//for(int i=0;i!=rootNVert;++i)
 	//	PetscPrintf(MPI_COMM_WORLD,"!!!!!!!!!!!!!!!!npart: %d , %lld\n",i,npart[i]);
 	delete []eptr;delete eind; eptr=NULL;eptr=NULL;
-
 	for(int i=0;i!=rootNElement;++i)
-		rootElems[i].pid = epart[i];
+		rootElems[i]->pid = epart[i];
 
 	/*****************DATA PARTITION*******************
 	 * 	phase3 :reorder elements according to epart;
@@ -184,43 +194,67 @@ void RootProcess::partition(DataPartition* dg, int N){
 	 * 	phase4 :create nodes pool and interfaces info
 	***************************************************/
 
-	nodesPool = new map<int,unordered_set<int> >[N]; // one for each partition,<partID,nodesInthisParts>
-	//interfacesInfo = new map<int,int>[N]; 			//one for each partition,<partID,width>
+	boundNodesPool = new map<int,unordered_set<int> > [N]; // one for each partition,<partID,nodesInthisParts>
+	nodesPool = new map<int,int> [N];		      //one for each partition,<partID,width>
+	//interfacesInfo = new map<int,int>[N]; 			
 	int iE = 0;	
 	for(int i=0;i!=N;++i){ //each part
 		int nElementsPerPart = rootgridList->at(i);
+	
+		//nodesPool[i].reserve(nElementsPerPart*4);  // map does NOT have a reserve method!!!
+		//boundNodesPool[i][i].reserve(nElementsPerPart);// a guess to the boundary nodes No. to be optimized
 
-		nodesPool[i][i].reserve(nElementsPerPart*4);
 		for(int j=0;j!=nElementsPerPart;++j){ //each elements
-			InputElement& _thisEle = rootElems[iE++];
-			nv = numberOfNodesInElementTypeOf[_thisEle.type]; 
+			InputElement* _thisEle = rootElems[iE++];
+			nv = numberOfNodesInElementTypeOf[_thisEle->type]; 
+			if(_thisEle->type > 3){
+				(rootNCells->at(i))++; 	//record the ncells for each part
+			} 
 			for(int k=0;k!=nv;++k){	     //each vertex
-				int _thisVert = _thisEle.vertex[k];
+				int _thisVert = _thisEle->vertex[k];
 				int _partid = npart[_thisVert];
 
-				nodesPool[i][_partid].insert(  _thisVert ); //if vert exists, nothing will do
+				nodesPool[i].insert(make_pair<int,int>(_thisVert,0) );//nodesPool[i][i] contains all verts of a partition, 
+				
+				if(_partid != i){ //if is a boundary, nodesPool[i][_partid] contains verts on each boundary
 
-				if(_partid != i){ //if is a boundary
+					boundNodesPool[i][_partid].insert(  _thisVert ); //if vert exists, nothing will do
 					//interfacesInfo[i][_partid]++; //count the number of body & boundaries
 					//interfacesInfo[_partid][i]++; // update the part info on the other side of the boundary	
-					nodesPool[_partid][_partid].erase(_thisVert); //correct the nodesPool of the partition on the
-					nodesPool[_partid][i].insert( _thisVert );    // other side of the boundary
+					boundNodesPool[_partid][_partid].erase(_thisVert); //correct the nodesPool of the partition on the
+					boundNodesPool[_partid][i].insert( _thisVert );    // other side of the boundary
 				}
 			}	
 		}
-	}
-	
-	delete []epart;delete npart;
+	}	
+
+
+	delete []epart,delete []npart;
 	printf("complete partitioning in root \n");
+	
+	/*****************DATA PARTITION*******************
+	 * 	phase5 : translate global idx of vertex list to local idx
+	 * 		 translate global idx of interface pool to local idx
+	 * 		 
+	 * 	THIS STEP IS DEFERED TO SENDING ROUTINE
+	***************************************************/
+	
 	printf("report partition result:\n");
 	for(int i=0;i!=N;++i){
-		printf("part: %d, elements: %d, interfaces:%lu\n",i,rootgridList->at(i),nodesPool[i].size());
-		for(auto it = nodesPool[i].begin();it!=nodesPool[i].end();++it){
+		printf("part: %d, elements: %d, interfaces:%lu\n",i,rootgridList->at(i),boundNodesPool[i].size());
+		for(auto it = boundNodesPool[i].begin();it!=boundNodesPool[i].end();++it){
 			printf("\t pid: %d: %lu\n",it->first,it->second.size());	
 		}
 	}
 
+		
+
+	//delete [] boundNodesPool;	
+
+
 }
+
+
 
 
 void RootProcess::write(DataPartition* dg){
@@ -235,5 +269,149 @@ void RootProcess::write(DataPartition* dg){
 	outfile.close();
 }
 
+
+/*********************************************
+ *	tecplot printer
+ *	call after allocate
+ *	call after data collection
+ *********************************************/
+void RootProcess::printTecplotHead(DataPartition* dg, ofstream& file){
+	if(dg->comRank!=rank) return; //root only
+	file<<"variables="<<"\"x\","<<"\"y\","<<"\"z\""
+		<<"\"p\","<<"\"u\","<<"\"v\","<<"\"w\","<<"\"ro\","<<"\"T\","
+		<<"\"Mach\","<<"\"mu\""<<endl;
+}
+
+
+/*********************************************
+ * 	build MPI transfer buffer for vertex  element interfaceinfo
+ * 	
+ * 	WARNING: this 3 function MUST be called in specifig sequence!
+ * 	calling sequence :
+ * 		getvertex[pid]
+ * 		getelement[pid]
+ * 		getinterface[pid]
+ *
+ * 	WARNING: it is the user's responsibility to free buffer return bu these functions
+ *
+ *********************************************/
+
+
+int RootProcess::getVertexSendBuffer(DataPartition*dg,int pid, double** buffer){
+	if(dg->comRank!=rank) return 0; //root only
+
+	/******************************************
+	 *	get the local vertex id for part pid
+	 ******************************************/
+
+
+
+	// build buffer
+	size_t nV = nodesPool[pid].size();
+	*buffer = new double[nV*3];
+
+	size_t counter = 0;
+	size_t localID = 0;
+	for(map<int,int>::iterator it = nodesPool[pid].begin(); it!=nodesPool[pid].end(); ++it){
+		it->second = localID++; // the second is local id
+		(*buffer)[counter++] = rootVerts[ it->first ].x;
+		(*buffer)[counter++] = rootVerts[ it->first ].y;
+		(*buffer)[counter++] = rootVerts[ it->first ].z;
+	}
+
+	//printf("vertex buffer for %d prepared\n",pid);
+	return nV;
+}
+
+
+int RootProcess::getElementSendBuffer(DataPartition* dg,int pid ,int** buffer){
+	if(dg->comRank!=rank) return 0; //root only
+
+	int numberOfNodesInElementTypeOf[8] = {
+		0,2,3,4,4,8,6,5
+	};
+
+	
+	/**************************************************
+	 *	transfer element Vertex list to local idx
+	 **************************************************/
+	size_t iEhead = 0;
+	for(int i=0;i!=pid;++i){
+		iEhead+=rootgridList->at(i);
+	}
+	size_t iE = iEhead;
+	size_t counter = 0; //calculate the buffer length
+	for(int j=0;j!=rootgridList->at(pid);++j){
+		InputElement* _thisEle = rootElems[iE++];
+		int nv = numberOfNodesInElementTypeOf[_thisEle->type];
+		for(int k=0;k!=nv;++k){
+			int globalID = _thisEle->vertex[k];
+			int localID = nodesPool[pid][globalID];
+			_thisEle->vertex[k] = localID;
+		}
+		counter+= (2 + _thisEle->ntag + nv);
+	}
+
+	// build buffer
+	(*buffer) = new int [ counter ];//
+
+	counter = 0;
+	iE = iEhead;
+	for(int j=0;j!=rootgridList->at(pid);++j){ //each elements
+		InputElement* _thisEle = rootElems[iE++];
+		(*buffer)[counter++] = _thisEle->type;
+		(*buffer)[counter++] = _thisEle->ntag;
+		for(int k=0;k!=_thisEle->ntag;++k){
+			(*buffer)[counter++] = _thisEle->tag[k];
+		}	
+		for(int k=0;k!=numberOfNodesInElementTypeOf[_thisEle->type];++k){
+			(*buffer)[counter++] = _thisEle->vertex[k];
+		}
+	}
+
+	//printf("element buffer for %d prepared\n",pid);
+	return counter;
+}
+
+
+
+
+
+int RootProcess::getInterfaceSendBuffer(DataPartition* dg,int pid ,int** buffer){
+	if(dg->comRank!=rank) return 0; //root only
+
+
+	// build buffer
+	//
+	size_t nI = 0;	
+
+	nI++; // head contains the number of interfaces;
+	//the data structure of this buffer:
+	//interfacePartID, interfaceWidth, vert1, ver2, ver3,... interfacePartID2, interfaceWidth2, ...
+	
+	for(map<int,unordered_set<int> >::iterator ittup = boundNodesPool[pid].begin(); ittup!=boundNodesPool[pid].end(); ++ittup){
+		nI += 2;			 //each bounds has a head to record the interface info;
+		nI += ittup->second.size();
+	}
+
+	*buffer = new int[nI];
+
+	size_t counter = 0;	
+	(*buffer)[counter++] = boundNodesPool[pid].size();
+
+	for(map<int,unordered_set<int> >::iterator ittup = boundNodesPool[pid].begin(); ittup!=boundNodesPool[pid].end(); ++ittup){
+		(*buffer)[counter++] = ittup->first;
+		(*buffer)[counter++] = ittup->second.size();	 
+		for(unordered_set<int>::iterator itnodes = ittup->second.begin(); itnodes!=ittup->second.end(); ++itnodes){
+			int globalID = *itnodes;
+			int localID = nodesPool[pid][globalID];
+			(*buffer)[counter++] = localID;  //transfer boundNodesPool to local id
+		}
+	}
+
+	//printf("interface buffer for %d prepared\n",pid);
+	return nI;
+
+}
 
 

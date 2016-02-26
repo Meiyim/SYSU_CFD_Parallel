@@ -24,157 +24,137 @@ void NavierStokesSolver::readAndPartition(){
 	root.init(dataPartition);
 	root.read(dataPartition,string(GridFileName));
 	root.partition(dataPartition, dataPartition->comSize);
-	PetscPrintf(MPI_COMM_WORLD,"done\n");
-
 	//root.reorder
 }
 
 
+
 /*******************************************************/
 //	original msh reading function
+//	read geometry from MPI_Buffer
 //	local
 /*******************************************************/
-int NavierStokesSolver::ReadGridFile( )
+int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int* interfaceBuffer)// free buffer after use
 {
-    string   line;
-    ifstream file;
-    int      NumNodeInCell[8]={0,2,3,4,4,8,6,5},vertices[8],
-		i, count,elem_type,ntags,p,tag[10];
+	string   line;
+	int      NumNodeInCell[8]={0,2,3,4,4,8,6,5},vertices[8],
+		i, elem_type,ntags,p,tag[10];
 		// bndType[10]={4,2,3,1,4,4,0}; // bndType change the tag in gmsh file to navier_bc types ( 4 types currently )
 
-	file.open (GridFileName);
-    	if( ! file.is_open() ){
-		char temp[256];
-		sprintf(temp,"Grid file: %s cannot be opened\n It doesnot exist or is busy\n",GridFileName);
-		throw std::logic_error(temp);
-	}
-    // Skip some lines
-    file >> line;
-    file >> line;
-    file >> line;
-    file >> line;
-    file >> line;
-    file >> line;
-    // Read vertices
-    file >> Nvrt;
-    assert (Nvrt > 0);
-    // realloc (Vert, Nvrt);
+	printf("begin parsing grid file buffer\n");
+	writeGeometryBackup(elementBuffer,vertexBuffer,interfaceBuffer);//back up binary
+
+	// Read vertices
+    	assert (Nvrt > 0);
 	Vert = new_Array2D<double>(Nvrt,3);
-    for(i=0; i<Nvrt; i++){
-        file >> count
-             >> Vert[i][0]
-             >> Vert[i][1]
-             >> Vert[i][2];
-    }
-    file >> line;
-    file >> line;
-    // Read cells
-    int n_elem;
-    file >> n_elem;
-    assert (n_elem > 0);
-    
-    Ncel = 0;
-    Nbnd = 0;
-    for(i=0; i<n_elem; ++i)
-    {
-        file >> count
-             >> elem_type
-             >> ntags;
+	size_t counter = 0;
+	for(i=0; i<Nvrt; i++){
+             Vert[i][0] = vertexBuffer[counter++];
+             Vert[i][1] = vertexBuffer[counter++];
+             Vert[i][2] = vertexBuffer[counter++];
+    	}
+	delete []vertexBuffer;
+
+	// Read cells
+	Bnd = new BoundaryData[Nbnd];	//pre_allocation
+	Cell = new CellData[Ncel];
+
+   	counter = 0; 
+	for(i=0; i!=dataPartition->nLocal ; ++i)
+	{
+
+		elem_type = elementBuffer[counter++];
+		ntags = elementBuffer[counter++]; //temperary now fixed
 		for( p=0; p<ntags; p++ )    // Dummy tags, maybe useful later
-            file >> tag[p];
-		for( p=0; p<NumNodeInCell[elem_type]; p++ ){
-            file >> vertices[p];
-			vertices[p] -- ;  // to agree with vertices numbering from 0 to Nvrt-1
+			tag[p] = elementBuffer[counter++];
+		for( p=0; p<NumNodeInCell[elem_type];++p){
+			vertices[p] = elementBuffer[counter++];
+			if(p>=Nvrt) throw logic_error("vertex list out of range! bug may be at global -> local transfer part\n");
 		}
+	//-----------//
 
         // Some gmsh files have 2 and some have 3 tags
-        assert( ntags==2 || ntags==3 );
+        	assert( ntags==2 || ntags==3 );
   
-        if( elem_type==2 || elem_type==3 ) // Boundary, Tri/Quad face
-        {
-            Bnd = (BoundaryData*) realloc(Bnd,(Nbnd+1)*sizeof(BoundaryData));
+	        if( elem_type==2 || elem_type==3 ){ // Boundary, Tri/Quad face
+			//Bnd = (BoundaryData*) realloc(Bnd,(Nbnd+1)*sizeof(BoundaryData)); //deprecated : pool performace!
 			Bnd[Nbnd].rid = tag[0];  // bndType[tag[0]];      // First tag is face type
-            if(     elem_type==2 )
-            {
-                Bnd[Nbnd].vertices[0]= vertices[0];
-                Bnd[Nbnd].vertices[1]= vertices[1];
-                Bnd[Nbnd].vertices[2]= vertices[2];
-                Bnd[Nbnd].vertices[3]= vertices[2];
-            }
-            else if( elem_type==3 )
-            {
-                Bnd[Nbnd].vertices[0]= vertices[0];
-                Bnd[Nbnd].vertices[1]= vertices[1];
-                Bnd[Nbnd].vertices[2]= vertices[2];
-                Bnd[Nbnd].vertices[3]= vertices[3];
-            }
-			else
-			{
+
+			if(elem_type==2 ){
+       		         	Bnd[Nbnd].vertices[0]= vertices[0];
+		                Bnd[Nbnd].vertices[1]= vertices[1];
+       			        Bnd[Nbnd].vertices[2]= vertices[2];
+		                Bnd[Nbnd].vertices[3]= vertices[2];
+			}else if(elem_type==3 ){
+       	        		Bnd[Nbnd].vertices[0]= vertices[0];
+		                Bnd[Nbnd].vertices[1]= vertices[1];
+       		        	Bnd[Nbnd].vertices[2]= vertices[2];
+       		         	Bnd[Nbnd].vertices[3]= vertices[3];
+	       		 }else{
 				cout<<"boundary type is not correct."<<elem_type<<endl;
 				abort();
 			}
 			Nbnd ++ ;
-        }
-        else if( elem_type==4 || elem_type==5 ||  // Tetrahedral/Hexa/Prism/Pyramid cell
-                 elem_type==6 || elem_type==7 )
-        {
-            Cell = (CellData*) realloc(Cell,(Ncel+1)*sizeof(CellData));
-            // set all the cell types to 8-vertex hexa
-            if(     elem_type==4 )   // tetra
-            {
+       		 }else if( elem_type==4 || elem_type==5 ||  // Tetrahedral/Hexa/Prism/Pyramid cell
+       		          elem_type==6 || elem_type==7 )
+       		 {
+            		//Cell = (CellData*) realloc(Cell,(Ncel+1)*sizeof(CellData));//deprecated: pool performance!
+            		// set all the cell types to 8-vertex hexa
+            		if(     elem_type==4 )   // tetra
+            		{
 				// 0-3
 				for( p=0; p<3; p++ )
-				Cell[Ncel].vertices[p]= vertices[p];
+					Cell[Ncel].vertices[p]= vertices[p];
 				Cell[Ncel].vertices[3]= vertices[2];
 				// 4-7
-                for( p=4; p<8; p++ )
-				Cell[Ncel].vertices[p]= vertices[3];
-            }
-			else if( elem_type==5 )  // hexa
+                		for( p=4; p<8; p++ )
+					Cell[Ncel].vertices[p]= vertices[3];
+
+	            	}else if( elem_type==5 )  // hexa
 			{
 				for( p=0; p<8; p++ )
 				Cell[Ncel].vertices[p]= vertices[p];
-			}
-            else if( elem_type==6 )  // prism
-            {
+			}else if( elem_type==6 )  // prism
+       		     	{
 				// 0-3
 				for( p=0; p<3; p++ )
-                Cell[Ncel].vertices[p]= vertices[p];
+       	        			 Cell[Ncel].vertices[p]= vertices[p];
 				Cell[Ncel].vertices[3]= vertices[2];
 				// 4-7
-                for( p=4; p<7; p++ )
-                Cell[Ncel].vertices[p]= vertices[p-1];
-                Cell[Ncel].vertices[7]= vertices[5];
-            }
-            else if( elem_type==7 )  // pyramid
-            {
+       		         	for( p=4; p<7; p++ )
+       		         		Cell[Ncel].vertices[p]= vertices[p-1];
+	       		         Cell[Ncel].vertices[7]= vertices[5];
+            		}
+            		else if( elem_type==7 )  // pyramid
+            		{
 				// 0-3
 				for( p=0; p<4; p++ )
-				Cell[Ncel].vertices[p]= vertices[p];
+					Cell[Ncel].vertices[p]= vertices[p];
 				// 4-7
-                for( p=4; p<8; p++ )
-                Cell[Ncel].vertices[p]= vertices[4];
-            }
-			Ncel++ ;
-        }
-        else
-        {
-           cout << "Unknown element type !!!" << endl;
-           abort();
-        }
-    }
-    file.close ();
-
-	OutputGrid();
-    return 0;
+               			for( p=4; p<8; p++ )
+               		 		Cell[Ncel].vertices[p]= vertices[4];
+	       		 }
+		   	Ncel++ ;
+       		}else{
+			throw logic_error("unknown element type in local grid file\n");
+        	}
+	}
+	
+	//reading interface info ....
+	//OutputGrid(); 
+	printf("complete parsing grid file buffer\n");
+    	return 0;
 }
 
 // output grid to tecplot for validation
 void NavierStokesSolver::OutputGrid()
 {
 	int i,j;
+	char title[256];
 	ofstream of;
-	of.open("grid.dat");
+	
+	sprintf(title,"grid_bk_%04d.dat",dataPartition->comRank);
+	of.open(title);
 	of<<"variables="<<"\"x\","<<"\"y\","<<"\"z\""<<endl;
 	// output cells
 	of<<"zone n="<<Nvrt<<", e="<<Ncel<<", f=fepoint, et=BRICK"<<endl;

@@ -40,7 +40,7 @@ int main(int argc, char* argv[])try{
 	}else{
 		//read geometry locally
 	}
-	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer);		//parse the gridfile as original
+	//nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer);		//parse the gridfile as original
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	PetscPrintf(MPI_COMM_WORLD,"done\n");

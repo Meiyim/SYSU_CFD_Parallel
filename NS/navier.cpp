@@ -114,7 +114,7 @@ void NavierStokesSolver::broadcastSolverParam(){
 			_sendbuf[i] = root.rootNCells->at(i);
 
 		for(int i=0;i!=dataPartition->nProcess;++i)
-			_sendbuf[i] = root.nodesPool[i].size();
+			_sendbuf1[i] = root.nodesPool[i].size();
 
 	}
 
@@ -141,6 +141,7 @@ void NavierStokesSolver::broadcastSolverParam(){
 	printf("check parameter\n");
 	printf("rank %d, nProcess %d, nLocal %d, nGlobal %d, nCell %d, nBnd %d\n",
 			dataPartition->comRank, dataPartition->nProcess, dataPartition->nLocal, dataPartition->nGlobal, Ncel, Nbnd);
+	printf("vert------>%d\n",Nvrt);
 	*/
 	delete []_sendbuf;
 	delete []_sendbuf1;
@@ -158,8 +159,8 @@ void NavierStokesSolver::broadcastSolverParam(){
 //	it is the USERs responsibility to free this buffer!
 /*******************************************************/
 #define SEND_TAG_ELEMENT 0
-#define SEND_TAG_VERTEX 1000
-#define SEND_TAG_INTERFACEINFO 2000
+#define SEND_TAG_VERTEX 100
+#define SEND_TAG_INTERFACEINFO 200
 void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer, int** interfaceBuffer){
 	//scatterv and multiple send operation are both good for this subroutine
 	MPI_Request* sendRequests = NULL;	
@@ -184,30 +185,30 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 		buffer3 = new int* [_size];
 
 		for(int pid = 0;pid!=_size;++pid){
-			printf("root: sending geometry to grid: %d\n",pid);
+			//printf("root: sending geometry to grid: %d\n",pid);
 			_sendSize[0] = root.getVertexSendBuffer(dataPartition, pid, buffer1 + pid);
 			_sendSize[1] = root.getElementSendBuffer(dataPartition,pid, buffer2+pid);
 			_sendSize[2] = root.getInterfaceSendBuffer(dataPartition, pid, buffer3 + pid);
-			printf("prepared buffer for pid %d, %d,%d,%d\n",pid,_sendSize[0],_sendSize[1],_sendSize[2]);
+			//printf("prepared buffer for pid %d, %d,%d,%d\n",pid,_sendSize[0],_sendSize[1],_sendSize[2]);
 
 			//non-blocking buffered send
 			MPI_Bsend(_sendSize,3,MPI_INT,pid,244,dataPartition->comm);
 
 			//send vertex	
-			MPI_Issend(buffer1+pid, _sendSize[0], MPI_DOUBLE,
+			MPI_Issend(buffer1[pid], _sendSize[0], MPI_DOUBLE,
 					pid,		     	     //dest
 					SEND_TAG_VERTEX,	     //send tag
 					dataPartition->comm,
 					sendRequests+3*pid+0); 	     //return request
 			//send elements
-			MPI_Issend(buffer2+pid, _sendSize[1], MPI_INT,
+			MPI_Issend(buffer2[pid], _sendSize[1], MPI_INT,
 					pid,		      	     //dest
 					SEND_TAG_ELEMENT,	     //send tag
 					dataPartition->comm,
 					sendRequests+3*pid+1); 	     //return request
 
 			//send interfaceinfo
-			MPI_Issend(buffer3+pid, _sendSize[2], MPI_INT,
+			MPI_Issend(buffer3[pid], _sendSize[2], MPI_INT,
 					pid,			     //dest
 					SEND_TAG_INTERFACEINFO,  //send tag
 					dataPartition->comm,
@@ -221,7 +222,7 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 
 	//receiveing side ...
 	//root is sending to itself...
-	printf("rank: %d is receiving geometry...\n",dataPartition->comRank);
+	//printf("rank: %d is receiving geometry...\n",dataPartition->comRank);
 	recvRequtests = new MPI_Request[ 3 ];
 	//blocking receive!
 	MPI_Recv(_recvSize,3,MPI_INT,root.rank,244,dataPartition->comm,MPI_STATUS_IGNORE);
@@ -252,7 +253,8 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 			dataPartition->comm,
 			recvRequtests+2); 			//return value
 
-	ierr = MPI_Waitall(3,recvRequtests,MPI_STATUS_IGNORE);
+	MPI_Status status[3];
+	ierr = MPI_Waitall(3,recvRequtests,status);
 	if(ierr!=MPI_SUCCESS){
 		char temp[256];
 		sprintf(temp,"MPI receive failure in geometry transfering\n");

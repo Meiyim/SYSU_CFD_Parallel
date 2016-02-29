@@ -41,10 +41,13 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 		i, elem_type,ntags,p,tag[10];
 		// bndType[10]={4,2,3,1,4,4,0}; // bndType change the tag in gmsh file to navier_bc types ( 4 types currently )
 
-	printf("begin parsing grid file buffer\n");
+	PetscPrintf(dataPartition->comm,"begin parsing grid file buffer\n");
+
 	writeGeometryBackup(elementBuffer,vertexBuffer,interfaceBuffer);//back up binary
 
 	// Read vertices
+	
+	//printf("readVert %d\n",Nvrt);
     	assert (Nvrt > 0);
 	Vert = new_Array2D<double>(Nvrt,3);
 	size_t counter = 0;
@@ -58,8 +61,11 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	// Read cells
 	Bnd = new BoundaryData[Nbnd];	//pre_allocation
 	Cell = new CellData[Ncel];
+	//printf("read cell: %d and %d\n",Nbnd,Ncel);
 
    	counter = 0; 
+	int icel = 0;
+	int ibnd = 0;
 	for(i=0; i!=dataPartition->nLocal ; ++i)
 	{
 
@@ -71,6 +77,16 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 			vertices[p] = elementBuffer[counter++];
 			if(p>=Nvrt) throw logic_error("vertex list out of range! bug may be at global -> local transfer part\n");
 		}
+		/*
+		if(dataPartition->comRank == 3){
+			printf("element read: type: %d, ntag %d, vertices:",elem_type,ntags);
+			for( p=0; p<NumNodeInCell[elem_type];++p){
+				printf("%d, ",vertices[p]);
+			}
+			printf("\n");
+		}
+		*/
+
 	//-----------//
 
         // Some gmsh files have 2 and some have 3 tags
@@ -81,20 +97,20 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 			Bnd[Nbnd].rid = tag[0];  // bndType[tag[0]];      // First tag is face type
 
 			if(elem_type==2 ){
-       		         	Bnd[Nbnd].vertices[0]= vertices[0];
-		                Bnd[Nbnd].vertices[1]= vertices[1];
-       			        Bnd[Nbnd].vertices[2]= vertices[2];
-		                Bnd[Nbnd].vertices[3]= vertices[2];
+       		         	Bnd[ibnd].vertices[0]= vertices[0];
+		                Bnd[ibnd].vertices[1]= vertices[1];
+       			        Bnd[ibnd].vertices[2]= vertices[2];
+		                Bnd[ibnd].vertices[3]= vertices[2];
 			}else if(elem_type==3 ){
-       	        		Bnd[Nbnd].vertices[0]= vertices[0];
-		                Bnd[Nbnd].vertices[1]= vertices[1];
-       		        	Bnd[Nbnd].vertices[2]= vertices[2];
-       		         	Bnd[Nbnd].vertices[3]= vertices[3];
+       	        		Bnd[ibnd].vertices[0]= vertices[0];
+		                Bnd[ibnd].vertices[1]= vertices[1];
+       		        	Bnd[ibnd].vertices[2]= vertices[2];
+       		         	Bnd[ibnd].vertices[3]= vertices[3];
 	       		 }else{
 				cout<<"boundary type is not correct."<<elem_type<<endl;
 				abort();
 			}
-			Nbnd ++ ;
+			ibnd ++ ;
        		 }else if( elem_type==4 || elem_type==5 ||  // Tetrahedral/Hexa/Prism/Pyramid cell
        		          elem_type==6 || elem_type==7 )
        		 {
@@ -104,37 +120,37 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
             		{
 				// 0-3
 				for( p=0; p<3; p++ )
-					Cell[Ncel].vertices[p]= vertices[p];
-				Cell[Ncel].vertices[3]= vertices[2];
+					Cell[icel].vertices[p]= vertices[p];
+				Cell[icel].vertices[3]= vertices[2];
 				// 4-7
                 		for( p=4; p<8; p++ )
-					Cell[Ncel].vertices[p]= vertices[3];
+					Cell[icel].vertices[p]= vertices[3];
 
 	            	}else if( elem_type==5 )  // hexa
 			{
 				for( p=0; p<8; p++ )
-				Cell[Ncel].vertices[p]= vertices[p];
+				Cell[icel].vertices[p]= vertices[p];
 			}else if( elem_type==6 )  // prism
        		     	{
 				// 0-3
 				for( p=0; p<3; p++ )
-       	        			 Cell[Ncel].vertices[p]= vertices[p];
-				Cell[Ncel].vertices[3]= vertices[2];
+       	        			 Cell[icel].vertices[p]= vertices[p];
+				Cell[icel].vertices[3]= vertices[2];
 				// 4-7
        		         	for( p=4; p<7; p++ )
-       		         		Cell[Ncel].vertices[p]= vertices[p-1];
-	       		         Cell[Ncel].vertices[7]= vertices[5];
+       		         		Cell[icel].vertices[p]= vertices[p-1];
+	       		         Cell[icel].vertices[7]= vertices[5];
             		}
             		else if( elem_type==7 )  // pyramid
             		{
 				// 0-3
 				for( p=0; p<4; p++ )
-					Cell[Ncel].vertices[p]= vertices[p];
+					Cell[icel].vertices[p]= vertices[p];
 				// 4-7
                			for( p=4; p<8; p++ )
-               		 		Cell[Ncel].vertices[p]= vertices[4];
+               		 		Cell[icel].vertices[p]= vertices[4];
 	       		 }
-		   	Ncel++ ;
+		   	icel++ ;
        		}else{
 			throw logic_error("unknown element type in local grid file\n");
         	}

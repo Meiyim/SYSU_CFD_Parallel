@@ -228,7 +228,6 @@ void RootProcess::partition(DataPartition* dg, int N){
 		}
 	}	
 
-
 	delete []epart,delete []npart;
 	printf("complete partitioning in root \n");
 	
@@ -387,7 +386,8 @@ int RootProcess::getInterfaceSendBuffer(DataPartition* dg,int pid ,int** buffer)
 
 	nI++; // head contains the number of interfaces;
 	//the data structure of this buffer:
-	//interfacePartID, interfaceWidth, vert1, ver2, ver3,... interfacePartID2, interfaceWidth2, ...
+	//
+	//numberOfInterfaces, interfacePartID, interfaceWidth, vert1, ver2, ver3,... interfacePartID2, interfaceWidth2, ...
 	
 	for(map<int,unordered_set<int> >::iterator ittup = boundNodesPool[pid].begin(); ittup!=boundNodesPool[pid].end(); ++ittup){
 		nI += 2;			 //each bounds has a head to record the interface info;

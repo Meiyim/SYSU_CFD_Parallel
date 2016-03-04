@@ -139,10 +139,10 @@ void NavierStokesSolver::broadcastSolverParam(){
 
 	/*
 	printf("check parameter\n");
-	printf("rank %d, nProcess %d, nLocal %d, nGlobal %d, nCell %d, nBnd %d\n",
-			dataPartition->comRank, dataPartition->nProcess, dataPartition->nLocal, dataPartition->nGlobal, Ncel, Nbnd);
 	printf("vert------>%d\n",Nvrt);
 	*/
+	printf("rank %d, nProcess %d, nLocal %d, nGlobal %d, nCell %d, nBnd %d\n",
+			dataPartition->comRank, dataPartition->nProcess, dataPartition->nLocal, dataPartition->nGlobal, Ncel, Nbnd);
 	delete []_sendbuf;
 	delete []_sendbuf1;
 }
@@ -260,7 +260,7 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 		sprintf(temp,"MPI receive failure in geometry transfering\n");
 		throw runtime_error(temp);
 	}else{
-		printf("rank: %d received geometry buffer\n",dataPartition->comRank);
+		//printf("rank: %d received geometry buffer\n",dataPartition->comRank);
 	}	
 	delete []recvRequtests;
 

@@ -14,20 +14,62 @@
 #define ELEMENT_TAG_LEN 2
 
 #ifdef SHOULD_CHECK_MPI_ERROR 
-
 #define CHECK(err) throwError("MPI_ERROR");
 #define PCHECK(err) throwError("PETSC_ERROR");
 #else
 #define CHECK(err)
 #define PCHECK(err)
-
 #endif
+
+#define PRINT_LOG(VAR) printlog(VAR,#VAR)
+
+class RootProcess;
+class Interface;
+class DataPartition;
+
+
+/******************************************************
+ *  	each interface correspond to a edge of the connectivity graph
+ ******************************************************/
+class Interface{
+public:
+	// Constructor
+	Interface(int selfRank,int rRank,int w): //recvlist & sendlist must be setted by Caller dataGroup
+		width(w),
+		sendRank(selfRank),	
+		recvRank(rRank),
+		sendposis(new int[w]),
+		sendBuffer(new double[w])
+	{}	
+	~Interface(){
+		delete sendposis;
+		delete sendBuffer;
+		sendposis = NULL;
+		sendBuffer = NULL;
+	}
+	// MPI non blocking communication method !
+	int push(); 		 // non-blocking method!! return immediatly
+	int update(); 		 // non-blocking method!! return immediatly
+public:
+	int width;
+	int sendRank;
+	int recvRank;
+
+	/****************************************/
+	int recvposi; 		 //index of the head of off_process cells
+	int const * sendposis;   //indexes of on_process cells
+private:	
+	double const *sendBuffer;//copy to this buffer and send;
+};
+
+
 /******************************************************
  *  	this data group lies each on a processor
  *  	a simple pack of u,v,w, etc.
  ******************************************************/
-class RootProcess;
-struct DataPartition{ 
+class DataPartition{ 
+public:
+	/***********PETSC*********************/
 	Vec u;
 	Vec bu;
 	Mat Au;
@@ -36,7 +78,8 @@ struct DataPartition{
 	/***********KSP CONTEXT***************/
 	KSP ksp;	
 	PC pc;
-	/*************************************/
+
+	/***********MPI_PARAMETER*************/
 	int mpiErr;
 	int comRank;
 	int comSize;
@@ -44,8 +87,10 @@ struct DataPartition{
 	int nGlobal;    // number of global cell
 	int nProcess;   // number of partitions
 	int* gridList;  //size of nProcess , gridList[comRank] == nLocal;
-	//double** Avals; //temp for file reading test;
-	//int** Aposi; 
+
+	/**********INTERFACE INFO**************/
+	vector<Interface*> interfaces; //remember to free pointer
+
 	DataPartition():
 		comm(MPI_COMM_WORLD),
 		//nLocal(0),
@@ -56,9 +101,21 @@ struct DataPartition{
 	{
 		mpiErr = MPI_Comm_rank(comm,&comRank);CHECK(mpiErr)
 		mpiErr = MPI_Comm_size(comm,&comSize);CHECK(mpiErr)
+		char temp[256];
+		sprintf(temp,"log/log%d",comRank);
+		logfile.open(temp);
 	}
 	
-	~DataPartition(){}
+	~DataPartition(){
+		/*******DESTROY PETSC OBJECTS**********/
+		logfile.close();
+		delete []gridList;	
+		gridList = NULL;
+		for(vector<Interface*>::iterator it = interfaces.begin();it!=interfaces.end();++it){
+			if((*it)!=NULL)
+				delete (*it);
+		}
+	}
 
 	int initPetsc(); //build petsc vectors, collective call
 
@@ -72,6 +129,18 @@ struct DataPartition{
 
 	int solveGMRES(double tol,int maxIter); //return 0 if good solve, retrun 1 if not converge
 
+
+	std::ofstream logfile; //for test purpose
+	template<typename T>
+	void printlog(const T& var,const char* varname){
+		char temp[256];
+		sprintf(temp,"RANK: %d, %s :",comRank,varname);
+		logfile<<temp;
+		logfile<<var<<std::endl;
+
+	}
+
+private:
 	int errorCounter;
 	void throwError(const std::string& msg){ // only check error when SHOULD_CHECK_MPI_ERROR is defined
 		char temp[256];
@@ -82,40 +151,8 @@ struct DataPartition{
 		printf("*****************************END ERROR***************************************");
 		throw std::runtime_error(temp);
 	}
-private:
 	int pushVectorToRoot(const Vec& petscVec, double* rootbuffer,int rootRank);
 
-};
-
-
-
-/******************************************************
- *  	each interface correspond to a edge of the connectivity graph
- ******************************************************/
-class Interface{
-public:
-	int width;
-	int sendRank;
-	int recvRank;
-	/****************FOR PROPERTY U************************/
-	int* recvlist; //point to off-process cells
-	int* sendlist; //point to on-process cells
-	
-	// MPI non blocking communication method !
-	int push(); // non-blocking method!! return immediatly
-	int update(); // non-blocking method!! return immediatly
-	// Constructor
-	Interface(int selfRank,int rRank,int w): //recvlist & sendlist must be setted by Caller dataGroup
-		width(w),
-		sendRank(selfRank),	
-		recvRank(rRank)
-	{}	
-	~Interface(){
-		delete recvlist;
-		delete sendlist;
-		recvlist = sendlist = NULL;
-	}
-	
 };
 
 
@@ -157,7 +194,7 @@ public:
 	double* rootArrayBuffer; 	//used to collect data
 
 	/***************used when partitioning*************************/
-	InputElement** rootElems;   	 //a pointer array //faster for sorting
+	InputElement** rootElems;   	 //a pointer array //for faster sorting
 	InputVert* rootVerts; 		
 	std::map<int, unordered_set<int> >* boundNodesPool ; //one for each partition, <partID,nodesPool>
 	std::map<int,int>* nodesPool;			     //one for each partition, <globalID, localID>;

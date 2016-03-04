@@ -165,10 +165,15 @@ public:
 *******************************************/
 //CXY:
 	void readAndPartition();
-	int  ReadGridFile    (int*,double*,int*);//read geometry from a buffer
+
+ 	//first 3 parameter is input buffer:
+	//last 1 parameter is output boundaryinfo;
+	////read geometry from a buffer,
+	int  ReadGridFile    (int*,double*,int*,map<int,unordered_set<int> >*);
+
 // Geometry
 
-	void OutputGrid      ( );
+	void OutputGrid      (map<int,unordered_set<int> >*);
 	int  CreateFaces     ( );
 	void FindFace( int, int,int,int,int, int&, int*,int** );
 	int  CellFaceInfo    ( );

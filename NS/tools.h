@@ -3,6 +3,7 @@
 
 #include <string>
 #include <stdlib.h>
+#include "../MPIStructure.h"
 using namespace std;
 
 #define CYCASMAX(x,y)  ((x)>(y)?(x):(y))
@@ -62,6 +63,19 @@ void init_Array2D(T **arr, int row, int col, T val )
         for (int j = 0; j < col; ++j)
             arr[i][j] = val;
 }
+
+
+/********************************************
+ * below is implement by CHENXUYI
+ ********************************************/
+
+
+/********************************************
+ * MPI Parallel I/O
+ * collective
+ * must ensure passing the buffer of same length to the function
+ ********************************************/
+int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* dg,int head);
 
 
 #endif

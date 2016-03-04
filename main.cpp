@@ -21,6 +21,9 @@ int main(int argc, char* argv[])try{
 	ierr = PetscInitialize(&argc,&argv,NULL,NULL); CHKERRQ(ierr);
 	PetscOptionsGetBool(NULL,"-readLocally",&shouldReadLocal,NULL);
 
+	/******************************************
+	 * START UP
+	 ******************************************/
 
 	NavierStokesSolver* nsSolver = new NavierStokesSolver;
 	//PetscPrintf(MPI_COMM_WORLD,"init\n");	
@@ -40,9 +43,14 @@ int main(int argc, char* argv[])try{
 	}else{
 		//read geometry locally
 	}
-	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer);		//parse the gridfile as original,
-      											// 	!!! remember to free buffer
 
+	map<int,unordered_set<int> >* boundInfo= new map<int,unordered_set<int> >;
+	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer,boundInfo);	//parse the gridfile as original, buffer is freeed
+	
+	delete boundInfo;
+	/******************************************
+	 * NS_solve
+	 ******************************************/
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	PetscPrintf(MPI_COMM_WORLD,"done\n");

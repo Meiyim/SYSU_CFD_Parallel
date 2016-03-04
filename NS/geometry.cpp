@@ -19,7 +19,6 @@ using namespace std;
 //	
 //	root ONLY
 /*******************************************************/
-
 void NavierStokesSolver::readAndPartition(){
 	root.init(dataPartition);
 	root.read(dataPartition,string(GridFileName));
@@ -33,23 +32,31 @@ void NavierStokesSolver::readAndPartition(){
 //	original msh reading function
 //	read geometry from MPI_Buffer
 //	local
+//	last parameter is ouput value, containing the boundaryInfo
 /*******************************************************/
-int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int* interfaceBuffer)// free buffer after use
+int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int* interfaceBuffer,map<int,unordered_set<int> >* boundaryInfo)// free buffer after use
 {
 	string   line;
 	int      NumNodeInCell[8]={0,2,3,4,4,8,6,5},vertices[8],
 		i, elem_type,ntags,p,tag[10];
 		// bndType[10]={4,2,3,1,4,4,0}; // bndType change the tag in gmsh file to navier_bc types ( 4 types currently )
 
+	MPI_Barrier(dataPartition->comm);
 	PetscPrintf(dataPartition->comm,"begin parsing grid file buffer\n");
 
 	writeGeometryBackup(elementBuffer,vertexBuffer,interfaceBuffer);//back up binary
 
-	// Read vertices
-	
-	//printf("readVert %d\n",Nvrt);
+	/******************************************
+	 *	Read Vertices
+	 ******************************************/
     	assert (Nvrt > 0);
 	Vert = new_Array2D<double>(Nvrt,3);
+
+	dataPartition->PRINT_LOG(Nvrt);
+	for(int i=0;i!=3*Nvrt;++i){
+		dataPartition->PRINT_LOG(vertexBuffer[i]);
+	}
+
 	size_t counter = 0;
 	for(i=0; i<Nvrt; i++){
              Vert[i][0] = vertexBuffer[counter++];
@@ -58,7 +65,9 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
     	}
 	delete []vertexBuffer;
 
-	// Read cells
+	/******************************************
+	 *	Read Cells
+	 ******************************************/
 	Bnd = new BoundaryData[Nbnd];	//pre_allocation
 	Cell = new CellData[Ncel];
 	//printf("read cell: %d and %d\n",Nbnd,Ncel);
@@ -66,7 +75,7 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
    	counter = 0; 
 	int icel = 0;
 	int ibnd = 0;
-	for(i=0; i!=dataPartition->nLocal ; ++i)
+	for(i=0; i!=dataPartition->gridList[dataPartition->comRank] ; ++i)
 	{
 
 		elem_type = elementBuffer[counter++];
@@ -107,8 +116,7 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
        		        	Bnd[ibnd].vertices[2]= vertices[2];
        		         	Bnd[ibnd].vertices[3]= vertices[3];
 	       		 }else{
-				cout<<"boundary type is not correct."<<elem_type<<endl;
-				abort();
+				throw logic_error("unknown boundary type in local grid file\n");
 			}
 			ibnd ++ ;
        		 }else if( elem_type==4 || elem_type==5 ||  // Tetrahedral/Hexa/Prism/Pyramid cell
@@ -154,24 +162,94 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
        		}else{
 			throw logic_error("unknown element type in local grid file\n");
         	}
+
 	}
-	
-	//reading interface info ....
-	//OutputGrid(); 
-	printf("complete parsing grid file buffer\n");
+	delete[] elementBuffer;
+
+	/******************************************
+	 *	Read Interface Info
+	 ******************************************/
+	counter = 0;
+	int _nInterfaces = interfaceBuffer[counter++];	
+	for(int i=0;i!=_nInterfaces;++i){
+		int _interfaceID = interfaceBuffer[counter++];
+		int _width = interfaceBuffer[counter++];
+		unordered_set<int> _nodesSet;
+		for(int _inode = 0; _inode!=_width; ++_inode){
+			_nodesSet.insert(interfaceBuffer[counter++]);
+		}
+		boundaryInfo->insert(make_pair<int,unordered_set<int> >(_interfaceID,_nodesSet));
+	}		
+
+	//printf("rank: %d complete reading geo: icell %d, ncel %d\tibnd %d,nbnd %d\t,nvert%d \n",dataPartition->comRank,icel,Ncel,ibnd,Nbnd,Nvrt);
+
+
+	OutputGrid(boundaryInfo); //output tecplot: grid.dat
+	PetscPrintf(dataPartition->comm,"complete parsing grid file buffer\n");
+	MPI_Barrier(dataPartition->comm);
     	return 0;
 }
 
 // output grid to tecplot for validation
-void NavierStokesSolver::OutputGrid()
+void NavierStokesSolver::OutputGrid(map<int,unordered_set<int> >* boundinfo)
 {
-	int i,j;
-	char title[256];
+	int i;
+	string title("grid.dat");
 	ofstream of;
+	int head =0;
 	
-	sprintf(title,"grid_bk_%04d.dat",dataPartition->comRank);
-	of.open(title);
-	of<<"variables="<<"\"x\","<<"\"y\","<<"\"z\""<<endl;
+	of.open(title.c_str());
+	string sbuffer;
+	char cbuffer[256];
+
+	sprintf(cbuffer,"variables=\"x\",\"y\",\"z\",\"i\"\n");
+	sbuffer = cbuffer;
+	head = sbuffer.size();
+	if(dataPartition->comRank == root.rank){//print head in root
+		of<<sbuffer;
+	}
+
+	sbuffer="";
+	sprintf(cbuffer,"zone n=%d, e=%d, f=fepoint, et=BRICK\n",Nvrt,Ncel);
+	sbuffer=cbuffer;
+
+	for( i=0; i<Nvrt; i++ ){
+		double _iinfo = 0.0;
+		for(map<int,unordered_set<int> >::iterator it=boundinfo->begin(); it!=boundinfo->end(); ++it){
+			unordered_set<int>& _bset = it->second;
+			if( _bset.find(i) != _bset.end() ){
+				_iinfo = it->first + 1;
+				break;
+			}
+		}
+		sprintf(cbuffer,"%f %f %f %f\n",Vert[i][0],Vert[i][1],Vert[i][2],_iinfo);
+		sbuffer.append(cbuffer);
+	}
+	for( i=0; i<Ncel; i++ ){
+		sprintf(cbuffer,"%8d %8d %8d %8d %8d %8d %8d %8d\n",
+				Cell[i].vertices[0]+1,
+				Cell[i].vertices[1]+1,
+				Cell[i].vertices[2]+1,
+				Cell[i].vertices[3]+1,
+				Cell[i].vertices[4]+1,
+				Cell[i].vertices[5]+1,
+				Cell[i].vertices[6]+1,
+				Cell[i].vertices[7]+1
+				);
+		sbuffer.append(cbuffer);
+	}
+
+	//printf("rank:%d printing %lu to buffer\n",dataPartition->comRank,sbuffer.size());
+
+	parallelWriteBuffer(title,sbuffer,dataPartition,head);
+
+	/*
+	char temp[256];
+	sprintf(temp,"gridtemp%0d.dat",dataPartition->comRank);
+	ofstream _of(temp);
+	_of<<sbuffer;
+	_of.close();
+
 	// output cells
 	of<<"zone n="<<Nvrt<<", e="<<Ncel<<", f=fepoint, et=BRICK"<<endl;
 	for( i=0; i<Nvrt; i++ )
@@ -181,14 +259,18 @@ void NavierStokesSolver::OutputGrid()
 			of<<Cell[i].vertices[j]+1<<" ";
 		of<<endl;
 	}
+	*/
 
 	/* // output boundary
 	of<<"zone n="<<Nvrt<<", e="<<Ncel<<", f=fepoint, et=Quadrilateral"<<
 		"VARSHARELIST = ([1-3]=1)"<<endl;
 	for( i=0; i<Nbnd; i++ )
 	{
-	} */
+	} 
+	*/
+
 	of.close( );
+	PetscPrintf(dataPartition->comm,"complete writing grid.dat\n");
 }
 
 
@@ -203,18 +285,24 @@ int NavierStokesSolver::CreateFaces( )
 		NumNodeFace[i] = 0;
 	for( i=0; i<Ncel; i++ )
 		Cell[i].nface = 0;
+	/* //CXY: seems not useful
 	for( i=0; i<Nfac; i++ ){
 		Face[i].bnd = -10;
 		Face[i].lambda = 1.;
 	}
+	*/
     
     //cout<<"begin faces construction ... ";
 	printer->addMessage(string("begin faces constructin ...\n"));
-    Nfac = 0;
+    //Nfac = 0;
     // first boundary faces
+   	 
+	Nfac = 0;
+	Face = new FaceData[Nbnd];	// modified by CXY
+
     for( i=0; i<Nbnd; i++ )
     {
-		Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) );
+	//Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) ); //deleted! bad performance
         Bnd[i].face = Nfac;
         for( j=0;j<4;j++ )
             Face[Nfac].vertices[j] = Bnd[i].vertices[j];
@@ -227,6 +315,7 @@ int NavierStokesSolver::CreateFaces( )
         }
 		Nfac++;  // face accumulation is at last
     }
+
     // interior faces
     for( i=0;i<Ncel;i++ )
     {

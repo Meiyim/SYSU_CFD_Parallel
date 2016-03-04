@@ -2,6 +2,7 @@
 #include <math.h>
 #include <string>
 #include <ctime>
+#include <mpi.h>
 #include "tools.h"
 
 using namespace std;
@@ -97,3 +98,52 @@ double ttime (void)
 	sec = clock()/double(CLOCKS_PER_SEC);
     return (sec);
 }
+
+
+/********************************************
+ * below is implement by CHENXUYI
+ ********************************************/
+
+
+/********************************************
+ * MPI Parallel I/O
+ * collective
+ * must ensure passing the buffer of same length to the function
+ ********************************************/
+int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* dg, int head){//collective
+	MPI_File thefile;
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	int myBufSize = buffer.size();
+	int* bufSizes = new int[dg->comSize];
+	int disp = 0;
+	
+	MPI_Allgather(&myBufSize,1,MPI_INT,bufSizes,1,MPI_INT,dg->comm);
+
+	for(int i=0;i!=dg->comRank;++i){
+		disp+=bufSizes[i];
+	}
+
+	int ret = MPI_File_open(MPI_COMM_WORLD,title.c_str(), MPI_MODE_RDWR, MPI_INFO_NULL, &thefile);
+	if(ret!=MPI_SUCCESS){ 
+		throw runtime_error("MPI Parallel I/O fail: cant open file \n");
+	}
+
+	ret = MPI_File_set_view(thefile, (MPI_Offset)head*sizeof(char) + (MPI_Offset)disp * sizeof(char), MPI_CHAR,MPI_CHAR,"native",MPI_INFO_NULL);
+	if(ret!=MPI_SUCCESS){ 
+		throw runtime_error("MPI Parallel I/O fail: cant set view \n");
+	}
+
+	ret = MPI_File_write(thefile,buffer.c_str(),myBufSize,MPI_CHAR,MPI_STATUS_IGNORE);
+	if(ret!=MPI_SUCCESS){ 
+		throw runtime_error("MPI Parallel I/O fail: cant write buffer \n");
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_File_close(&thefile);
+	delete []bufSizes;
+	return 0;
+}
+
+
+

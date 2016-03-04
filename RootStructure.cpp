@@ -319,7 +319,7 @@ int RootProcess::getVertexSendBuffer(DataPartition*dg,int pid, double** buffer){
 	}
 
 	//printf("vertex buffer for %d prepared\n",pid);
-	return nV;
+	return counter;
 }
 
 

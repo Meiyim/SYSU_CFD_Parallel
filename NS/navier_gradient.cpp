@@ -3,7 +3,11 @@
 #include <math.h>
 using namespace std;
 
-// Gradient calculation using Gaussian law
+/*********************************************
+ * Gradient calculation using Gaussian law
+ * MPI Collective Subroutine
+ * Communicate to get gradient at interface Cell
+ *********************************************/
 int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 {
     int    i,g, c1,c2;

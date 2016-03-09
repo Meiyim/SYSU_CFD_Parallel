@@ -172,6 +172,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	//for(int i=0;i!=rootNVert;++i)
 	//	PetscPrintf(MPI_COMM_WORLD,"!!!!!!!!!!!!!!!!npart: %d , %lld\n",i,npart[i]);
 	delete []eptr;delete eind; eptr=NULL;eptr=NULL;
+	delete []npart;npart = NULL;
 	for(int i=0;i!=rootNElement;++i)
 		rootElems[i]->pid = epart[i];
 
@@ -212,25 +213,45 @@ void RootProcess::partition(DataPartition* dg, int N){
 			} 
 			for(int k=0;k!=nv;++k){	     //each vertex
 				int _thisVert = _thisEle->vertex[k];
-				int _partid = npart[_thisVert];
+				//int _partid = npart[_thisVert];
 
 				nodesPool[i].insert(make_pair<int,int>(_thisVert,0) );//nodesPool[i][i] contains all verts of a partition, 
 				
+				/*
 				if(_partid != i){ //if is a boundary, nodesPool[i][_partid] contains verts on each boundary
 
 					boundNodesPool[i][_partid].insert(  _thisVert ); //if vert exists, nothing will do
 					//interfacesInfo[i][_partid]++; //count the number of body & boundaries
 					//interfacesInfo[_partid][i]++; // update the part info on the other side of the boundary	
-					boundNodesPool[_partid][_partid].erase(_thisVert); //correct the nodesPool of the partition on the
+					//boundNodesPool[_partid][_partid].erase(_thisVert); //correct the nodesPool of the partition on the
 					boundNodesPool[_partid][i].insert( _thisVert );    // other side of the boundary
 				}
+				*/
 			}	
+
 		}
 	}	
 
-	delete []epart,delete []npart;
+
+	//bug fixed! boundNodesPool should obtained by intersection
+	for(int thisPart = 0;thisPart!=N;++thisPart){
+		for(int thatPart = thisPart+1;thatPart!=N;++thatPart){
+			vector<pair<int,int> > res;
+			set_intersection(nodesPool[thisPart].begin(),nodesPool[thisPart].end(),
+					 nodesPool[thatPart].begin(),nodesPool[thatPart].end(),
+					 back_inserter(res));
+			if(res.empty()){
+				//no interface with this and that
+			}else{
+				for(vector<pair<int,int> >::iterator iter = res.begin();iter!=res.end();++iter){
+					boundNodesPool[thisPart][thatPart].insert(iter->first);
+					boundNodesPool[thatPart][thisPart].insert(iter->first);
+				}
+			}
+		}
+	}
+
 	printf("complete partitioning in root \n");
-	
 	/*****************DATA PARTITION*******************
 	 * 	phase5 : translate global idx of vertex list to local idx
 	 * 		 translate global idx of interface pool to local idx
@@ -245,10 +266,6 @@ void RootProcess::partition(DataPartition* dg, int N){
 			printf("\t pid: %d: %lu\n",it->first,it->second.size());	
 		}
 	}
-
-		
-
-	//delete [] boundNodesPool;	
 
 
 }
@@ -415,3 +432,66 @@ int RootProcess::getInterfaceSendBuffer(DataPartition* dg,int pid ,int** buffer)
 }
 
 
+/***************************************************
+ * 	 print screen
+ * 	 root only
+ * *************************************************/
+void RootProcess::printStarter(DataPartition* dg){
+	if(dg->comRank != rank) return ;
+	system("clear");
+	printf("    1111111    111        111    1111111         111111         1111111          \n");
+	printf("  11111111111  111        111  11111111111      11111111      11111111111        \n");
+	printf(" 1111     1111 111        111 1111     1111    1111  1111    1111     1111       \n");
+	printf(" 1111            111    111   1111            1111    1111   1111     1111       \n");
+	printf(" 1111              111111     1111           1111      1111    111               \n");
+	printf(" 1111               1111      1111           1111      1111      11111           \n");
+	printf(" 1111               1111      1111           11111111111111         1111         \n");
+	printf(" 1111               1111      1111           1111      1111  1111     1111       \n");
+	printf(" 1111     1111      1111       1111    1111  1111      1111  1111     1111       \n");
+	printf("  11111111111       1111        1111111111   1111      1111   11111111111        \n");
+   	printf("    1111111         1111          111111     1111      1111     1111111          \n");
+	printf("\n");
+	printf("\n");
+    	printf("000000000000000000000000000000000000000000000000000000000000000000000000000000\n");
+	printf("0 0000 0 0    00     0      0     00 0000 00     0      0 0000 0     00      0\n");
+	printf("0 0000 0  000 0 00000000  000 0000 0 0000 0 00000000  000 0000 0 0000 0 000000\n");
+	printf("0 0000 0 0000 00    0000  000     00 0000 0 00000000  000 0000 0     00      0\n");
+	printf("0 0000 0 0000 000000 000  000 000 00 0000 0 00000000  000 0000 0 000 00 000000\n");
+	printf("00    00 0000 0     0000  000 0000 00    000     000  0000    00 0000 0      0\n");
+    	printf("000000000000000000000000000000000000000000000000000000000000000000000000000000\n");
+
+
+	printf("                   *******************************************\n");
+	printf("                     COMPUTATIONAL CODES FOR FLUID DYNAMICS\n");
+	printf("                   *******************************************\n");
+	printf("                   VERSION 2.0                     27 NOV 2015 \n");
+	printf("                             EXECUTABLE ATTRIBUTES \n\n");
+	printf("   All rights reserved. Unauthorized use, distribution or duplication is \n");
+	printf("   prohibited. This product is subject to China Nuclear Power Technology \n");
+	printf("   Research Institute and State Nuclear Power Software Development Center.\n");
+	printf("--------------------------------------------------------------------------------\n\n");
+}
+
+void RootProcess::printEnding(DataPartition* dg){
+	if(dg->comRank!=rank) return;
+	printf( " -------------------------------------------------------------------------------- \n\n");
+	printf( "                      CPU REQUIREMENTS OF NUMERICAL SOLUTION\n\n");
+	printf( " -------------------------------------------------------------------------------- \n");
+	printf( "    The total problem used   : %10.1f seconds of CPU time\n", 0.0);
+	printf( "    includes system time     : %10.1f seconds of CPU time\n", 0.0);
+	printf(	"    for an average of        : %10.1f  MICROSECONDS/CELL/CYCLE.\n", 0.0);
+	printf( "    Total wall clock time of : %10.1f  seconds \n", 0.0);
+}
+
+void RootProcess::printStepStatus(DataPartition*dg, int step,int piter ,double time,double dt,double res){
+	if(dg->comRank!=rank) return;
+	printf("%15f\t%10d\t%10d\t%13.5f\t%13.5f\n",time,step,piter,dt,res);
+}
+void RootProcess::printSteadyStatus(DataPartition*dg,int step,double res){
+	if(dg->comRank!=rank) return;
+	printf("%15s\t%10d\t%10s\t%13s\t%15f\n","---",step,"---","---",res);
+}
+void RootProcess::printSectionHead(DataPartition* dg,double timeElapse){;
+	if(dg->comRank!=rank) return;
+	printf("%15s\t%10s\t%10s\t%13s\t%15s\n","TIME","CAL STEPE","ITER","DELT","MAX RES");
+}

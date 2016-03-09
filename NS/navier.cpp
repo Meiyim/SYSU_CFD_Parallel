@@ -1,6 +1,4 @@
-#include <iostream>
-#include <string>
-#include <fstream>
+
 #include <math.h>
 #include <stdlib.h>
 #include <sstream>
@@ -19,9 +17,9 @@ void NavierStokesSolver::NSSolve( )
 	int iter;
 	double ResMax,ResMax0, tstart,tend;
 	tstart = ttime( );
-    for( step=1; step<=MaxStep; step++ )
-    {
-		if( (step-1)%10==0 )printer->printSectionHead(cur_time);
+    	for( step=1; step<=MaxStep; step++ )
+    	{
+		if( (step-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
 		if( !IfSteady ){
 			cur_time += dt;
 			SaveTransientOldData( );
@@ -50,7 +48,7 @@ void NavierStokesSolver::NSSolve( )
 			{
 				if( iter==1    ) ResMax0 = ResMax;
 				if( ResMax<1.e-4 || ResMax0/(ResMax+1.e-16)>1000. ){
-					printer->printStepStatus(step,iter,cur_time,dt,ResMax);
+					root.printStepStatus(dataPartition,step,iter,cur_time,dt,ResMax);
 					break; // more reasonal to break : order drop 2
 				}
 			}
@@ -65,12 +63,12 @@ void NavierStokesSolver::NSSolve( )
 			WriteBackupFile( );
 		}
 		if( IfSteady ){
-			printer->printSteadyStatus(step,ResMax);
+			root.printSteadyStatus(dataPartition,step,ResMax);
 			if( ResMax<ResidualSteady )break;
 		}
 		else if( cur_time >= total_time )break;
 	}
-	printer->printEnding();
+	root.printEnding(dataPartition);
 	//if( outputFormat==0 ) Output2Tecplot ( );
 	//if( outputFormat==1 ) Output2VTK     ( );
 	//WriteBackupFile( );
@@ -280,6 +278,7 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 		delete []buffer2;
 		delete []buffer3;
 		delete []sendRequests;
+		root.clean();//OK to free root data
 	}
 	MPI_Barrier(dataPartition->comm);
 	PetscPrintf(dataPartition->comm,"complete scatter grid\n");
@@ -296,11 +295,9 @@ void NavierStokesSolver::initSolverParam()
 {
 	if(dataPartition->comRank != root.rank) return; //root ONLY
 
-
+	root.printStarter(dataPartition);
 	int i;
 	// default values, can be reset in initflow
-	root.printer = new TerminalPrinter;
-	printer->printStarter();
 	MaxStep      = 10000 ;
 	MaxOuterStep = 50  ;
 	IfReadBackup = false;
@@ -333,6 +330,10 @@ void NavierStokesSolver::initSolverParam()
 	URF[5]= 0.8;  // k
 	URF[6]= 0.8;  // e
 	URF[7]= 0.8;  // scalar
+
+	for(int i=0;i!=100;++i){//currently len 100
+		initvalues[i] = 0.0;
+	}
 	limiter = 0;
 
 	total_time   = 0.    ;
@@ -367,8 +368,8 @@ void NavierStokesSolver::initSolverParam()
 	// init parameters from param.in
 	
 	ReadParamFile( );
-
 	// some parameters check work, e.g. 
+	
 }
 
 
@@ -378,25 +379,24 @@ void NavierStokesSolver::InitFlowField( ){
 	if( IfReadBackup ) 
 		ReadBackupFile( );
 	else{
-	for( i=0; i<Ncel; i++ )
-	{
-		Un[i] = initvalues[0];
-		Vn[i] = initvalues[1];
-		Wn[i] = initvalues[2];
-		Rn[i] = initvalues[3];
-		Tn[i] = initvalues[4];
-		Pn[i] = 0.;
-		if( DensityModel== 1 ) Rn[i]= (Pn[i]+PressureReference)/(Rcpcv*Tn[i]);
-
-		VisLam[i]= initvalues[5]; // 0.6666667e-2;  // 1.458e-6 * pow(Tn[i],1.5) /(Tn[i]+110.5) ;
-		VisTur[i]= 0.;
-		if( TurModel==1 )
+		for( i=0; i<Ncel; i++ )
 		{
-			TE[i]    = initvalues[6];  // 1.e-4*(Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]);
-			ED[i]    = initvalues[7];    // TurKEpsilonVar::Cmu * pow(TE[i],1.5) / 1.;
-			VisTur[i]= Rn[i]*TurKEpsilonVar::Cmu * TE[i]*TE[i]/(ED[i]+SMALL);
+			Un[i] = initvalues[0];
+			Vn[i] = initvalues[1];
+			Wn[i] = initvalues[2];
+			Rn[i] = initvalues[3];
+			Tn[i] = initvalues[4];
+			Pn[i] = 0.;
+			if( DensityModel== 1 ) Rn[i]= (Pn[i]+PressureReference)/(Rcpcv*Tn[i]);
+			VisLam[i]= initvalues[5]; // 0.6666667e-2;  // 1.458e-6 * pow(Tn[i],1.5) /(Tn[i]+110.5) ;
+			VisTur[i]= 0.;
+			if( TurModel==1 )
+			{
+				TE[i]    = initvalues[6];  // 1.e-4*(Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]);
+				ED[i]    = initvalues[7];    // TurKEpsilonVar::Cmu * pow(TE[i],1.5) / 1.;
+				VisTur[i]= Rn[i]*TurKEpsilonVar::Cmu * TE[i]*TE[i]/(ED[i]+SMALL);
+			}
 		}
-	}
 	}
 	// change grid boundary to actual boundary
 	int rid;  // rtable[10]={0,1,2,3,4,0},
@@ -405,7 +405,6 @@ void NavierStokesSolver::InitFlowField( ){
 		rid = Bnd[i].rid;
 		Bnd[i].rid = rtable[ rid ];
 	}
-	
 
 	for( i=0;i<Nfac;i++ )
 		RUFace[i] = 0.;
@@ -456,8 +455,7 @@ void NavierStokesSolver::SaveTransientOldData( )
 	}
 	else
 	{
-		cout<<"No unsteady time advanced scheme? Are you kidding?"<<endl;
-		exit(0);
+		throw std::logic_error("No unsteady time advance scheme? Are you f**king kidding?\n");
 	}
 }
 
@@ -468,7 +466,6 @@ void NavierStokesSolver::SaveTransientOldData( )
 /***********************************************/
 NavierStokesSolver::NavierStokesSolver():
 	outputCounter(0), 
-	printer(NULL), //define in init
 	dataPartition(new DataPartition),
 	root(0),			// the root rank is 0
 	iOptions(new int[INT_OPTION_NO]),
@@ -514,6 +511,7 @@ NavierStokesSolver::NavierStokesSolver():
 	pout			(dbOptions[20]),
 	gravity			(dbOptions+21), //gravity components: 22,23,24
 	URF			(dbOptions+24),  //URF 	24~31 //length 8
+	initvalues		(dbOptions+32),
 
 	//all put NULL to avoid wild pointer
 	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL), 
@@ -550,6 +548,29 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] Wn;
 	delete [] Pn;
 	delete [] Tn;
+	if(!IfSteady){
+		if(TimeScheme>=1){
+			delete [] Rnp;
+			delete [] Unp;
+			delete [] Vnp;
+			delete [] Wnp;
+			delete [] Tnp;
+			delete [] TEp;
+			delete [] EDp;
+			delete_Array2D(RSnp,Nspecies,Ncel);
+		}
+		if(TimeScheme>=2){
+			delete [] Rnp2;
+			delete [] Unp2;
+			delete [] Vnp2;
+			delete [] Wnp2;
+			delete [] Tnp2;
+			delete [] TEp2;
+			delete [] EDp2;
+			delete_Array2D(RSnp2,Nspecies,Ncel);
+		}
+	}
+
 	delete [] VisLam;
 	delete [] VisTur;
 	delete_Array2D( dPdX,Ncel,3 );
@@ -566,16 +587,16 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] BTem;
 	delete [] BPre;
 
+	delete_Array2D(BRS,Nspecies,Nbnd);
+
+	delete [] BTE;
+	delete [] BED;
 	delete [] RUFace;
 	/*****************THIS PART IS ADDED BY CHENXUYI*******************/
-	delete printer;
 	delete dataPartition;
 
 	delete iOptions;
 	delete dbOptions;
-	printer = NULL;
-	dataPartition = NULL;
-	delete printer;
 	/*
         V_Destr ( &bs );
 	V_Destr ( &bu );

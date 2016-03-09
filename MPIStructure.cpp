@@ -1,5 +1,6 @@
 
 #include "MPIStructure.h"
+
 using namespace std;
 
 
@@ -7,30 +8,43 @@ int DataPartition::initPetsc(){ //collcetive
 
 	MPI_Barrier(comm);
 
-	printf("process %d initing\n",comRank);
+	PetscPrintf(comm,"PETSC initing\n");
 		
-	/*
 	//init PETSC vec
-	ierr = VecCreateMPI(comm,nLocal,nGlobal,&u);CHKERRQ(ierr); 
-	ierr = VecDuplicate(u,&bu);CHKERRQ(ierr);
+	ierr = VecCreateMPI(comm,nLocal,nGlobal,&bu);CHKERRQ(ierr); 
+	ierr = VecDuplicate(bu,&bv);CHKERRQ(ierr);
+	ierr = VecDuplicate(bu,&bw);CHKERRQ(ierr);
+	ierr = VecDuplicate(bu,&bp);CHKERRQ(ierr);
+	ierr = VecDuplicate(bu,&bs);CHKERRQ(ierr);
 
 	ierr = VecSet(bu,0.0);CHKERRQ(ierr);
-	ierr = VecSet(u,1.0);CHKERRQ(ierr);
-	ierr = VecAssemblyBegin(u);CHKERRQ(ierr);
-	ierr = VecAssemblyEnd(u);CHKERRQ(ierr);
-	ierr = VecAssemblyBegin(bu);CHKERRQ(ierr);
-	ierr = VecAssemblyEnd(bu);CHKERRQ(ierr);
+	ierr = VecSet(bv,0.0);CHKERRQ(ierr);
+	ierr = VecSet(bw,0.0);CHKERRQ(ierr);
+	ierr = VecSet(bp,0.0);CHKERRQ(ierr);
+	ierr = VecSet(bs,0.0);CHKERRQ(ierr);
 
 	//init PETSC mat
-	ierr = MatCreate(comm,&Au);PCHECK(ierr);CHKERRQ(ierr);     
+	ierr = MatCreate(comm,&Au);CHKERRQ(ierr);     
 	ierr = MatSetSizes(Au,nLocal,nLocal,nGlobal,nGlobal);CHKERRQ(ierr);
 	ierr = MatSetType(Au,MATAIJ);CHKERRQ(ierr);
-	ierr = MatMPIAIJSetPreallocation(Au,MAX_ROW,NULL,MAX_ROW,NULL);CHKERRQ(ierr);	
+	ierr = MatMPIAIJSetPreallocation(Au,MAX_LOCAL_PREALLOCATION,NULL,MAX_LOCAL_PREALLOCATION,NULL);CHKERRQ(ierr);	
+
+
+	ierr = MatCreate(comm,&Ap);CHKERRQ(ierr);     
+	ierr = MatSetSizes(Ap,nLocal,nLocal,nGlobal,nGlobal);CHKERRQ(ierr);
+	ierr = MatSetType(Ap,MATAIJ);CHKERRQ(ierr);
+	ierr = MatMPIAIJSetPreallocation(Ap,MAX_LOCAL_PREALLOCATION,NULL,MAX_LOCAL_PREALLOCATION,NULL);CHKERRQ(ierr);	
+
+
+	ierr = MatCreate(comm,&As);CHKERRQ(ierr);     
+	ierr = MatSetSizes(As,nLocal,nLocal,nGlobal,nGlobal);CHKERRQ(ierr);
+	ierr = MatSetType(As,MATAIJ);CHKERRQ(ierr);
+	ierr = MatMPIAIJSetPreallocation(As,MAX_LOCAL_PREALLOCATION,NULL,MAX_LOCAL_PREALLOCATION,NULL);CHKERRQ(ierr);	
 
 	//init KSP context
 	ierr = KSPCreate(comm,&ksp);
-	*/
-	printf("datagrounp NO. %d init complete, dimension %d x %d = %d\n",comRank,nLocal,nProcess,nGlobal);
+
+	printf("dataPartition PETSC NO. %d init complete, dimension %d x %d = %d\n",comRank,nLocal,nProcess,nGlobal);
 
 	return 0;
 }
@@ -38,9 +52,14 @@ int DataPartition::initPetsc(){ //collcetive
 
 int DataPartition::deinit(){
 	printf("datagroup NO. %d died\n",comRank);
-	ierr = VecDestroy(&u);CHKERRQ(ierr);
 	ierr = VecDestroy(&bu);CHKERRQ(ierr);
+	ierr = VecDestroy(&bv);CHKERRQ(ierr);
+	ierr = VecDestroy(&bw);CHKERRQ(ierr);
+	ierr = VecDestroy(&bp);CHKERRQ(ierr);
+	ierr = VecDestroy(&bs);CHKERRQ(ierr);
 	ierr = MatDestroy(&Au);CHKERRQ(ierr);
+	ierr = MatDestroy(&Ap);CHKERRQ(ierr);
+	ierr = MatDestroy(&As);CHKERRQ(ierr);
 	ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
 	delete []gridList;
 	gridList=NULL;
@@ -99,7 +118,6 @@ int DataPartition::pushDataTo(RootProcess& root){//collective reverse progress o
 	printf("begin pushing data to root\n");
 
 	root.allocate(this);
-	pushVectorToRoot(u,root.rootArrayBuffer,root.rank);
 	pushVectorToRoot(bu,root.rootArrayBuffer,root.rank);
 
 	printf("complete pushing data to root\n");
@@ -200,7 +218,7 @@ int DataPartition::solveGMRES(double tol, int maxIter){
 	/***************************************
 	 * 	SOLVE!
 	 ***************************************/
-	KSPSolve(ksp,bu,u);
+	//KSPSolve(ksp,bu,u);
 	//KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);
 	KSPGetConvergedReason(ksp,&reason);
 	if(reason<0){

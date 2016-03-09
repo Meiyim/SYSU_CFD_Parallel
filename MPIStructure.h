@@ -2,23 +2,23 @@
 #include <stdio.h>
 #include <vector>
 #include <map>
+#include <set>
 #include <unordered_set>
 #include <string>
 #include <stdexcept>
 #include <petscksp.h>
-#include "NS/TerminalPrinter.h"
+
 #ifndef _DATA_PROCESS_H_
 #define _DATA_PROCESS_H_
 
 #define MAX_ROW 5
+#define MAX_LOCAL_PREALLOCATION 7
 #define ELEMENT_TAG_LEN 2
 
 #ifdef SHOULD_CHECK_MPI_ERROR 
-#define CHECK(err) throwError("MPI_ERROR");
-#define PCHECK(err) throwError("PETSC_ERROR");
+#define CHECK(err) if(err!=MPI_SUCCESS) throwError("MPI_ERROR");
 #else
 #define CHECK(err)
-#define PCHECK(err)
 #endif
 
 #define PRINT_LOG(VAR) printlog(VAR,#VAR)
@@ -27,6 +27,10 @@ class RootProcess;
 class Interface;
 class DataPartition;
 
+using std::vector;
+using std::map;
+using std::unordered_set;
+using std::string;
 
 /******************************************************
  *  	each interface correspond to a edge of the connectivity graph
@@ -34,32 +38,40 @@ class DataPartition;
 class Interface{
 public:
 	// Constructor
-	Interface(int selfRank,int rRank,int w): //recvlist & sendlist must be setted by Caller dataGroup
-		width(w),
+	Interface():
+		sendRank(-1),
+		recvRank(-1),
+		sendBuffer(NULL)
+	{}
+	Interface(int selfRank,int rRank): //recvlist & sendlist must be setted by Caller dataGroup
 		sendRank(selfRank),	
 		recvRank(rRank),
-		sendposis(new int[w]),
-		sendBuffer(new double[w])
+		sendBuffer(NULL)
 	{}	
+	// Copy Constructor
+	Interface(const Interface& ori):
+		recvposis(ori.recvposis),
+		sendposis(ori.sendposis),
+		sendRank(ori.sendRank),
+		recvRank(ori.recvRank),
+		sendBuffer(NULL)
+	{}
 	~Interface(){
-		delete sendposis;
-		delete sendBuffer;
-		sendposis = NULL;
-		sendBuffer = NULL;
+		if(sendBuffer!=NULL) delete [] sendBuffer;
 	}
 	// MPI non blocking communication method !
 	int push(); 		 // non-blocking method!! return immediatly
 	int update(); 		 // non-blocking method!! return immediatly
+	size_t getWidth(){return sendposis.size();}
 public:
-	int width;
+	/****************************************/
+	vector<int> recvposis;//indexes of the head of off_process cells
+	vector<int> sendposis;//indexes of on_process cells
+
+private:	
 	int sendRank;
 	int recvRank;
-
-	/****************************************/
-	int recvposi; 		 //index of the head of off_process cells
-	int const * sendposis;   //indexes of on_process cells
-private:	
-	double const *sendBuffer;//copy to this buffer and send;
+	double *sendBuffer;//copy to this buffer and send;
 };
 
 
@@ -69,12 +81,22 @@ private:
  ******************************************************/
 class DataPartition{ 
 public:
-	/***********PETSC*********************/
-	Vec u;
+	/***********PETSC_HANDLE***************/
 	Vec bu;
+	Vec bv;
+	Vec bw;
+	Vec bp;
+	Vec bs;//universal scarlar solver
+
+	Vec xsol;//determined when solve
+
 	Mat Au;
+	Mat Ap;
+	Mat As;
+
 	PetscErrorCode ierr;
 	MPI_Comm comm;
+
 	/***********KSP CONTEXT***************/
 	KSP ksp;	
 	PC pc;
@@ -89,7 +111,7 @@ public:
 	int* gridList;  //size of nProcess , gridList[comRank] == nLocal;
 
 	/**********INTERFACE INFO**************/
-	vector<Interface*> interfaces; //remember to free pointer
+	map<int,Interface> interfaces; //<partID,Interface>
 
 	DataPartition():
 		comm(MPI_COMM_WORLD),
@@ -111,10 +133,6 @@ public:
 		logfile.close();
 		delete []gridList;	
 		gridList = NULL;
-		for(vector<Interface*>::iterator it = interfaces.begin();it!=interfaces.end();++it){
-			if((*it)!=NULL)
-				delete (*it);
-		}
 	}
 
 	int initPetsc(); //build petsc vectors, collective call
@@ -201,7 +219,6 @@ public:
 
 	std::vector<int>* rootgridList;	// the element number of each parition
 	std::vector<int>* rootNCells;	// the cell number of each partition
-	TerminalPrinter* printer;
 	/*********************************************************/
 	RootProcess(int r):
 		rank(r),
@@ -212,13 +229,10 @@ public:
 		rootVerts(NULL),
 		boundNodesPool(NULL),
 		nodesPool(NULL),
-		rootgridList(NULL),
-		printer(NULL)
+		rootgridList(NULL)
 	{}
 	~RootProcess(){
 		clean();
-		delete printer;
-		printer=NULL;
 	}
 
 	void init(DataPartition* dg); 		//init for patitioning
@@ -254,6 +268,14 @@ public:
 	int getInterfaceSendBuffer(DataPartition* dg,int pid, int** buffer);   
 
 
+	/***************************************************
+	 * 	 print screen
+	 * *************************************************/
+	void printStarter(DataPartition*);
+	void printEnding(DataPartition*);
+	void printStepStatus(DataPartition* , int,int,double,double,double);
+	void printSteadyStatus(DataPartition*,int,double);
+	void printSectionHead(DataPartition*, double);
 
 	/***************************************************
 	 * 	 writing result to root

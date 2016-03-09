@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <cassert>
+#include <iterator>
+#include <algorithm>
 #include "navier.h"
 #include "tools.h"
 
@@ -34,7 +36,7 @@ void NavierStokesSolver::readAndPartition(){
 //	local
 //	last parameter is ouput value, containing the boundaryInfo
 /*******************************************************/
-int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int* interfaceBuffer,map<int,unordered_set<int> >* boundaryInfo)// free buffer after use
+int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int* interfaceBuffer,map<int,set<int> >* interfaceNodes)// free buffer after use
 {
 	string   line;
 	int      NumNodeInCell[8]={0,2,3,4,4,8,6,5},vertices[8],
@@ -53,9 +55,11 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	Vert = new_Array2D<double>(Nvrt,3);
 
 	dataPartition->PRINT_LOG(Nvrt);
+	/*
 	for(int i=0;i!=3*Nvrt;++i){
 		dataPartition->PRINT_LOG(vertexBuffer[i]);
 	}
+	*/
 
 	size_t counter = 0;
 	for(i=0; i<Nvrt; i++){
@@ -103,7 +107,7 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
   
 	        if( elem_type==2 || elem_type==3 ){ // Boundary, Tri/Quad face
 			//Bnd = (BoundaryData*) realloc(Bnd,(Nbnd+1)*sizeof(BoundaryData)); //deprecated : pool performace!
-			Bnd[Nbnd].rid = tag[0];  // bndType[tag[0]];      // First tag is face type
+			Bnd[ibnd].rid = tag[0];  // bndType[tag[0]];      // First tag is face type
 
 			if(elem_type==2 ){
        		         	Bnd[ibnd].vertices[0]= vertices[0];
@@ -174,24 +178,24 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	for(int i=0;i!=_nInterfaces;++i){
 		int _interfaceID = interfaceBuffer[counter++];
 		int _width = interfaceBuffer[counter++];
-		unordered_set<int> _nodesSet;
+		set<int> _nodesSet;
 		for(int _inode = 0; _inode!=_width; ++_inode){
 			_nodesSet.insert(interfaceBuffer[counter++]);
 		}
-		boundaryInfo->insert(make_pair<int,unordered_set<int> >(_interfaceID,_nodesSet));
+		interfaceNodes->insert(make_pair<int,set<int> >(_interfaceID,_nodesSet));
 	}		
 
 	//printf("rank: %d complete reading geo: icell %d, ncel %d\tibnd %d,nbnd %d\t,nvert%d \n",dataPartition->comRank,icel,Ncel,ibnd,Nbnd,Nvrt);
 
 
-	OutputGrid(boundaryInfo); //output tecplot: grid.dat
+	OutputGrid(interfaceNodes); //output tecplot: grid.dat
 	PetscPrintf(dataPartition->comm,"complete parsing grid file buffer\n");
 	MPI_Barrier(dataPartition->comm);
     	return 0;
 }
 
 // output grid to tecplot for validation
-void NavierStokesSolver::OutputGrid(map<int,unordered_set<int> >* boundinfo)
+void NavierStokesSolver::OutputGrid(map<int,set<int> >* boundinfo)
 {
 	int i;
 	string title("grid.dat");
@@ -215,8 +219,8 @@ void NavierStokesSolver::OutputGrid(map<int,unordered_set<int> >* boundinfo)
 
 	for( i=0; i<Nvrt; i++ ){
 		double _iinfo = 0.0;
-		for(map<int,unordered_set<int> >::iterator it=boundinfo->begin(); it!=boundinfo->end(); ++it){
-			unordered_set<int>& _bset = it->second;
+		for(map<int,set<int> >::iterator it=boundinfo->begin(); it!=boundinfo->end(); ++it){
+			set<int>& _bset = it->second;
 			if( _bset.find(i) != _bset.end() ){
 				_iinfo = it->first + 1;
 				break;
@@ -272,7 +276,8 @@ void NavierStokesSolver::OutputGrid(map<int,unordered_set<int> >* boundinfo)
 	of.close( );
 	PetscPrintf(dataPartition->comm,"complete writing grid.dat\n");
 }
-
+#define VOID_CELL_ON_BOUNDARY -10
+#define VOID_CELL_ON_INTERFACE -20
 
 int NavierStokesSolver::CreateFaces( )
 {
@@ -280,7 +285,7 @@ int NavierStokesSolver::CreateFaces( )
     int *NumNodeFace, **NodeFace;
     
     NumNodeFace = new int[Nvrt];
-    NodeFace    = new_Array2D<int>( Nvrt,500 );
+    NodeFace    = new_Array2D<int>( Nvrt,500 ); //CXY: not a good idea
 	for( i=0; i<Nvrt; i++ )
 		NumNodeFace[i] = 0;
 	for( i=0; i<Ncel; i++ )
@@ -292,58 +297,56 @@ int NavierStokesSolver::CreateFaces( )
 	}
 	*/
     
-    //cout<<"begin faces construction ... ";
-	printer->addMessage(string("begin faces constructin ...\n"));
-    //Nfac = 0;
-    // first boundary faces
+	PetscPrintf(dataPartition->comm,"begin faces construction\n");
+    	//Nfac = 0;
+   	// first boundary faces
    	 
 	Nfac = 0;
 	Face = new FaceData[Nbnd];	// modified by CXY
 
-    for( i=0; i<Nbnd; i++ )
-    {
-	//Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) ); //deleted! bad performance
-        Bnd[i].face = Nfac;
-        for( j=0;j<4;j++ )
-            Face[Nfac].vertices[j] = Bnd[i].vertices[j];
-        Face[Nfac].bnd     = i   ;  // bnd(i)%rid
-        Face[Nfac].cell2   = -10 ;  // cell1 is not known, set in FindFace
-        for( j=0;j<4;j++ )
-        {
-            id = Face[Nfac].vertices[j];
-            NodeFace[id][NumNodeFace[id]++]= Nfac;
-        }
+   	 for( i=0; i<Nbnd; i++ )
+    	{
+		//Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) ); //deleted! bad performance
+      	 	Bnd[i].face = Nfac;
+      	 	for( j=0;j<4;j++ )
+       			Face[Nfac].vertices[j] = Bnd[i].vertices[j];
+	        Face[Nfac].bnd     = i   ;  // bnd(i)%rid CXY: Face.bnd is the idx of Bnd
+       		Face[Nfac].cell2   = VOID_CELL_ON_BOUNDARY;  // cell1 is not known, set in FindFace
+        	for( j=0;j<4;j++ )
+        	{
+            		id = Face[Nfac].vertices[j];
+            		NodeFace[id][NumNodeFace[id]++]= Nfac;
+        	}
 		Nfac++;  // face accumulation is at last
-    }
+    	}
 
-    // interior faces
-    for( i=0;i<Ncel;i++ )
-    {
-        if( i%50000==0 ) cout<<i<<endl;
-        n1= Cell[i].vertices[0];
-        n2= Cell[i].vertices[1];
-        n3= Cell[i].vertices[2];
-        n4= Cell[i].vertices[3];
-        n5= Cell[i].vertices[4];
-        n6= Cell[i].vertices[5];
-        n7= Cell[i].vertices[6];
-        n8= Cell[i].vertices[7];
-        FindFace( i,n1,n2,n3,n4, Nfac, NumNodeFace,NodeFace );
-        FindFace( i,n5,n6,n7,n8, Nfac, NumNodeFace,NodeFace );
-        FindFace( i,n1,n2,n6,n5, Nfac, NumNodeFace,NodeFace );
-        FindFace( i,n2,n3,n7,n6, Nfac, NumNodeFace,NodeFace );
-        FindFace( i,n4,n3,n7,n8, Nfac, NumNodeFace,NodeFace );
-        FindFace( i,n1,n4,n8,n5, Nfac, NumNodeFace,NodeFace );
-    }
-    //cout<< "number of faces : "<< Nfac <<endl; // << maxval(NFaces,Nfac) << minval(NFaces,Nfac) ;
-	char temp[256];
-	sprintf(temp,"number of faces: %d\n",Nfac);
-	printer->addMessage(string(temp));
-    delete [] NumNodeFace;
-    delete_Array2D<int>( NodeFace, Nvrt, 500 );
-    //cout<<"finish constructing all faces"<<endl;
-	printer->addMessage(string("finish constructing all faces\n"));
-	return 1;
+	if(Nfac!=Nbnd) throw logic_error("error occur finding faces\n");
+    	// interior faces
+    	for( i=0;i<Ncel;i++ )
+    	{
+        	n1= Cell[i].vertices[0];
+        	n2= Cell[i].vertices[1];
+        	n3= Cell[i].vertices[2];
+        	n4= Cell[i].vertices[3];
+        	n5= Cell[i].vertices[4];
+        	n6= Cell[i].vertices[5];
+        	n7= Cell[i].vertices[6];
+        	n8= Cell[i].vertices[7];
+        	FindFace( i,n1,n2,n3,n4, Nfac, NumNodeFace,NodeFace );//Nface++
+        	FindFace( i,n5,n6,n7,n8, Nfac, NumNodeFace,NodeFace );//Nface++
+        	FindFace( i,n1,n2,n6,n5, Nfac, NumNodeFace,NodeFace );//Nface++
+        	FindFace( i,n2,n3,n7,n6, Nfac, NumNodeFace,NodeFace );//Nface++
+        	FindFace( i,n4,n3,n7,n8, Nfac, NumNodeFace,NodeFace );//Nface++
+        	FindFace( i,n1,n4,n8,n5, Nfac, NumNodeFace,NodeFace );//Nface++
+    	}
+
+	printf("Rank: %d Number of faces: %d\n",dataPartition->comRank,Nfac);
+
+	delete [] NumNodeFace;
+	delete_Array2D<int>( NodeFace, Nvrt, 500 );
+    	PetscPrintf(dataPartition->comm,"finish face construction\n");
+
+	return 0;
 }
 
 void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &nf, 
@@ -351,9 +354,9 @@ void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &
 {
     int fid,k,irepeat,iface,ifn1,ifn2,ifn3,ifn4,id;
     irepeat = 0;
-    if( n1==n2 || n1==n3 || n1==n4 ) irepeat= irepeat + 1;
-    if( n2==n3 || n2==n4           ) irepeat= irepeat + 1;
-    if( n3==n4                     ) irepeat= irepeat + 1;
+    if( n1==n2 || n1==n3 || n1==n4 ) irepeat++;
+    if( n2==n3 || n2==n4           ) irepeat++;
+    if( n3==n4                     ) irepeat++;
     if( irepeat>1 ) return;
     // find 
     fid= -100;
@@ -376,26 +379,28 @@ void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &
 
     if( fid<0 )
     {
-		Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) );
+	Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) );//CXY: not a good idea
         Face[nf].vertices[0]= n1;
         Face[nf].vertices[1]= n2;
         Face[nf].vertices[2]= n3;
         Face[nf].vertices[3]= n4;
-        Face[nf].cell1      = ic;
+        Face[nf].cell1      = ic;   
+        Face[nf].cell2      = VOID_CELL_ON_INTERFACE; //added by CXY: cell2 might not be set in the following FindFace,
+       						      //thus results in a interface cell
         Face[nf].bnd        = -10;  // inner face
         Cell[ic].face[ Cell[ic].nface++ ] = nf;
         // add face to NodeFace
-        for( k=0; k<4; k++ )
+        for( k=0; k<4; k++ )// CXY: is this loop really necessary?
         {
             id = Face[nf].vertices[k];
             NodeFace[id][ NumNodeface[id]++ ] = nf;
         }
-		nf = nf + 1; // face accumulation is at last
+	nf++; // face accumulation is at last
     }
     else
     {
         if( Face[fid].bnd >= 0 )    // boundary face
-            Face[fid].cell1  = ic;
+            Face[fid].cell1  = ic;  // cell2 == -10
         else                       // inner face
             Face[fid].cell2  = ic;
         
@@ -428,7 +433,12 @@ double TetVolum(double x1[], double x2[], double x3[], double x4[])
     return 1./6.*fabs( vec_dot( v1, dx3, 3 ) );
 }
 
-int NavierStokesSolver::CellFaceInfo()
+/************************************************
+ *	modified by CXY:
+ *	input : interfaceNodes, the nodesPool of interfaces
+ *	return value: indicates the number of virtual cell;
+ ************************************************/
+int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 {
     int i,j, n1,n2,n3,n4, ic1,ic2,ic, iface,nc,jf,jc;
     double area1,area2, r1,r2, 
@@ -516,8 +526,9 @@ int NavierStokesSolver::CellFaceInfo()
     }
 	
 	
-
     //-- cell
+    int interfaceVoidCellCounter = Ncel;//out of Ncel range!
+    int nVirtualCell = 0;
     for( i=0; i<Ncel; i++ )
     {
         for( j=0; j<3; j++ )
@@ -532,7 +543,7 @@ int NavierStokesSolver::CellFaceInfo()
             xv8[j] = Vert[ Cell[i].vertices[7] ] [j];
         }
 
-		// cell volume
+	// cell volume
         // way-1: |V|=Integ_V( div(x,0,0) ) = Integ_S( (x,0,0).n ).
         /* Cell[i].vol = 0.;
         for( j=0; j<Cell[i].nface; j++ )
@@ -563,7 +574,7 @@ int NavierStokesSolver::CellFaceInfo()
         V4= TetVolum(xv2,xv3,xv4,xv7);
         V5= TetVolum(xv2,xv6,xv4,xv7);
         V6= TetVolum(xv8,xv4,xv6,xv7);
-		Cell[i].vol= V1 + V2 + V3 + V4 + V5 + V6;
+	Cell[i].vol= V1 + V2 + V3 + V4 + V5 + V6;
 
         for( j=0; j<3; j++ ){
             xc1[j]= 0.25*( xv1[j]+xv2[j]+xv4[j]+xv6[j] );
@@ -573,25 +584,61 @@ int NavierStokesSolver::CellFaceInfo()
             xc5[j]= 0.25*( xv2[j]+xv6[j]+xv4[j]+xv7[j] );
             xc6[j]= 0.25*( xv8[j]+xv4[j]+xv6[j]+xv7[j] );
         }
-		double Vsum = V1+V2+V3+V4+V5+V6;
+	double Vsum = V1+V2+V3+V4+V5+V6;
         for( j=0; j<3; j++ )
             Cell[i].x[j]=1./Vsum*( V1*xc1[j] + V2*xc2[j] +
                                    V3*xc3[j] + V4*xc4[j] +
                                    V5*xc5[j] + V6*xc6[j] );
         if( fabs((Cell[i].vol - (V1+V2+V3+V4+V5+V6))/Cell[i].vol) > 1.e-3 ){
-            cout<< "error in cell volume calculation."<<i<<" "
-				<<Cell[i].vol<<" "<<V1+V2+V3+V4+V5+V6<<endl;
-            exit(0);
+		char temp[256];
+		sprintf(temp,"error in cell volume calculation%d vol:%f %f\n",i,Cell[i].vol,V1+V2+V3+V4+V5+V6 );
+		throw logic_error(temp);
         }
 
         // neighbored cells
         for( j=0; j<Cell[i].nface; j++ )
         {
-            iface = Cell[i].face[j];
-            nc    = Face[iface].cell1;
-            if( nc==i )
-                nc= Face[iface].cell2;
-            Cell[i].cell[j]= nc;
+        	iface = Cell[i].face[j];
+		nc    = Face[iface].cell1;
+        	if( nc==i )
+        		nc = Face[iface].cell2;
+		if(nc==VOID_CELL_ON_INTERFACE){ //insert virtual cell for the interfaces
+			set<int> verts;
+			for(int i=0;i!=4;++i)
+				verts.insert(Face[iface].vertices[i]);
+			for(map<int,set<int> >::iterator it = interfaceNodes->begin();it!=interfaceNodes->end();++it){//for each interfaces
+				vector<int> _intersectionVector;//hold result of intersection
+				set<int>& _st = it->second;
+				int partID    = it->first;
+				set_difference(verts.begin(),verts.end(),_st.begin(),_st.end(),back_inserter(_intersectionVector));
+				
+				if(_intersectionVector.empty()){//verts belong to _st
+					map<int,Interface>& _interfaces = dataPartition->interfaces;
+					if(_interfaces.find(partID) == _interfaces.end() ){
+						//create a new interface
+						_interfaces.insert(make_pair<int,Interface>(partID,Interface(dataPartition->comRank,partID)));
+					}
+					_interfaces[partID].sendposis.push_back(i);	//i --> icell
+					_interfaces[partID].recvposis.push_back(interfaceVoidCellCounter);
+					assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE);
+
+					Cell[i].cell[j] = interfaceVoidCellCounter;	//add void cell
+					Face[iface].cell2 = interfaceVoidCellCounter;
+
+					//dataPartition->PRINT_LOG(partID);
+					//dataPartition->PRINT_LOG(Face[iface].cell1);
+					//dataPartition->PRINT_LOG(Face[iface].cell2);
+					
+					interfaceVoidCellCounter++;
+					nVirtualCell++;
+					break;	
+				}
+				
+			}		
+
+		}else{
+        		Cell[i].cell[j]= nc; //nc = -10 when boundary
+		}
         }
     }
 
@@ -620,18 +667,19 @@ int NavierStokesSolver::CellFaceInfo()
 
     
     //-- boundary
-    for( i=0; i<Nbnd; i++ )
-    {
-        jf  = Bnd [i ].face  ;
-        jc  = Face[jf].cell1 ;
-        vec_minus( dx, Face[jf].x, Cell[jc].x,3 );
-        Bnd[i].distance =  vec_dot(dx, Face[jf].n, 3) / Face[jf].area;
-        if( Bnd[i].distance<0. )
-        {
-            cout<< "wall distance is negative." << i ;
-            exit(0);
-        }
-    }
+    	for( i=0; i<Nbnd; i++ )
+    	{
+        	jf  = Bnd [i ].face  ;
+        	jc  = Face[jf].cell1 ;
+        	vec_minus( dx, Face[jf].x, Cell[jc].x,3 );
+       		Bnd[i].distance =  vec_dot(dx, Face[jf].n, 3) / Face[jf].area;
+	        if( Bnd[i].distance<0. )
+        	{
+			char temp[256];
+			sprintf(temp,"wall distance is negatifve: %d\n",i);
+			throw logic_error(temp);
+       		}
+	}
 
 	//-- Face[].rlencos
 	for( i=0; i<Nfac; i++ )
@@ -668,10 +716,10 @@ int NavierStokesSolver::CellFaceInfo()
 		}
 	}
 
-    return 1;
+    return nVirtualCell;
 }
 
-int NavierStokesSolver::CheckAndAllocate()
+int NavierStokesSolver::CheckAndAllocate(int nVirtualCell)
 {
 	int i,c1,c2;
 	// check if all boundaries are marked
@@ -679,54 +727,57 @@ int NavierStokesSolver::CheckAndAllocate()
 	{
 		c1= Face[i].cell1;
 		c2= Face[i].cell2;
-		if( c2==-10 || c2>=0 ) continue;
-		cout<<"error in face right hand side!"<<endl;
+		if( c2==VOID_CELL_ON_BOUNDARY || c2>=0 ) continue;
+		char temp[256];
+		sprintf(temp,"error in face right hand side\nfaceID: %d, cell1:%d cell2 %d\n",i,c1,c2);
+		throw logic_error(temp);
 	}
 
-
+	
+	//below is moved into NavierStokerSolver::Init
 	// allocate variables
-   	Rn = new double[Ncel];
-	Un = new double[Ncel];
-	Vn = new double[Ncel];
-	Wn = new double[Ncel];
-	Pn = new double[Ncel];
-	Tn = new double[Ncel];
-	TE = new double[Ncel];
-	ED = new double[Ncel];
-	RSn= new_Array2D<double>(Nspecies,Ncel);
+   	Rn = new double[Ncel+nVirtualCell];
+	Un = new double[Ncel+nVirtualCell];
+	Vn = new double[Ncel+nVirtualCell];
+	Wn = new double[Ncel+nVirtualCell];
+	Pn = new double[Ncel+nVirtualCell];
+	Tn = new double[Ncel+nVirtualCell];
+	TE = new double[Ncel+nVirtualCell];
+	ED = new double[Ncel+nVirtualCell];
+	RSn= new_Array2D<double>(Nspecies,Ncel+nVirtualCell);
 
 	if( !IfSteady ){
-	if( TimeScheme>=1 ){
-	Rnp = new double[Ncel];
-	Unp = new double[Ncel];
-	Vnp = new double[Ncel];
-	Wnp = new double[Ncel];
-	Tnp = new double[Ncel];
-	TEp = new double[Ncel];
-	EDp = new double[Ncel];
-	RSnp= new_Array2D<double>(Nspecies,Ncel);
+		if( TimeScheme>=1 ){
+			Rnp = new double[Ncel+nVirtualCell];
+			Unp = new double[Ncel+nVirtualCell];
+			Vnp = new double[Ncel+nVirtualCell];
+			Wnp = new double[Ncel+nVirtualCell];
+			Tnp = new double[Ncel+nVirtualCell];
+			TEp = new double[Ncel+nVirtualCell];
+			EDp = new double[Ncel+nVirtualCell];
+			RSnp= new_Array2D<double>(Nspecies,Ncel+nVirtualCell);
+		}
+		if( TimeScheme>=2 ){
+			Rnp2 = new double[Ncel+nVirtualCell];
+			Unp2 = new double[Ncel+nVirtualCell];
+			Vnp2 = new double[Ncel+nVirtualCell];
+			Wnp2 = new double[Ncel+nVirtualCell];
+			Tnp2 = new double[Ncel+nVirtualCell];
+			TEp2 = new double[Ncel+nVirtualCell];
+			EDp2 = new double[Ncel+nVirtualCell];
+			RSnp2= new_Array2D<double>(Nspecies,Ncel+nVirtualCell);
+		}
 	}
 
-	if( TimeScheme>=2 ){
-	Rnp2 = new double[Ncel];
-	Unp2 = new double[Ncel];
-	Vnp2 = new double[Ncel];
-	Wnp2 = new double[Ncel];
-	Tnp2 = new double[Ncel];
-	TEp2 = new double[Ncel];
-	EDp2 = new double[Ncel];
-	RSnp2= new_Array2D<double>(Nspecies,Ncel);
-	}
-	}
 
-	VisLam = new double[Ncel];
-	VisTur = new double[Ncel];
-	dPdX   = new_Array2D<double>(Ncel,3);
-	dUdX   = new_Array2D<double>(Ncel,3);
-	dVdX   = new_Array2D<double>(Ncel,3);
-	dWdX   = new_Array2D<double>(Ncel,3);
-	Apr    = new double[Ncel];
-	dPhidX = new_Array2D<double>(Ncel,3);
+	VisLam = new double[Ncel+nVirtualCell];
+	VisTur = new double[Ncel+nVirtualCell];
+	dPdX   = new_Array2D<double>(Ncel+nVirtualCell,3);
+	dUdX   = new_Array2D<double>(Ncel+nVirtualCell,3);
+	dVdX   = new_Array2D<double>(Ncel+nVirtualCell,3);
+	dWdX   = new_Array2D<double>(Ncel+nVirtualCell,3);
+	Apr    = new double[Ncel+nVirtualCell];
+	dPhidX = new_Array2D<double>(Ncel+nVirtualCell,3);
 
 	BRo = new double[Nbnd];
 	BU  = new double[Nbnd];
@@ -739,7 +790,6 @@ int NavierStokesSolver::CheckAndAllocate()
 	BED = new double[Nbnd];
 
 	RUFace = new double[Nfac];
-
 	
 	// laspack working array
 	//V_Constr(&bs,   "rightU",    Ncel, Normal, True);
@@ -748,7 +798,10 @@ int NavierStokesSolver::CheckAndAllocate()
 	//V_Constr(&bw,   "rightU",    Ncel, Normal, True);
 	//V_Constr(&bp,   "rightU",    Ncel, Normal, True);
 	//V_Constr(&xsol, "rightU",    Ncel, Normal, True);
+	dataPartition->initPetsc();
 
 	cur_time = 0.;
-	return 1;
+		
+
+	return 0;
 }

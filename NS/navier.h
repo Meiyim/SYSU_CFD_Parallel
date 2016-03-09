@@ -1,16 +1,20 @@
 #pragma once
 #include <stdlib.h>
+#include <iostream>
+#include <string>
+#include <fstream>
 #include "tools.h"
-#include "terminalPrinter.h"
 #include "../MPIStructure.h"
 
 #define SMALL 1.e-16
 
 #define INT_OPTION_NO 14 
-#define DB_OPTION_NO  32
-#define TECPLOT_NVAR 13
+#define DB_OPTION_NO  132
+#define TECPLOT_NVAR  13
 
 
+using std::cout;
+using std::endl;
 // geometry, face & cell data
 typedef struct 
 {
@@ -76,7 +80,6 @@ public:
 	
 	//main data sets;
 	size_t outputCounter;
-	TerminalPrinter* printer;
 	DataPartition* dataPartition;	
 	RootProcess root;
 
@@ -116,8 +119,9 @@ public:
 	double& total_time;
 	double& dt;
 	double& uin,&vin,&win,&roin,&Tin,&tein,&edin, &Twall, &pin,&pout; //input parameters ,simple implementation
-	double *gravity;// length of 3
-	double *URF; 	//numerical scheme relaxation factor , currently length 8
+	double *gravity;    // length of 3
+	double *URF; 	    //numerical scheme relaxation factor , currently length 8
+	double *initvalues; // len:100
 	
 
 
@@ -129,7 +133,6 @@ public:
     	// --- time evolution
 	int    step;
     	double cur_time, Residual[10],ResidualSteady;
-	double initvalues[100];
 
 
     	// geometry, local, build from mesh files
@@ -169,15 +172,15 @@ public:
  	//first 3 parameter is input buffer:
 	//last 1 parameter is output boundaryinfo;
 	////read geometry from a buffer,
-	int  ReadGridFile    (int*,double*,int*,map<int,unordered_set<int> >*);
+	int  ReadGridFile    (int*,double*,int*,map<int,set<int> >*);
 
 // Geometry
 
-	void OutputGrid      (map<int,unordered_set<int> >*);
+	void OutputGrid      (map<int,set<int> >*); //modified by CXY
 	int  CreateFaces     ( );
 	void FindFace( int, int,int,int,int, int&, int*,int** );
-	int  CellFaceInfo    ( );
-	int  CheckAndAllocate( );
+	int  CellFaceInfo    (map<int,set<int> >* );//modified by CXY //the return value indicates the number of virtual cell beyond Ncel
+	int  CheckAndAllocate(int );		    //modified by CXY: input the number of virtual cells
 
 // Init flow field
     // read solver param, material, post, everything except 

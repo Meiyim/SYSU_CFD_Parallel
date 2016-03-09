@@ -26,28 +26,32 @@ int main(int argc, char* argv[])try{
 	 ******************************************/
 
 	NavierStokesSolver* nsSolver = new NavierStokesSolver;
-	//PetscPrintf(MPI_COMM_WORLD,"init\n");	
 	nsSolver->initSolverParam(); 	//root only : read param.in and check
-
-	//PetscPrintf(MPI_COMM_WORLD,"init complete\n");	
 	nsSolver->readAndPartition();	//root only : read msh and partition
-
 	nsSolver->broadcastSolverParam(); 	//collective fetch param from root
-	//PetscPrintf(MPI_COMM_WORLD,"read\n");
 
 	int* elementBuffer 	= NULL;
 	double* vertexBuffer 	= NULL;
 	int*  interfaceBuffer 	= NULL;
+
 	if(shouldReadLocal == PETSC_FALSE){ //transfer geometry through MPI
 		nsSolver->scatterGridFile(&elementBuffer,&vertexBuffer,&interfaceBuffer);//collective
 	}else{
 		//read geometry locally
 	}
 
-	map<int,unordered_set<int> >* boundInfo= new map<int,unordered_set<int> >;
-	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer,boundInfo);	//parse the gridfile as original, buffer is freeed
+	map<int,set<int> >* interfaceNodes= new map<int,set<int> >;
+
+	//parse the gridfile as original, buffer freeed, boundInfo got;
+	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer,interfaceNodes);
+		
+	//build faces. same sequence as Original;
+	nsSolver->CreateFaces();
+	int nVirtual = nsSolver->CellFaceInfo(interfaceNodes);
+	delete interfaceNodes;
+	nsSolver->CheckAndAllocate(nVirtual);
+	nsSolver->InitFlowField();
 	
-	delete boundInfo;
 	/******************************************
 	 * NS_solve
 	 ******************************************/

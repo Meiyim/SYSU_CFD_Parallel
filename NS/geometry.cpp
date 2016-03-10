@@ -616,7 +616,7 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 					map<int,Interface>& _interfaces = dataPartition->interfaces;
 					if(_interfaces.find(partID) == _interfaces.end() ){
 						//create a new interface
-						_interfaces.insert(make_pair<int,Interface>(partID,Interface(dataPartition->comRank,partID)));
+						_interfaces.insert(make_pair<int,Interface>(partID,Interface(dataPartition->comRank,partID,dataPartition->comm)));
 					}
 					_interfaces[partID].sendposis.push_back(i);	//i --> icell
 					_interfaces[partID].recvposis.push_back(interfaceVoidCellCounter);
@@ -641,7 +641,7 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 		}
         }
     }
-
+	dataPartition->nVirtualCell = nVirtualCell;
 
 	/* // output 
 	ofstream of;
@@ -716,10 +716,10 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 		}
 	}
 
-    return nVirtualCell;
+    return 0;
 }
 
-int NavierStokesSolver::CheckAndAllocate(int nVirtualCell)
+int NavierStokesSolver::CheckAndAllocate()
 {
 	int i,c1,c2;
 	// check if all boundaries are marked
@@ -733,7 +733,7 @@ int NavierStokesSolver::CheckAndAllocate(int nVirtualCell)
 		throw logic_error(temp);
 	}
 
-	
+	int nVirtualCell = dataPartition->nVirtualCell;	
 	//below is moved into NavierStokerSolver::Init
 	// allocate variables
    	Rn = new double[Ncel+nVirtualCell];

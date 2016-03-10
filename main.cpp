@@ -47,13 +47,20 @@ int main(int argc, char* argv[])try{
 		
 	//build faces. same sequence as Original;
 	nsSolver->CreateFaces();
-	int nVirtual = nsSolver->CellFaceInfo(interfaceNodes);
+	nsSolver->CellFaceInfo(interfaceNodes);
 	delete interfaceNodes;
-	nsSolver->CheckAndAllocate(nVirtual);
+	nsSolver->CheckAndAllocate();
 	nsSolver->InitFlowField();
 	
 	/******************************************
 	 * NS_solve
+	 * MAIN CFD 
+	 ******************************************/
+	nsSolver->NSSolve();
+
+	/******************************************
+	 * Post Process
+	 * VTK, Tecplot, etc.
 	 ******************************************/
 
 	MPI_Barrier(MPI_COMM_WORLD);

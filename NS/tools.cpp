@@ -68,8 +68,7 @@ void SolveLinearEqu(Vector* Func(QMatrix*, Vector*, Vector*, int,PrecondProcType
 */
 void ErrorStop( string str )
 {
-	cout<<str<<endl;
-	exit(0);
+	throw std::runtime_error(str);
 }
 
 char *trimwhitespace(char *str)

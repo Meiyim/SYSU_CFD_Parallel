@@ -239,3 +239,93 @@ int DataPartition::solveGMRES(double tol, int maxIter){
 }
 
 
+/*****************************************
+ *	implement of Interface
+****************************************/
+/*
+int Interface::send(MPI_Request* req, double* phi){
+	size_t width = getWidth();
+	if(sendBuffer==NULL)
+		sendBuffer = new double[width];
+
+	for(int i=0;i!=width;++i) //openMP optimizeable
+		sendBuffer[i] = phi[sendposis[i]];
+	MPI_Issend(sendBuffer,	width, MPI_DOUBLE, 
+			otherRank,
+			selfRank, //TAG==self Rank
+			comm,
+			req);
+	return 0;
+
+}
+
+
+int Interface::recv(MPI_Request* req, double* phi){
+	size_t width = getWidth();
+	if(recvBuffer==NULL)
+		recvBuffer = new double[width];
+
+	MPI_Irecv(recvBuffer,width,MPI_DOUBLE,
+			otherRank,
+			otherRank,//TAG = source
+			comm,
+			req);
+
+	return 0;
+}
+*/
+
+/***************SEND AND RECV GRADIENT**********************/
+
+int Interface::send(MPI_Request* req, double* phi[3]){
+	size_t width = getWidth();
+	if(sendBufferGradient==NULL)
+		sendBufferGradient = new double[3*width];
+
+	for(int i=0;i!=width;++i) //openMP optimizeable
+		for(int j=0;j!=3;++j)
+			sendBufferGradient[i*3+j] = phi[sendposis[i]][j];
+
+
+	MPI_Issend(sendBufferGradient,	3*width, MPI_DOUBLE, 
+			otherRank,
+			selfRank, //TAG==self Rank
+			comm,
+			req);
+	return 0;
+
+}
+
+
+int Interface::recv(MPI_Request* req, double* phi[3]){
+	size_t width = getWidth();
+	if(recvBufferGradient==NULL)
+		recvBufferGradient = new double[3*width];
+
+	MPI_Irecv(recvBufferGradient,3*width,MPI_DOUBLE,
+			otherRank,
+			otherRank,//TAG = source
+			comm,
+			req);
+
+	return 0;
+}
+
+
+void Interface::getData(double* phi){
+	size_t width = getWidth();
+	for(int i=0;i!=width;++i)
+		phi[recvposis[i]] = recvBuffer[i];
+}
+
+
+void Interface::getGradient(double* phi[3]){
+	size_t width = getWidth();
+	for(int i=0;i!=width;++i)
+		for(int j=0;j!=3;++j)
+			phi[recvposis[i]][j] = recvBufferGradient[i*3+j];
+}
+
+
+
+

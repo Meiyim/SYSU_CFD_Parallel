@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <sstream>
+#include <limits.h>
 #include "navier.h"
 #include "tools.h"
 #include "terminalPrinter.h"
@@ -16,19 +17,27 @@ void NavierStokesSolver::NSSolve( )
 {
 	int iter;
 	double ResMax,ResMax0, tstart,tend;
+	MPI_Barrier(dataPartition->comm);
 	tstart = ttime( );
-    	for( step=1; step<=MaxStep; step++ )
+	cur_time = 0.0;
+	if(IfSteady)
+		dt = numeric_limits<double>::max();/*MAX*/	
+
+	cur_time += dt;
+	MaxStep = 1;//test purpose
+    	for( step=1; step<=MaxStep; step++ ) //step : total time step
     	{
 		if( (step-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
 		if( !IfSteady ){
-			cur_time += dt;
 			SaveTransientOldData( );
 		}
 
 		// outer iteration, drive residual to zero for every physical time step
 		for( iter=1; iter<MaxOuterStep; iter++ ){
+
 			CalculateVelocity ( );
-				// Output2Tecplot ( );
+			break;
+			/*
 			CalculatePressure ( );
 
 			// scalar transportation
@@ -40,38 +49,49 @@ void NavierStokesSolver::NSSolve( )
 			if( SolveSpecies ) UpdateSpecies( );
 			//4. other physical models
 			//    e.g., condensation, combustion, wall heat conduction
-
+			*/
 			ResMax = vec_max( Residual,10 );
-			if( IfSteady ) 
-				break;
-			else  // unsteady
-			{
-				if( iter==1    ) ResMax0 = ResMax;
+
+			//check if should break
+			if( IfSteady ){
+				//steady
+				root.printSteadyStatus(dataPartition,step,ResMax);
+				if( ResMax<ResidualSteady )break;
+			}else{
+				//unsteady
+				if( iter == 1 ) ResMax0 = ResMax;
 				if( ResMax<1.e-4 || ResMax0/(ResMax+1.e-16)>1000. ){
 					root.printStepStatus(dataPartition,step,iter,cur_time,dt,ResMax);
 					break; // more reasonal to break : order drop 2
 				}
 			}
+			if( shouldPostProcess(step) ){
+				PetscPrintf(dataPartition->comm,"ouput...\n");
+				/*
+				tend   = ttime( );
+				tstart = tend;
+				if( outputFormat==0 ) Output2Tecplot ( );  // exit(0);
+				if( outputFormat==1 ) Output2VTK     ( );
+				WriteBackupFile( );
+				*/
+			}
 		}
-		if( step%noutput==0 ){
-			tend   = ttime( );
-			//cout<<"  spend time "<<tend-tstart<<" seconds"<<endl;
-			tstart = tend;
-			//cout<<"  output to tecplot ......."<<endl;
-			if( outputFormat==0 ) Output2Tecplot ( );  // exit(0);
-			if( outputFormat==1 ) Output2VTK     ( );
-			WriteBackupFile( );
-		}
-		if( IfSteady ){
-			root.printSteadyStatus(dataPartition,step,ResMax);
-			if( ResMax<ResidualSteady )break;
-		}
-		else if( cur_time >= total_time )break;
+
+		if(cur_time >= total_time){
+			root.printEnding(dataPartition);
+			break;
+		}else{//time advance
+			cur_time+=dt;
+		}	
 	}
-	root.printEnding(dataPartition);
-	//if( outputFormat==0 ) Output2Tecplot ( );
-	//if( outputFormat==1 ) Output2VTK     ( );
-	//WriteBackupFile( );
+}
+
+
+/*******************************************************/
+//	determint if should output to tecplot, vtk...
+/*******************************************************/
+bool NavierStokesSolver::shouldPostProcess(int step){
+	return step%noutput == 0;
 }
 
 
@@ -331,6 +351,9 @@ void NavierStokesSolver::initSolverParam()
 	URF[6]= 0.8;  // e
 	URF[7]= 0.8;  // scalar
 
+	for(int i=0;i!=100;++i){
+		rtable[i] = 0;	//currently len 100
+	}
 	for(int i=0;i!=100;++i){//currently len 100
 		initvalues[i] = 0.0;
 	}
@@ -487,6 +510,7 @@ NavierStokesSolver::NavierStokesSolver():
 	Nspecies		(iOptions[11]),
 	cellPressureRef		(iOptions[12]),
 	MaxStep			(iOptions[13]),
+	rtable			(iOptions+14),
 	//double
 	PressureReference	(dbOptions[0]),
 	gama			(dbOptions[1]),

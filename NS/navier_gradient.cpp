@@ -10,39 +10,39 @@ using namespace std;
  *********************************************/
 int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 {
-    int    i,g, c1,c2;
-    double lambda,pf;
-    // using Gauss theorem
-    for( i=0; i<Ncel; i++ )
-        for(g=0;g<3;g++)
-            phigd[i][g]= 0.;
+    	int    i,g, c1,c2;
+    	double lambda,pf;
+    	// using Gauss theorem
+    	for( i=0; i<Ncel; i++ )
+        	for(g=0;g<3;g++)
+            		phigd[i][g]= 0.;
 
-    for( i=0; i<Nfac; i++ )
-    {
-        lambda = Face[i].lambda;
-        c1     = Face[i].cell1;
-        c2     = Face[i].cell2;
+    	for( i=0; i<Nfac; i++ )
+    	{
+        	lambda = Face[i].lambda;
+        	c1     = Face[i].cell1;
+        	c2     = Face[i].cell2;
 
-        if( c2>=0 ){
-            pf = lambda*phi[c1] + (1.-lambda)*phi[c2];
+        	if( c2>=0 ){
+			pf = lambda*phi[c1] + (1.-lambda)*phi[c2];
 			for( g=0;g<3;g++ ){
 				phigd[c1][g] += pf * Face[i].n[g];
-				phigd[c2][g] -= pf * Face[i].n[g];
+				phigd[c2][g] -= pf * Face[i].n[g];//might add to interface cell, meaningless but no harmful
 			}
-		}
-        else{
-            pf = Bphif[Face[i].bnd]; // how to add boundary condition ?
+		}else{
+		 	pf = Bphif[Face[i].bnd]; // how to add boundary condition ?
 			for( g=0;g<3;g++ )
 				phigd[c1][g] += pf * Face[i].n[g];
 		}
-    }
+    	}
 
-    for( i=0; i<Ncel; i++ ){
-        for( g=0; g<3; g++ )
-            phigd[i][g] /= Cell[i].vol;
-    }
+    	for( i=0; i<Ncel; i++ ){
+       	 for( g=0; g<3; g++ )
+       	     phigd[i][g] /= Cell[i].vol;
+    	}
 
-	if(      limiter==0 )
+
+    	if(      limiter==0 )
 	{}
 	else if( limiter==1 )
 		Limiter_Barth( phi, phigd );
@@ -53,7 +53,42 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 	else
 		ErrorStop("no such limiter choice");
 
-    return 0;
+	/*************MPI INTERFACE COMMUNICATION***********************/
+	MPI_Barrier(dataPartition->comm);
+	map<int,Interface >& interfaces = dataPartition->interfaces;
+	size_t nInter = interfaces.size();
+	MPI_Request* sendReq = new MPI_Request[nInter];	
+	MPI_Request* recvReq = new MPI_Request[nInter];	
+	size_t reqCounter = 0;
+	for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
+		Interface& _inter = iter->second;
+		_inter.send(sendReq+reqCounter,phigd);//non-blocking...
+		_inter.recv(recvReq+reqCounter,phigd);//non-blocking
+		reqCounter++;
+	}	
+
+	int ierr = 0;
+	ierr = MPI_Waitall(nInter,recvReq,MPI_STATUS_IGNORE);//blocking wait
+	if(ierr!=MPI_SUCCESS){
+		throw std::runtime_error("error occured when recving interface value\n");
+	}
+	delete []recvReq;recvReq = NULL;
+
+	for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
+		int destRank = iter->first;
+		dataPartition->PRINT_LOG("recv from destRank complete\n");
+		dataPartition->PRINT_LOG(destRank);
+		iter->second.getGradient(phigd); //copy to local
+	}
+
+	ierr = MPI_Waitall(nInter,sendReq,MPI_STATUS_IGNORE);//blocking wait //perhaps redundant
+	if(ierr!=MPI_SUCCESS){
+		throw std::runtime_error("error occured when sending interface value\n");
+	}
+	delete []sendReq;sendReq=NULL;
+			
+
+	return 0;
 }
 
 

@@ -8,7 +8,7 @@
 
 #define SMALL 1.e-16
 
-#define INT_OPTION_NO 14 
+#define INT_OPTION_NO 114 
 #define DB_OPTION_NO  132
 #define TECPLOT_NVAR  13
 
@@ -105,6 +105,7 @@ public:
 	int& Nspecies;
 	int& cellPressureRef;
 	int& MaxStep;      
+	int     *rtable;//[100];				// preset rtables only used with debugging
 
 	/******Length - 32***********/
 	double& PressureReference; 
@@ -152,7 +153,6 @@ public:
 	double  *RUFace;   // RUFace[Nfac]
 	// Boundary faces values
 	double  *BRo,*BU,*BV,*BW,*BPre, *BTem,**BRS, *BTE,*BED;
-	int     rtable[100]; 				// preset rtables only used with debugging
    	
         //CXY: should upgrade to PETSC	
 	// laspack library work array 
@@ -169,6 +169,7 @@ public:
 //CXY:
 	void readAndPartition();
 
+
  	//first 3 parameter is input buffer:
 	//last 1 parameter is output boundaryinfo;
 	////read geometry from a buffer,
@@ -180,7 +181,7 @@ public:
 	int  CreateFaces     ( );
 	void FindFace( int, int,int,int,int, int&, int*,int** );
 	int  CellFaceInfo    (map<int,set<int> >* );//modified by CXY //the return value indicates the number of virtual cell beyond Ncel
-	int  CheckAndAllocate(int );		    //modified by CXY: input the number of virtual cells
+	int  CheckAndAllocate();		    //modified by CXY: input the number of virtual cells
 
 // Init flow field
     // read solver param, material, post, everything except 
@@ -241,6 +242,7 @@ private:
 	//initiation
 	void ReadParamFile   ( );
 	//post process
+	bool shouldPostProcess(int step);		//should output
 	void writeTecZoneParallel(const string& title); //collective on MPI
 };
 

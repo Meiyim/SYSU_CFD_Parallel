@@ -39,29 +39,40 @@ class Interface{
 public:
 	// Constructor
 	Interface():
-		sendRank(-1),
-		recvRank(-1),
-		sendBuffer(NULL)
+		selfRank(-1),
+		otherRank(-1),
+		sendBuffer(NULL),
+		recvBuffer(NULL),
+		sendBufferGradient(NULL),
+		recvBufferGradient(NULL)
 	{}
-	Interface(int selfRank,int rRank): //recvlist & sendlist must be setted by Caller dataGroup
-		sendRank(selfRank),	
-		recvRank(rRank),
-		sendBuffer(NULL)
+
+	Interface(int s,int o,MPI_Comm c): //recvlist & sendlist must be setted by Caller dataGroup
+		selfRank(s),	
+		otherRank(o),
+		sendBuffer(NULL),
+		recvBuffer(NULL),
+		sendBufferGradient(NULL),
+		recvBufferGradient(NULL),
+		comm(c)
 	{}	
-	// Copy Constructor
-	Interface(const Interface& ori):
-		recvposis(ori.recvposis),
-		sendposis(ori.sendposis),
-		sendRank(ori.sendRank),
-		recvRank(ori.recvRank),
-		sendBuffer(NULL)
-	{}
+
 	~Interface(){
 		if(sendBuffer!=NULL) delete [] sendBuffer;
+		if(recvBuffer!=NULL) delete [] recvBuffer;
+		if(sendBufferGradient!=NULL) delete [] sendBufferGradient;
+		if(recvBufferGradient!=NULL) delete [] recvBufferGradient;
 	}
+
 	// MPI non blocking communication method !
-	int push(); 		 // non-blocking method!! return immediatly
-	int update(); 		 // non-blocking method!! return immediatly
+	int send(MPI_Request* ,double* phi); 		 // non-blocking method!! return immediatly
+	int recv(MPI_Request* ,double* phi); 		 // non-blocking method!! return immediatly
+	int send(MPI_Request* ,double* phi[3]); 		 // non-blocking method!! return immediatly
+	int recv(MPI_Request* ,double* phi[3]); 		 // non-blocking method!! return immediatly
+
+	void getData(double* phi);
+	void getGradient(double* phi[3]);
+
 	size_t getWidth(){return sendposis.size();}
 public:
 	/****************************************/
@@ -69,10 +80,15 @@ public:
 	vector<int> sendposis;//indexes of on_process cells
 
 private:	
-	int sendRank;
-	int recvRank;
-	double *sendBuffer;//copy to this buffer and send;
+	int selfRank;
+	int otherRank;
+	double *sendBuffer;		//copy to this buffer and send;
+	double *recvBuffer;
+	double *sendBufferGradient;
+	double *recvBufferGradient;
+	MPI_Comm comm;
 };
+
 
 
 /******************************************************
@@ -106,6 +122,7 @@ public:
 	int comRank;
 	int comSize;
 	int nLocal; 	// number of local cell, same as Ncel
+	int nVirtualCell;
 	int nGlobal;    // number of global cell
 	int nProcess;   // number of partitions
 	int* gridList;  //size of nProcess , gridList[comRank] == nLocal;

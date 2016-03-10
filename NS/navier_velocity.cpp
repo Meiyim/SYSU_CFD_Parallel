@@ -10,12 +10,13 @@ int NavierStokesSolver::CalculateVelocity( )
 {
     int    i,Iter=0;
     double IterRes=0;
-	ofstream of;
-
+//	ofstream of;
+//
 	for( i=0; i<10; i++ ) Residual[i]= 0.;
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
-    BuildVelocityMatrix( );
+	BuildVelocityMatrix( );
 
+/*
 
 	// solve U
 	for( i=0; i<Ncel; i++ ) ;
@@ -52,7 +53,7 @@ int NavierStokesSolver::CalculateVelocity( )
 	}
 
 //	Q_Destr ( &As );
-
+*/
 
 	return 0;
 }
@@ -69,6 +70,10 @@ void NavierStokesSolver::BuildVelocityMatrix( )
 	SetBCVelocity( BRo,BU,BV,BW );
 	SetBCPressure( BPre );
 	Gradient ( Un, BU,   dUdX );
+	for(int i=0;i!=Ncel+dataPartition->nVirtualCell;++i)
+		for(int j=0;j!=3;++j)
+			dataPartition->PRINT_LOG(dUdX[i][j]);
+	return ;
 	Gradient ( Vn, BV,   dVdX );
 	Gradient ( Wn, BW,   dWdX );
 	Gradient ( Pn, BPre, dPdX );

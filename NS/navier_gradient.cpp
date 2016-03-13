@@ -53,40 +53,8 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 	else
 		ErrorStop("no such limiter choice");
 
-	/*************MPI INTERFACE COMMUNICATION***********************/
-	MPI_Barrier(dataPartition->comm);
-	map<int,Interface >& interfaces = dataPartition->interfaces;
-	size_t nInter = interfaces.size();
-	MPI_Request* sendReq = new MPI_Request[nInter];	
-	MPI_Request* recvReq = new MPI_Request[nInter];	
-	size_t reqCounter = 0;
-	for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
-		Interface& _inter = iter->second;
-		_inter.send(sendReq+reqCounter,phigd);//non-blocking...
-		_inter.recv(recvReq+reqCounter,phigd);//non-blocking
-		reqCounter++;
-	}	
-
-	int ierr = 0;
-	ierr = MPI_Waitall(nInter,recvReq,MPI_STATUS_IGNORE);//blocking wait
-	if(ierr!=MPI_SUCCESS){
-		throw std::runtime_error("error occured when recving interface value\n");
-	}
-	delete []recvReq;recvReq = NULL;
-
-	for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
-		int destRank = iter->first;
-		dataPartition->PRINT_LOG("recv from destRank complete\n");
-		dataPartition->PRINT_LOG(destRank);
-		iter->second.getGradient(phigd); //copy to local
-	}
-
-	ierr = MPI_Waitall(nInter,sendReq,MPI_STATUS_IGNORE);//blocking wait //perhaps redundant
-	if(ierr!=MPI_SUCCESS){
-		throw std::runtime_error("error occured when sending interface value\n");
-	}
-	delete []sendReq;sendReq=NULL;
-			
+	dataPartition->interfaceCommunication(phigd);			
+	
 
 	return 0;
 }

@@ -11,14 +11,20 @@ int NavierStokesSolver::CalculateVelocity( )
     int    i,Iter=0;
     double IterRes=0;
 //	ofstream of;
-//
-	for( i=0; i<10; i++ ) Residual[i]= 0.;
-//	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
-	BuildVelocityMatrix( );
+	
 
-/*
+    	for( i=0; i<10; i++ ) Residual[i]= 0.;
+//	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
+	BuildVelocityMatrix(dataPartition->Au,dataPartition->bu,dataPartition->bv,dataPartition->bw );
+	
 
 	// solve U
+	dataPartition->solveVelocity_GMRES(1.e-6,1000,Un,Vn,Wn);	
+		
+		
+	
+	
+/*
 	for( i=0; i<Ncel; i++ ) ;
 //		xsol.Cmp[i+1]= Un[i];
 //	SolveLinearEqu( GMRESIter, &As, &xsol, &bu, 500, SSORPrecond, 1.2, 1.e-8, &Iter, &IterRes );
@@ -58,25 +64,25 @@ int NavierStokesSolver::CalculateVelocity( )
 	return 0;
 }
 
-void NavierStokesSolver::BuildVelocityMatrix( )
+
+void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 {
-	int i,j,iface, ip,in,ani[6],nj,rid,bnd;
+	int i,j,iface, ip,in,nj,rid,bnd;
+	PetscInt ani[6];
 	double app,apn[6],lambda,lambda2, Visc,dxc[3], f,
 		dudx,dudy,dudz,dvdx,dvdy,dvdz,dwdx,dwdy,dwdz,
 		sav1,sav2,sav3,RUnormal,ViscAreaLen, 
 		su,sv,sw, ufi,vfi,wfi,ufh,vfh,wfh,fcs[3]={0.}, fde[3],fdi[3], dx[3],
 		s1,s2, coef;
 
+
 	SetBCVelocity( BRo,BU,BV,BW );
 	SetBCPressure( BPre );
 	Gradient ( Un, BU,   dUdX );
-	for(int i=0;i!=Ncel+dataPartition->nVirtualCell;++i)
-		for(int j=0;j!=3;++j)
-			dataPartition->PRINT_LOG(dUdX[i][j]);
-	return ;
 	Gradient ( Vn, BV,   dVdX );
 	Gradient ( Wn, BW,   dWdX );
 	Gradient ( Pn, BPre, dPdX );
+	PetscPrintf(dataPartition->comm,"begin build velocity matrix\n");
 	
 	/* This will lead to turbulence problem, wierd !!
 	   limiter on velocity seems to affect turbulence generation */
@@ -92,6 +98,7 @@ void NavierStokesSolver::BuildVelocityMatrix( )
 		Limiter_WENO( Wn, dWdX );
 		Limiter_WENO( Pn, dPdX );
 	}*/
+
 	for( i=0; i<Ncel; i++ )
 	{
 		app = 0.;
@@ -263,7 +270,7 @@ void NavierStokesSolver::BuildVelocityMatrix( )
 				ViscAreaLen =  Visc*Face[iface].rlencos;
 				app        +=  ViscAreaLen;
 				apn[nj]    += -ViscAreaLen;
-				ani[nj]     =  in;
+				ani[nj]     =  Cell[in].globalIdx;// in is the idx of virtual cell, cellglobalidx[in] is the global idx for matrix build
 				nj ++ ;
 
 				// convection to source term. (high order schemes)
@@ -300,9 +307,11 @@ void NavierStokesSolver::BuildVelocityMatrix( )
 				fcs[2] = 0.; */
 				
 				// diffusion to source term. ( compressible or incompressible )
-				fde[0] = (dudx+dudx)*sav1 + (dudy+dvdx)*sav2 + (dudz+dwdx)*sav3 ; // dudx, dudy, dudz is the diffusion term in the generic equation,
-                                                                                  //dudx,dvdx,dwdx will vanish if Visc & Rou is constant. Is this part considered to be the Compressible part?
-                                                                                  // why didnt see the divergence of U part.
+				fde[0] = (dudx+dudx)*sav1 + (dudy+dvdx)*sav2 + (dudz+dwdx)*sav3 ; 
+				// dudx, dudy, dudz is the diffusion term in the generic equation,
+                                //dudx,dvdx,dwdx will vanish if Visc & Rou is constant. 
+			 	//Is this part considered to be the Compressible part?
+                                // why didnt see the divergence of U part.
 				fde[1] = (dvdx+dudy)*sav1 + (dvdy+dvdy)*sav2 + (dvdz+dwdy)*sav3;
 				fde[2] = (dwdx+dudz)*sav1 + (dwdy+dvdz)*sav2 + (dwdz+dwdz)*sav3;
 				fde[0] *= Visc;
@@ -334,20 +343,33 @@ void NavierStokesSolver::BuildVelocityMatrix( )
 			App[i] += apn[j];
 		App[i] = 1./App[i];  */
 
-//		Q_SetLen  (&As, i+1, nj + 1);
-		// center cell
-//        Q_SetEntry(&As, i+1, 0,  i+1, app);
-		// off-diagonal
-        for( j=0; j<nj; j++ );
-//			Q_SetEntry(&As, i+1, j+1, ani[j]+1, apn[j]);
+		PetscInt row = Cell[i].globalIdx;
+		dataPartition->PRINT_LOG(row);
+		for(int ii=0;ii!=nj;++ii){
+			dataPartition->PRINT_LOG(ani[ii]);
+		}
+		MatSetValue(Au,row,row,app,INSERT_VALUES);	  //center cell
+		MatSetValues(Au,1,&row,nj,ani,apn,INSERT_VALUES); //off-diagonal
+
 
 		// right hand side, including
 		//   pressure, gravity and part of convection&diffusion terms (explicit - implicit), 
 		//   relaxation terms
-//		bu.Cmp[i+1] = su + (1.-URF[0])*app*Un[i] + ( -dPdX[i][0] + Rn[i]*gravity[0] )*Cell[i].vol;
-//		bv.Cmp[i+1] = sv + (1.-URF[0])*app*Vn[i] + ( -dPdX[i][1] + Rn[i]*gravity[1] )*Cell[i].vol;
-//		bw.Cmp[i+1] = sw + (1.-URF[0])*app*Wn[i] + ( -dPdX[i][2] + Rn[i]*gravity[2] )*Cell[i].vol;
+		VecSetValue(bu,row,su + (1.-URF[0])*app*Un[i] + ( -dPdX[i][0] + Rn[i]*gravity[0] )*Cell[i].vol , INSERT_VALUES);
+		VecSetValue(bv,row,sv + (1.-URF[0])*app*Vn[i] + ( -dPdX[i][1] + Rn[i]*gravity[1] )*Cell[i].vol , INSERT_VALUES);
+		VecSetValue(bw,row,sw + (1.-URF[0])*app*Wn[i] + ( -dPdX[i][2] + Rn[i]*gravity[2] )*Cell[i].vol , INSERT_VALUES);
+
+
 	}
+
+	MatAssemblyBegin(Au,MAT_FINAL_ASSEMBLY);
+	VecAssemblyBegin(bu);
+	VecAssemblyBegin(bv);
+	VecAssemblyBegin(bw);
+
+	return;
+	
+
 }
 
 void NavierStokesSolver::CalRUFace( )

@@ -7,6 +7,7 @@
 #include <string>
 #include <stdexcept>
 #include <petscksp.h>
+#include "NS/BasicType.h"
 
 #ifndef _DATA_PROCESS_H_
 #define _DATA_PROCESS_H_
@@ -26,6 +27,7 @@
 class RootProcess;
 class Interface;
 class DataPartition;
+class CellData;
 
 using std::vector;
 using std::map;
@@ -44,7 +46,9 @@ public:
 		sendBuffer(NULL),
 		recvBuffer(NULL),
 		sendBufferGradient(NULL),
-		recvBufferGradient(NULL)
+		recvBufferGradient(NULL),
+		sendBufferCell(NULL),
+		recvBufferCell(NULL)
 	{}
 
 	Interface(int s,int o,MPI_Comm c): //recvlist & sendlist must be setted by Caller dataGroup
@@ -54,6 +58,8 @@ public:
 		recvBuffer(NULL),
 		sendBufferGradient(NULL),
 		recvBufferGradient(NULL),
+		sendBufferCell(NULL),
+		recvBufferCell(NULL),
 		comm(c)
 	{}	
 
@@ -62,16 +68,21 @@ public:
 		if(recvBuffer!=NULL) delete [] recvBuffer;
 		if(sendBufferGradient!=NULL) delete [] sendBufferGradient;
 		if(recvBufferGradient!=NULL) delete [] recvBufferGradient;
+		if(sendBufferCell!=NULL) delete []sendBufferCell;
+		if(recvBufferCell!=NULL) delete []recvBufferCell;
 	}
 
 	// MPI non blocking communication method !
+	int send(MPI_Request* ,CellData* phi); 		 // non-blocking method!! return immediatly
+	int recv(MPI_Request* ,CellData* phi); 		 // non-blocking method!! return immediatly
 	int send(MPI_Request* ,double* phi); 		 // non-blocking method!! return immediatly
 	int recv(MPI_Request* ,double* phi); 		 // non-blocking method!! return immediatly
 	int send(MPI_Request* ,double* phi[3]); 		 // non-blocking method!! return immediatly
 	int recv(MPI_Request* ,double* phi[3]); 		 // non-blocking method!! return immediatly
 
+	void getData(CellData* phi);
 	void getData(double* phi);
-	void getGradient(double* phi[3]);
+	void getData(double* phi[3]);
 
 	size_t getWidth(){return sendposis.size();}
 public:
@@ -86,6 +97,8 @@ private:
 	double *recvBuffer;
 	double *sendBufferGradient;
 	double *recvBufferGradient;
+	CellData *sendBufferCell;
+	CellData *recvBufferCell;
 	MPI_Comm comm;
 };
 
@@ -102,9 +115,9 @@ public:
 	Vec bv;
 	Vec bw;
 	Vec bp;
-	Vec bs;//universal scarlar solver
+	Vec bs;   //universal scarlar solver
 
-	Vec xsol;//determined when solve
+	Vec xsol; //determined when solve
 
 	Mat Au;
 	Mat Ap;
@@ -132,7 +145,8 @@ public:
 
 	DataPartition():
 		comm(MPI_COMM_WORLD),
-		//nLocal(0),
+		nLocal(0),
+		nVirtualCell(0),
 		nGlobal(0),
 		nProcess(0),
 		gridList(NULL),
@@ -160,12 +174,46 @@ public:
 
 	int pushDataTo(RootProcess& root);
 
-	int buildMatrix();
+	int solveVelocity_GMRES(double tol,int maxIter,double const* xu,double const* xv,double const* xw); //return 0 if good solve, retrun 1 if not converge
 
-	int solveGMRES(double tol,int maxIter); //return 0 if good solve, retrun 1 if not converge
+	/*************MPI INTERFACE COMMUNICATION***********************
+	 *	collective
+	 ***************************************************************/
 
+	template<typename T>
+	int interfaceCommunication(T var){
+		MPI_Barrier(comm);
+		size_t nInter = interfaces.size();
+		MPI_Request* sendReq = new MPI_Request[nInter];	
+		MPI_Request* recvReq = new MPI_Request[nInter];	
+		size_t reqCounter = 0;
+		for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
+			Interface& _inter = iter->second;
+			_inter.send(sendReq+reqCounter,var);//non-blocking...
+			_inter.recv(recvReq+reqCounter,var);//non-blocking
+			reqCounter++;
+		}	
 
-	std::ofstream logfile; //for test purpose
+		int ierr = 0;
+		ierr = MPI_Waitall(nInter,recvReq,MPI_STATUS_IGNORE);//blocking wait
+		if(ierr!=MPI_SUCCESS){
+			throw std::runtime_error("error occured when recving interface value\n");
+		}
+		delete []recvReq;recvReq = NULL;
+
+		for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
+			iter->second.getData(var); //copy to local
+		}
+
+		ierr = MPI_Waitall(nInter,sendReq,MPI_STATUS_IGNORE);//blocking wait //perhaps redundant
+		if(ierr!=MPI_SUCCESS){
+			throw std::runtime_error("error occured when sending interface value\n");
+		}
+		delete []sendReq;sendReq=NULL;
+		
+		return 0;
+	}
+
 	template<typename T>
 	void printlog(const T& var,const char* varname){
 		char temp[256];
@@ -177,6 +225,7 @@ public:
 
 private:
 	int errorCounter;
+	std::ofstream logfile; //for test purpose
 	void throwError(const std::string& msg){ // only check error when SHOULD_CHECK_MPI_ERROR is defined
 		char temp[256];
 		printf("*****************************ON ERROR***************************************");

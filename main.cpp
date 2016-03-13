@@ -12,8 +12,8 @@
 #include<iostream>
 #include<stdexcept>
 #include<petscksp.h>
-#include"NS/navier.h"
 #include"MPIStructure.h"
+#include"NS/navier.h"
 int main(int argc, char* argv[])try{
 	PetscErrorCode ierr;
 	PetscBool shouldReadLocal = PETSC_FALSE;
@@ -44,7 +44,9 @@ int main(int argc, char* argv[])try{
 
 	//parse the gridfile as original, buffer freeed, boundInfo got;
 	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer,interfaceNodes);
-		
+
+	nsSolver->dataPartition->initPetsc();
+
 	//build faces. same sequence as Original;
 	nsSolver->CreateFaces();
 	nsSolver->CellFaceInfo(interfaceNodes);

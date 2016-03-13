@@ -3,8 +3,9 @@
 #include <iostream>
 #include <string>
 #include <fstream>
-#include "tools.h"
+#include "BasicType.h"
 #include "../MPIStructure.h"
+#include "tools.h"
 
 #define SMALL 1.e-16
 
@@ -16,58 +17,6 @@
 using std::cout;
 using std::endl;
 // geometry, face & cell data
-typedef struct 
-{
-    int    bnd;
-    int    vertices[4];
-    int    cell1,cell2;
-    double x[3],n[3],area;   // face center and normal vector
-    double lambda,   // lambda for left, (1.-lambda) for right
-		rlencos;     // area/(|Xpn|*vect_cosangle(n,Xpn))
-	double Xpac[3],Xnac[3]; // auxiliary points
-}FaceData;
-typedef struct
-{
-    int nface;
-    int face[6], cell[6], vertices[8]; // maybe wasterful a bit. Make it dynamics to save memory
-    //face[nface]: for the faces index
-    //  all elements are treated as 8 nodes hexahdron,
-    //  but with different number of faces, so judges will be used for avoid faces with one vertex
-    double vol, x[3];
-}CellData;
-// connect boundary to faces, boundary to BdRegion
-typedef struct
-{
-    int face;                // belongs to face...
-    int vertices[4];         // the 4 vertices, to be done allocatable
-    int rid;                 // region id as set in rtable
-    double distance;         // normal distance from cell face
-                             // center to cell center
-    double  yplus;           // y+
-    double  uplus;           // u+
-    double  shear[3];        // shearstress components
-    double  h;               // local heattransfer coef.
-    double  q;               // local heat flux (in W/m2)
-    double  T;               // local wall temperature
-}BoundaryData;
-// store the data set in one type of boundary
-typedef struct
-{
-	char name[50];
-	int  itype;
-	// momentum and pressure
-	double vel[3],massflow[3],veldirection[3], pressure;
-	// temperature
-	int    temType; // =0 : given temperature; 
-	                // =1 : heat flux (0 for default adiabatic, others )
-	double tem,qflux;
-	// turbulence
-	double te,ed, turbIntensity;
-	// species
-	int    speType; // = 0 : specific mass fraction (e.g., saturated concentration);
-	                // = 1 : specific mass flux (0 for default,means no diffusion flux in Fluent)
-	double *speCon; // mass fraction
-}BdRegion;
 
 
 class NavierStokesSolver
@@ -198,7 +147,7 @@ public:
 
     // velocity
 	int  CalculateVelocity( );
-	void BuildVelocityMatrix( );
+	void BuildVelocityMatrix( Mat&, Vec&, Vec&, Vec&);
 	void CalRUFace ( );
 	void CalRUFace2( );
 	// pressure

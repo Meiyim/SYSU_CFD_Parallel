@@ -67,8 +67,6 @@ int DataPartition::deinit(){
 };
 
 
-
-
 /*****************************************************
  *	MPI ScatterV / Send routine
  *	scatter geometry data to each partition
@@ -162,6 +160,9 @@ int DataPartition::pushVectorToRoot(const Vec& petscVec,double* rootBuffer,int r
 
 }
 
+
+
+/*
 int DataPartition::buildMatrix(){ //local but should involked in each processes
 	PetscInt linecounter = 0;
 	int ibegin=0, iend=0;
@@ -189,13 +190,17 @@ int DataPartition::buildMatrix(){ //local but should involked in each processes
 	delete vInsert;
 	return 0;
 }
+*/
 
 
-int DataPartition::solveGMRES(double tol, int maxIter){
+int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,double const *xv,double const* xw){
 	KSPConvergedReason reason;
 	int iters;
-	ierr = MatAssemblyEnd(Au,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+
 	MPI_Barrier(comm);
+	PetscPrintf(comm,"begine GMRES velocity solve\n");
+	ierr = VecAssemblyEnd(bv);CHKERRQ(ierr);
+	ierr = VecAssemblyEnd(bw);CHKERRQ(ierr);
 	
 	KSPSetOperators(ksp,Au,Au);
 	KSPSetType(ksp,KSPGMRES);
@@ -206,34 +211,89 @@ int DataPartition::solveGMRES(double tol, int maxIter){
 	 ***************************************/
 	KSPSetTolerances(ksp,tol,PETSC_DEFAULT,PETSC_DEFAULT,maxIter);	
 
-
 	/***************************************
 	 * 	ILU preconditioner:
 	 ***************************************/
 	//KSPGetPC(ksp,&pc);
-	KSPSetFromOptions(ksp);
+	KSPSetFromOptions(ksp);//can override settings from command line
 	KSPSetUp(ksp); //the precondition is done at this step
 
 
 	/***************************************
-	 * 	SOLVE!
+	 * 	SOLVE U!
 	 ***************************************/
-	//KSPSolve(ksp,bu,u);
-	//KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);
+	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xu,&xsol);CHKERRQ(ierr);
+	ierr = VecAssemblyBegin(xsol);CHKERRQ(ierr);
+
+	ierr = MatAssemblyEnd(Au,MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+	ierr = VecAssemblyEnd(bu);		      CHKERRQ(ierr);
+	ierr = VecAssemblyEnd(xsol);		      CHKERRQ(ierr);
+	ierr = KSPSolve(ksp,bu,xsol);		      CHKERRQ(ierr);
+	
+	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+
 	KSPGetConvergedReason(ksp,&reason);
+
 	if(reason<0){
-		printf("seems the KSP didnt converge :(\n");
+		PetscPrintf(comm,"seems the GMRES for U didnt converge :(\n");
 		return 1;
 	}else if(reason ==0){
-		printf("why is this program still running?\n");
+		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
 		KSPGetIterationNumber(ksp,&iters);
-		printf("KSP converged in %d step! :)\n",iters);
+		PetscPrintf(comm,"KSP GMRES - U converged in %d step! :)\n",iters);
 		return 0;
 	}
+	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 	
+	return 0;	
+	/***************************************
+	 * 	SOLVE V!
+	 ***************************************/
+	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xv,&xsol);CHKERRQ(ierr); 
+	ierr = VecAssemblyBegin(xsol);			CHKERRQ(ierr);
 
+	ierr = VecAssemblyEnd(bv);			CHKERRQ(ierr);
+	ierr = VecAssemblyEnd(xsol);			CHKERRQ(ierr);
+	ierr = KSPSolve(ksp,bv,xsol);			CHKERRQ(ierr);
+	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);	CHKERRQ(ierr);
+	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
 
+	if(reason<0){
+		PetscPrintf(comm,"seems the GMRES for V didnt converge :(\n");
+		return 1;
+	}else if(reason ==0){
+		PetscPrintf(comm,"why is this program still running?\n");
+	}else{
+		KSPGetIterationNumber(ksp,&iters);
+		PetscPrintf(comm,"KSP GMRES - V converged in %d step! :)\n",iters);
+		return 0;
+	}
+	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
+
+	/***************************************
+	 * 	SOLVE W!
+	 ***************************************/
+	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xw,&xsol);CHKERRQ(ierr); 
+	ierr = VecAssemblyBegin(xsol);			CHKERRQ(ierr);
+
+	ierr = VecAssemblyEnd(bw);			CHKERRQ(ierr);
+	ierr = VecAssemblyEnd(xsol);			CHKERRQ(ierr);
+	ierr = KSPSolve(ksp,bw,xsol);			CHKERRQ(ierr);
+	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);	CHKERRQ(ierr);
+	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
+
+	if(reason<0){
+		PetscPrintf(comm,"seems the GMRES for W didnt converge :(\n");
+		return 1;
+	}else if(reason ==0){
+		PetscPrintf(comm,"why is this program still running?\n");
+	}else{
+		KSPGetIterationNumber(ksp,&iters);
+		PetscPrintf(comm,"KSP GMRES - W converged in %d step! :)\n",iters);
+		return 0;
+	}
+	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 
 	return 0;	
 }
@@ -242,7 +302,6 @@ int DataPartition::solveGMRES(double tol, int maxIter){
 /*****************************************
  *	implement of Interface
 ****************************************/
-/*
 int Interface::send(MPI_Request* req, double* phi){
 	size_t width = getWidth();
 	if(sendBuffer==NULL)
@@ -273,9 +332,38 @@ int Interface::recv(MPI_Request* req, double* phi){
 
 	return 0;
 }
-*/
 
-/***************SEND AND RECV GRADIENT**********************/
+int Interface::send(MPI_Request* req, CellData* phi){
+	size_t width = getWidth();
+	if(sendBufferCell==NULL)
+		sendBufferCell = new CellData[width];
+
+	for(int i=0;i!=width;++i) //openMP optimizeable
+		sendBufferCell[i] = phi[sendposis[i]];
+
+	MPI_Issend(sendBufferCell,width, MPI_INT,
+			otherRank,
+			selfRank, //TAG==self Rank
+			comm,
+			req);
+	return 0;
+
+}
+
+
+int Interface::recv(MPI_Request* req, CellData* phi){
+	size_t width = getWidth();
+	if(recvBufferCell==NULL)
+		recvBufferCell = new CellData[width];
+
+	MPI_Irecv(recvBufferCell,width,MPI_INT,
+			otherRank,
+			otherRank,//TAG = source
+			comm,
+			req);
+
+	return 0;
+}
 
 int Interface::send(MPI_Request* req, double* phi[3]){
 	size_t width = getWidth();
@@ -312,6 +400,13 @@ int Interface::recv(MPI_Request* req, double* phi[3]){
 }
 
 
+void Interface::getData(CellData* phi){
+	size_t width = getWidth();
+	for(int i=0;i!=width;++i)
+		phi[recvposis[i]] = recvBufferCell[i];
+
+}
+
 void Interface::getData(double* phi){
 	size_t width = getWidth();
 	for(int i=0;i!=width;++i)
@@ -319,7 +414,7 @@ void Interface::getData(double* phi){
 }
 
 
-void Interface::getGradient(double* phi[3]){
+void Interface::getData(double* phi[3]){
 	size_t width = getWidth();
 	for(int i=0;i!=width;++i)
 		for(int j=0;j!=3;++j)

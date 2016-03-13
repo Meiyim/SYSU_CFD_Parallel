@@ -35,6 +35,14 @@ void NavierStokesSolver::NSSolve( )
 		// outer iteration, drive residual to zero for every physical time step
 		for( iter=1; iter<MaxOuterStep; iter++ ){
 
+			//-----MPI interface communication-------//
+			dataPartition->interfaceCommunication(Un);
+			dataPartition->interfaceCommunication(Vn);
+			dataPartition->interfaceCommunication(Wn);
+			dataPartition->interfaceCommunication(Pn);
+			dataPartition->interfaceCommunication(VisLam);
+			dataPartition->interfaceCommunication(VisTur);
+
 			CalculateVelocity ( );
 			break;
 			/*
@@ -538,7 +546,7 @@ NavierStokesSolver::NavierStokesSolver():
 	initvalues		(dbOptions+32),
 
 	//all put NULL to avoid wild pointer
-	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL), 
+	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL),
 	Rn(NULL),Un(NULL),Vn(NULL),Wn(NULL),Pn(NULL),Tn(NULL),TE(NULL),ED(NULL),
 	RSn(NULL),
 
@@ -565,6 +573,13 @@ NavierStokesSolver::~NavierStokesSolver()
 	// Output2Tecplot ();
 	
 	cout<<"desturct object and free space"<<endl;
+	// delete primitive variable
+	delete [] Vert;
+	delete [] Face;
+	delete [] Cell;	
+	delete [] Bnd;
+
+		
 	// delete variables
    	delete [] Rn;
 	delete [] Un;

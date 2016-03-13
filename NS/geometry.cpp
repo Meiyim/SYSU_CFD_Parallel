@@ -460,6 +460,130 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
                              Vert[ Cell[i].vertices[7] ][j] );
     }
 
+
+    //-- cell neighbouring
+    int interfaceVoidCellCounter = Ncel;//out of Ncel range!
+    int nVirtualCell = 0;
+    for( i=0; i!=Ncel; ++i){
+	        // neighbored cells
+        for( j=0; j<Cell[i].nface; j++ )
+        {
+        	iface = Cell[i].face[j];
+		nc    = Face[iface].cell1;
+        	if( nc==i )
+        		nc = Face[iface].cell2;
+		if(nc==VOID_CELL_ON_INTERFACE){ //insert virtual cell for the interfaces
+			set<int> verts;
+			for(int i=0;i!=4;++i)
+				verts.insert(Face[iface].vertices[i]);
+			for(map<int,set<int> >::iterator it = interfaceNodes->begin();it!=interfaceNodes->end();++it){//for each interfaces
+				vector<int> _intersectionVector;//hold result of intersection
+				set<int>& _st = it->second;
+				int partID    = it->first;
+				set_difference(verts.begin(),verts.end(),_st.begin(),_st.end(),back_inserter(_intersectionVector));
+				
+				if(_intersectionVector.empty()){//verts belong to _st
+					map<int,Interface>& _interfaces = dataPartition->interfaces;
+					if(_interfaces.find(partID) == _interfaces.end() ){
+						//create a new interface
+						_interfaces.insert(make_pair<int,Interface>(partID,Interface(dataPartition->comRank,partID,dataPartition->comm)));
+					}
+					_interfaces[partID].sendposis.push_back(i);	//i --> icell
+					_interfaces[partID].recvposis.push_back(interfaceVoidCellCounter);
+					assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE);
+
+					//dynamic memory adjustment, might result in bad performance
+					Cell = (CellData*) realloc(Cell,(interfaceVoidCellCounter+1)*sizeof(CellData) );
+
+					Cell[i].cell[j] = interfaceVoidCellCounter;	//add void cell
+					Face[iface].cell2 = interfaceVoidCellCounter;
+
+					//dataPartition->PRINT_LOG(partID);
+					//dataPartition->PRINT_LOG(Face[iface].cell1);
+					//dataPartition->PRINT_LOG(Face[iface].cell2);
+					
+					interfaceVoidCellCounter++;
+					nVirtualCell++;
+					break;	
+				}
+			}		
+
+		}else{
+        		Cell[i].cell[j]= nc; //nc = -10 when boundary
+		}
+        }
+    }
+
+
+
+    //-- cell volumn and center cordinate
+    for( i=0; i<Ncel; i++ )
+    {
+        for( j=0; j<3; j++ )
+        {
+            xv1[j] = Vert[ Cell[i].vertices[0] ] [j];
+            xv2[j] = Vert[ Cell[i].vertices[1] ] [j];
+            xv3[j] = Vert[ Cell[i].vertices[2] ] [j];
+            xv4[j] = Vert[ Cell[i].vertices[3] ] [j];
+            xv5[j] = Vert[ Cell[i].vertices[4] ] [j];
+            xv6[j] = Vert[ Cell[i].vertices[5] ] [j];
+            xv7[j] = Vert[ Cell[i].vertices[6] ] [j];
+            xv8[j] = Vert[ Cell[i].vertices[7] ] [j];
+        }
+
+	// cell volume
+        // Hexa is divided into 6 Tets
+        V1= TetVolum(xv1,xv2,xv4,xv6);
+        V2= TetVolum(xv1,xv5,xv4,xv6);
+        V3= TetVolum(xv4,xv5,xv8,xv6);
+        V4= TetVolum(xv2,xv3,xv4,xv7);
+        V5= TetVolum(xv2,xv6,xv4,xv7);
+        V6= TetVolum(xv8,xv4,xv6,xv7);
+	Cell[i].vol= V1 + V2 + V3 + V4 + V5 + V6;
+
+        for( j=0; j<3; j++ ){
+            xc1[j]= 0.25*( xv1[j]+xv2[j]+xv4[j]+xv6[j] );
+            xc2[j]= 0.25*( xv1[j]+xv5[j]+xv4[j]+xv6[j] );
+            xc3[j]= 0.25*( xv4[j]+xv5[j]+xv8[j]+xv6[j] );
+            xc4[j]= 0.25*( xv2[j]+xv3[j]+xv4[j]+xv7[j] );
+            xc5[j]= 0.25*( xv2[j]+xv6[j]+xv4[j]+xv7[j] );
+            xc6[j]= 0.25*( xv8[j]+xv4[j]+xv6[j]+xv7[j] );
+        }
+	double Vsum = V1+V2+V3+V4+V5+V6;
+        for( j=0; j<3; j++ )
+            Cell[i].x[j]=1./Vsum*( V1*xc1[j] + V2*xc2[j] +
+                                   V3*xc3[j] + V4*xc4[j] +
+                                   V5*xc5[j] + V6*xc6[j] );
+        if( fabs((Cell[i].vol - (V1+V2+V3+V4+V5+V6))/Cell[i].vol) > 1.e-3 ){
+		char temp[256];
+		sprintf(temp,"error in cell volume calculation%d vol:%f %f\n",i,Cell[i].vol,V1+V2+V3+V4+V5+V6 );
+		throw logic_error(temp);
+        }
+
+    }
+
+    /*************************************************
+     *	configure cellGlobalIdx, CXY
+     *************************************************/
+	dataPartition->nVirtualCell = nVirtualCell;
+    //-- set Global index for each cell
+	PetscInt iStart,iEnd;	
+
+	MatGetOwnershipRange(dataPartition->Au,&iStart,&iEnd);	//global idx this part: [iStart, iEnd);
+	for(int i=0;i!=Ncel;++i){
+		Cell[i].globalIdx = iStart + i;
+	}
+	assert(iEnd == i + iStart);
+
+	//--------------interface communication to get gloabl index for virtual cell
+	dataPartition->interfaceCommunication(Cell);
+	for(int i=0;i!=Ncel+nVirtualCell;++i){
+		dataPartition->PRINT_LOG(Cell[i].globalIdx);
+	}
+
+
+
+
     //-- face
     for( i=0; i<Nfac; i++ )
     {
@@ -525,123 +649,12 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 			Face[i].lambda = 1.;
     }
 	
-	
-    //-- cell
-    int interfaceVoidCellCounter = Ncel;//out of Ncel range!
-    int nVirtualCell = 0;
-    for( i=0; i<Ncel; i++ )
-    {
-        for( j=0; j<3; j++ )
-        {
-            xv1[j] = Vert[ Cell[i].vertices[0] ] [j];
-            xv2[j] = Vert[ Cell[i].vertices[1] ] [j];
-            xv3[j] = Vert[ Cell[i].vertices[2] ] [j];
-            xv4[j] = Vert[ Cell[i].vertices[3] ] [j];
-            xv5[j] = Vert[ Cell[i].vertices[4] ] [j];
-            xv6[j] = Vert[ Cell[i].vertices[5] ] [j];
-            xv7[j] = Vert[ Cell[i].vertices[6] ] [j];
-            xv8[j] = Vert[ Cell[i].vertices[7] ] [j];
-        }
 
-	// cell volume
-        // way-1: |V|=Integ_V( div(x,0,0) ) = Integ_S( (x,0,0).n ).
-        /* Cell[i].vol = 0.;
-        for( j=0; j<Cell[i].nface; j++ )
-        {
-            int iface= Cell[i].face[j];
-			if( Face[iface].cell1==i )
-				Cell[i].vol += Face[iface].x[0] * Face[iface].n[0];
-			else
-				Cell[i].vol -= Face[iface].x[0] * Face[iface].n[0];
-        } */
-		// way-2:
-		/* double ddp[3],dde[3],ddz[3];
-		for( j=0;j<3;j++ ){
-			ddp[j]=0.125*( -xv1[j]+xv2[j]+xv3[j]-xv4[j]-xv5[j]+xv6[j]+xv7[j]-xv8[j] );
-			dde[j]=0.125*( -xv1[j]-xv2[j]+xv3[j]+xv4[j]-xv5[j]-xv6[j]+xv7[j]+xv8[j] );
-			ddz[j]=0.125*( -xv1[j]-xv2[j]-xv3[j]-xv4[j]+xv5[j]+xv6[j]+xv7[j]+xv8[j] );
-		}
-		Cell[i].vol = ddp[0]*( dde[1]*ddz[2] - dde[2]*ddz[1] )
-					 -ddp[1]*( dde[0]*ddz[2] - dde[2]*ddz[0] )
-					 +ddp[2]*( dde[0]*ddz[1] - dde[1]*ddz[0] );
-		Cell[i].vol *= 8.; */
 
-		// cell-gravity
-        // Hexa is divided into 6 Tets
-        V1= TetVolum(xv1,xv2,xv4,xv6);
-        V2= TetVolum(xv1,xv5,xv4,xv6);
-        V3= TetVolum(xv4,xv5,xv8,xv6);
-        V4= TetVolum(xv2,xv3,xv4,xv7);
-        V5= TetVolum(xv2,xv6,xv4,xv7);
-        V6= TetVolum(xv8,xv4,xv6,xv7);
-	Cell[i].vol= V1 + V2 + V3 + V4 + V5 + V6;
+    
 
-        for( j=0; j<3; j++ ){
-            xc1[j]= 0.25*( xv1[j]+xv2[j]+xv4[j]+xv6[j] );
-            xc2[j]= 0.25*( xv1[j]+xv5[j]+xv4[j]+xv6[j] );
-            xc3[j]= 0.25*( xv4[j]+xv5[j]+xv8[j]+xv6[j] );
-            xc4[j]= 0.25*( xv2[j]+xv3[j]+xv4[j]+xv7[j] );
-            xc5[j]= 0.25*( xv2[j]+xv6[j]+xv4[j]+xv7[j] );
-            xc6[j]= 0.25*( xv8[j]+xv4[j]+xv6[j]+xv7[j] );
-        }
-	double Vsum = V1+V2+V3+V4+V5+V6;
-        for( j=0; j<3; j++ )
-            Cell[i].x[j]=1./Vsum*( V1*xc1[j] + V2*xc2[j] +
-                                   V3*xc3[j] + V4*xc4[j] +
-                                   V5*xc5[j] + V6*xc6[j] );
-        if( fabs((Cell[i].vol - (V1+V2+V3+V4+V5+V6))/Cell[i].vol) > 1.e-3 ){
-		char temp[256];
-		sprintf(temp,"error in cell volume calculation%d vol:%f %f\n",i,Cell[i].vol,V1+V2+V3+V4+V5+V6 );
-		throw logic_error(temp);
-        }
 
-        // neighbored cells
-        for( j=0; j<Cell[i].nface; j++ )
-        {
-        	iface = Cell[i].face[j];
-		nc    = Face[iface].cell1;
-        	if( nc==i )
-        		nc = Face[iface].cell2;
-		if(nc==VOID_CELL_ON_INTERFACE){ //insert virtual cell for the interfaces
-			set<int> verts;
-			for(int i=0;i!=4;++i)
-				verts.insert(Face[iface].vertices[i]);
-			for(map<int,set<int> >::iterator it = interfaceNodes->begin();it!=interfaceNodes->end();++it){//for each interfaces
-				vector<int> _intersectionVector;//hold result of intersection
-				set<int>& _st = it->second;
-				int partID    = it->first;
-				set_difference(verts.begin(),verts.end(),_st.begin(),_st.end(),back_inserter(_intersectionVector));
-				
-				if(_intersectionVector.empty()){//verts belong to _st
-					map<int,Interface>& _interfaces = dataPartition->interfaces;
-					if(_interfaces.find(partID) == _interfaces.end() ){
-						//create a new interface
-						_interfaces.insert(make_pair<int,Interface>(partID,Interface(dataPartition->comRank,partID,dataPartition->comm)));
-					}
-					_interfaces[partID].sendposis.push_back(i);	//i --> icell
-					_interfaces[partID].recvposis.push_back(interfaceVoidCellCounter);
-					assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE);
 
-					Cell[i].cell[j] = interfaceVoidCellCounter;	//add void cell
-					Face[iface].cell2 = interfaceVoidCellCounter;
-
-					//dataPartition->PRINT_LOG(partID);
-					//dataPartition->PRINT_LOG(Face[iface].cell1);
-					//dataPartition->PRINT_LOG(Face[iface].cell2);
-					
-					interfaceVoidCellCounter++;
-					nVirtualCell++;
-					break;	
-				}
-				
-			}		
-
-		}else{
-        		Cell[i].cell[j]= nc; //nc = -10 when boundary
-		}
-        }
-    }
-	dataPartition->nVirtualCell = nVirtualCell;
 
 	/* // output 
 	ofstream of;
@@ -798,7 +811,6 @@ int NavierStokesSolver::CheckAndAllocate()
 	//V_Constr(&bw,   "rightU",    Ncel, Normal, True);
 	//V_Constr(&bp,   "rightU",    Ncel, Normal, True);
 	//V_Constr(&xsol, "rightU",    Ncel, Normal, True);
-	dataPartition->initPetsc();
 
 	cur_time = 0.;
 		

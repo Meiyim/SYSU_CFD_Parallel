@@ -3,11 +3,16 @@
 #include <vector>
 #include <map>
 #include <set>
-#include <unordered_set>
 #include <string>
 #include <stdexcept>
 #include <petscksp.h>
 #include "NS/BasicType.h"
+
+#ifndef CYCAS_DEBUG_MODE
+#define NDEBUG
+#endif
+#include <assert.h>
+
 
 #ifndef _DATA_PROCESS_H_
 #define _DATA_PROCESS_H_
@@ -31,7 +36,7 @@ class CellData;
 
 using std::vector;
 using std::map;
-using std::unordered_set;
+using std::set;
 using std::string;
 
 /******************************************************
@@ -303,7 +308,7 @@ public:
 	/***************used when partitioning*************************/
 	InputElement** rootElems;   	 //a pointer array //for faster sorting
 	InputVert* rootVerts; 		
-	std::map<int, unordered_set<int> >* boundNodesPool ; //one for each partition, <partID,nodesPool>
+	std::map<int, set<int> >* boundNodesPool ; //one for each partition, <partID,nodesPool>
 	std::map<int,int>* nodesPool;			     //one for each partition, <globalID, localID>;
 
 	std::vector<int>* rootgridList;	// the element number of each parition

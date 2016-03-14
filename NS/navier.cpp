@@ -123,17 +123,25 @@ void NavierStokesSolver::broadcastSolverParam(){
 
 	//------other constant, nProcess, gridList, nCell etc.
 	
-	dataPartition->gridList = new int[dataPartition->nProcess];
 	int* _sendbuf = NULL;
 	int* _sendbuf1 = NULL;
 
 	if(root.rootgridList!=NULL){//root only
 		dataPartition->nProcess = root.rootgridList->size();
 		dataPartition->nGlobal = root.rootNGlobal;
+	}
+
+	MPI_Bcast(&(dataPartition->nProcess),1,MPI_INT,sourceRank,dataPartition->comm);//nProcess
+
+	MPI_Bcast(&(dataPartition->nGlobal),1,MPI_INT,sourceRank,dataPartition->comm);//nGlobal
+
+
+	dataPartition->gridList = new int[dataPartition->nProcess];
+	if(root.rootgridList!=NULL){//root only
 		for(int i=0;i!=dataPartition->nProcess;++i)
 			dataPartition->gridList[i] = root.rootgridList->at(i);
 
-		_sendbuf = new int[dataPartition->nProcess];
+		_sendbuf = new int[dataPartition->nProcess]; //only significant in root
 		_sendbuf1 = new int[dataPartition->nProcess];
 
 		for(int i=0;i!=dataPartition->nProcess;++i)
@@ -143,11 +151,7 @@ void NavierStokesSolver::broadcastSolverParam(){
 			_sendbuf1[i] = root.nodesPool[i].size();
 
 	}
-
-	MPI_Bcast(&(dataPartition->nProcess),1,MPI_INT,sourceRank,dataPartition->comm);//nProcess
-
-	MPI_Bcast(&(dataPartition->nGlobal),1,MPI_INT,sourceRank,dataPartition->comm);//nProcess
-
+	
 	MPI_Bcast(dataPartition->gridList, dataPartition->nProcess, MPI_INT, sourceRank, dataPartition->comm);//gridlist
 
 	//scatter: sendbuf, sendcount(number of element to EACH process), sendtype, recvbuf, recvcount, recvtype, rootrank, communicator

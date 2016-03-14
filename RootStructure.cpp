@@ -178,7 +178,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	 * 	phase4 :create nodes pool and interfaces info
 	***************************************************/
 
-	boundNodesPool = new map<int,unordered_set<int> > [N]; // one for each partition,<partID,nodesInthisParts>
+	boundNodesPool = new map<int,set<int> > [N]; // one for each partition,<partID,nodesInthisParts>
 	nodesPool = new map<int,int> [N];		      //one for each partition,<partID,width>
 	//interfacesInfo = new map<int,int>[N]; 			
 	int iE = 0;	
@@ -389,20 +389,21 @@ int RootProcess::getInterfaceSendBuffer(DataPartition* dg,int pid ,int** buffer)
 	//
 	//numberOfInterfaces, interfacePartID, interfaceWidth, vert1, ver2, ver3,... interfacePartID2, interfaceWidth2, ...
 	
-	for(map<int,unordered_set<int> >::iterator ittup = boundNodesPool[pid].begin(); ittup!=boundNodesPool[pid].end(); ++ittup){
+	for(map<int,set<int> >::iterator ittup = boundNodesPool[pid].begin(); ittup!=boundNodesPool[pid].end(); ++ittup){
 		nI += 2;			 //each bounds has a head to record the interface info;
 		nI += ittup->second.size();
 	}
 
 	*buffer = new int[nI];
+	dg->PRINT_LOG(nI);
 
 	size_t counter = 0;	
 	(*buffer)[counter++] = boundNodesPool[pid].size();
 
-	for(map<int,unordered_set<int> >::iterator ittup = boundNodesPool[pid].begin(); ittup!=boundNodesPool[pid].end(); ++ittup){
+	for(map<int,set<int> >::iterator ittup = boundNodesPool[pid].begin(); ittup!=boundNodesPool[pid].end(); ++ittup){
 		(*buffer)[counter++] = ittup->first;
 		(*buffer)[counter++] = ittup->second.size();	 
-		for(unordered_set<int>::iterator itnodes = ittup->second.begin(); itnodes!=ittup->second.end(); ++itnodes){
+		for(set<int>::iterator itnodes = ittup->second.begin(); itnodes!=ittup->second.end(); ++itnodes){
 			int globalID = *itnodes;
 			int localID = nodesPool[pid][globalID];
 			(*buffer)[counter++] = localID;  //transfer boundNodesPool to local id

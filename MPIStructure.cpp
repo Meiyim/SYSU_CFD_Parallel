@@ -250,14 +250,12 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	KSPGetConvergedReason(ksp,&reason);
 
 	if(reason<0){
-		PetscPrintf(comm,"seems the GMRES for U didnt converge :(\n");
 		return 1;
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - U converged in %d step! :)\n",iters);
-		return 0;
 	}
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 	
@@ -275,14 +273,12 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
 
 	if(reason<0){
-		PetscPrintf(comm,"seems the GMRES for V didnt converge :(\n");
-		return 1;
+		return 2;
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - V converged in %d step! :)\n",iters);
-		return 0;
 	}
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 
@@ -299,14 +295,11 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
 
 	if(reason<0){
-		PetscPrintf(comm,"seems the GMRES for W didnt converge :(\n");
-		return 1;
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - W converged in %d step! :)\n",iters);
-		return 0;
 	}
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 

@@ -104,24 +104,7 @@ struct _SortAccordingToPart{
 		return lhs->pid<rhs->pid ? true : false;
 	}
 };
-/*
-struct _SortVertAccordingToPart{
-	InputVert* head;
-	idx_t* partid;
-	bool operator()(InputVert& lhs,InputVert& rhs){
-		int i=&lhs - head;
-		int j=&rhs - head;
-		return partid[i]<partid[j] ? true : false ;
-	}
-};
-struct _AssigntoOriginIdx{
-	int*  //stop here, restart tomorrow
-	int* originVertOrder;
-	void operator()(InputVert& vert){
-		originVertOrder[vert.tag] = vert.tag;
-	}
-};
-*/
+
 void RootProcess::partition(DataPartition* dg, int N){
 	if(dg->comRank!=rank) return;//only in root
 

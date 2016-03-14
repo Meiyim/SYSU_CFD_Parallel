@@ -16,7 +16,7 @@
 #define MAX_LOCAL_PREALLOCATION 7
 #define ELEMENT_TAG_LEN 2
 
-#ifdef SHOULD_CHECK_MPI_ERROR 
+#ifdef CYCAS_DEBUG_MODE
 #define CHECK(err) if(err!=MPI_SUCCESS) throwError("MPI_ERROR");
 #else
 #define CHECK(err)
@@ -61,7 +61,29 @@ public:
 		sendBufferCell(NULL),
 		recvBufferCell(NULL),
 		comm(c)
-	{}	
+	{
+		CellData cellSample;
+		int lena[2];
+		MPI_Aint loca[2];
+		MPI_Datatype typa[2];
+		MPI_Aint baseAddress;
+
+		MPI_Get_address(&cellSample,&baseAddress);
+
+		lena[0] = 22; //22 Ints
+		MPI_Get_address(&cellSample.nface,&loca[0]);
+		loca[0] -= baseAddress;
+		typa[0] = MPI_INT;
+
+		lena[1] = 4; //4  Double
+		MPI_Get_address(&cellSample.vol,&loca[1]);
+		loca[1] -= baseAddress;
+		typa[1] = MPI_DOUBLE;
+		
+		MPI_Type_create_struct(2,lena,loca,typa,&MPI_CellData);
+		MPI_Type_commit(&MPI_CellData);
+
+	}	
 
 	~Interface(){
 		if(sendBuffer!=NULL) delete [] sendBuffer;
@@ -100,6 +122,7 @@ private:
 	CellData *sendBufferCell;
 	CellData *recvBufferCell;
 	MPI_Comm comm;
+	MPI_Datatype MPI_CellData; //a variable to hold the customized MPI TYPE, contains 22 Ints, 4 Doubles
 };
 
 

@@ -2,6 +2,21 @@
 #include "MPIStructure.h"
 
 using namespace std;
+//------------for PRINT_LOG(CellData);
+std::ostream& operator<<(std::ostream& out,const CellData& cel){
+	out<<"nface:"<<cel.nface<<std::endl;
+	out<<"globalIDx "<<cel.globalIdx<<std::endl;
+	out<<"face\tvertices:\tcell\n";
+	for(int i=0;i!=6;++i)
+		out<<cel.face[i]<<'\t'<<cel.vertices[i]<<'\t'<<cel.cell[i]<<std::endl;
+	out<<"vol: "<<cel.vol<<std::endl;
+	out<<"x:\t";
+	for(int i=0;i!=3;++i)
+		out<<cel.x[i]<<'\t';
+	out<<std::endl;
+	return out;
+
+}
 
 
 int DataPartition::initPetsc(){ //collcetive
@@ -230,7 +245,7 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = VecAssemblyEnd(xsol);		      CHKERRQ(ierr);
 	ierr = KSPSolve(ksp,bu,xsol);		      CHKERRQ(ierr);
 	
-	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+	//ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
 	KSPGetConvergedReason(ksp,&reason);
 
@@ -256,7 +271,7 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = VecAssemblyEnd(bv);			CHKERRQ(ierr);
 	ierr = VecAssemblyEnd(xsol);			CHKERRQ(ierr);
 	ierr = KSPSolve(ksp,bv,xsol);			CHKERRQ(ierr);
-	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);	CHKERRQ(ierr);
+	//ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);	CHKERRQ(ierr);
 	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
 
 	if(reason<0){
@@ -280,7 +295,7 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = VecAssemblyEnd(bw);			CHKERRQ(ierr);
 	ierr = VecAssemblyEnd(xsol);			CHKERRQ(ierr);
 	ierr = KSPSolve(ksp,bw,xsol);			CHKERRQ(ierr);
-	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);	CHKERRQ(ierr);
+	//ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);	CHKERRQ(ierr);
 	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
 
 	if(reason<0){
@@ -341,7 +356,7 @@ int Interface::send(MPI_Request* req, CellData* phi){
 	for(int i=0;i!=width;++i) //openMP optimizeable
 		sendBufferCell[i] = phi[sendposis[i]];
 
-	MPI_Issend(sendBufferCell,width, MPI_INT,
+	MPI_Issend(sendBufferCell,width, MPI_CellData,
 			otherRank,
 			selfRank, //TAG==self Rank
 			comm,
@@ -356,7 +371,7 @@ int Interface::recv(MPI_Request* req, CellData* phi){
 	if(recvBufferCell==NULL)
 		recvBufferCell = new CellData[width];
 
-	MPI_Irecv(recvBufferCell,width,MPI_INT,
+	MPI_Irecv(recvBufferCell,width,MPI_CellData,
 			otherRank,
 			otherRank,//TAG = source
 			comm,
@@ -402,8 +417,9 @@ int Interface::recv(MPI_Request* req, double* phi[3]){
 
 void Interface::getData(CellData* phi){
 	size_t width = getWidth();
-	for(int i=0;i!=width;++i)
+	for(int i=0;i!=width;++i){
 		phi[recvposis[i]] = recvBufferCell[i];
+	}
 
 }
 

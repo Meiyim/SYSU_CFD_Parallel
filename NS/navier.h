@@ -4,14 +4,14 @@
 #include <string>
 #include <fstream>
 #include "BasicType.h"
+#ifndef CYCAS_DEBUG_MODE
+#define NDEBUG
+#endif
+#include <assert.h>
 #include "../MPIStructure.h"
 #include "tools.h"
 
-#define SMALL 1.e-16
 
-#define INT_OPTION_NO 114 
-#define DB_OPTION_NO  132
-#define TECPLOT_NVAR  13
 
 
 using std::cout;

@@ -23,6 +23,9 @@ int NavierStokesSolver::CalculateVelocity( )
 		
 		
 	
+	for(int i=0;i!=Ncel;++i){
+		dataPartition->PRINT_LOG(Un[i]);
+	}
 	
 /*
 	for( i=0; i<Ncel; i++ ) ;
@@ -344,9 +347,9 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 		App[i] = 1./App[i];  */
 
 		PetscInt row = Cell[i].globalIdx;
-		dataPartition->PRINT_LOG(row);
+		assert(row>=0&&row<dataPartition->nGlobal);
 		for(int ii=0;ii!=nj;++ii){
-			dataPartition->PRINT_LOG(ani[ii]);
+			assert(ani[ii]>=0&&ani[ii]<dataPartition->nGlobal);
 		}
 		MatSetValue(Au,row,row,app,INSERT_VALUES);	  //center cell
 		MatSetValues(Au,1,&row,nj,ani,apn,INSERT_VALUES); //off-diagonal

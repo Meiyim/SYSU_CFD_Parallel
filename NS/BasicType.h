@@ -1,10 +1,20 @@
+#include<iostream>
 #include<petscksp.h>
 /********************************************************
  * define the basic type in NavierStorkesSolver
  ********************************************************/
 
+#define CYCAS_DEBUG_MODE
+
+#define SMALL 1.e-16
+#define INT_OPTION_NO 114 
+#define DB_OPTION_NO  132
+#define TECPLOT_NVAR  13
+
+
 #ifndef BASIC_TYPE_H
 #define BASIC_TYPE_H
+
 
 struct FaceData
 {
@@ -22,15 +32,16 @@ class CellData{
 public:
     int nface;
     int face[6], cell[6], vertices[8]; // maybe wasterful a bit. Make it dynamics to save memory
-    //face[nface]: for the faces index
-    //  all elements are treated as 8 nodes hexahdron,
-    //  but with different number of faces, so judges will be used for avoid faces with one vertex
-    double vol, x[3];
-    PetscInt  globalIdx; //added by CXY: len: Ncel, global idx for each cell
+    				       //  face[nface]: for the faces index
+    				       //  all elements are treated as 8 nodes hexahdron,
+    				       //  but with different number of faces, so judges will be used for avoid faces with one vertex
+    int  globalIdx; 		       //added by CXY: len: Ncel, global idx for each cell
+    double vol;
+    double x[3];
     CellData():
 	    nface(-1),
-	    vol(-1.0),
-	    globalIdx(-1)
+	    globalIdx(-1),
+	    vol(-1.0)
 	    {
 		    for(int i=0;i!=6;++i)
 			    face[i] = cell[i]  = -1;
@@ -40,7 +51,27 @@ public:
 			    x[i] = -1;
 	    }
 
+    CellData& operator=(CellData& rhs){
+	    this->nface = rhs.nface;
+	    this->vol = rhs.vol;
+	    for(int i=0;i!=6;++i){
+		   this->face[i] = rhs.face[i];
+		   this->cell[i] = rhs.cell[i];
+	    }
+	    for(int i=0;i!=8;++i)
+		    this->vertices[i] = rhs.vertices[i];
+	    for(int i=0;i!=3;++i)
+		    this->x[i] = rhs.x[i];
+
+	    this->globalIdx = rhs.globalIdx;
+
+	    return *this;
+    }
+
 };
+
+//------for PRINT_LOG
+std::ostream& operator<<(std::ostream&,const CellData& cel);
 
 
 // connect boundary to faces, boundary to BdRegion

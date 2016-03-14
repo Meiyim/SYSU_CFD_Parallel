@@ -577,9 +577,11 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 
 	//--------------interface communication to get gloabl index for virtual cell
 	dataPartition->interfaceCommunication(Cell);
+	/*
 	for(int i=0;i!=Ncel+nVirtualCell;++i){
-		dataPartition->PRINT_LOG(Cell[i].globalIdx);
+		dataPartition->PRINT_LOG(Cell[i]);
 	}
+	*/
 
 
 

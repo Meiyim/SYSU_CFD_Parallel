@@ -259,9 +259,10 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	}
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 	
-	return 0;	
+
 	/***************************************
 	 * 	SOLVE V!
+	 * 	no need to reset KSP context and Mat
 	 ***************************************/
 	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xv,&xsol);CHKERRQ(ierr); 
 	ierr = VecAssemblyBegin(xsol);			CHKERRQ(ierr);
@@ -282,8 +283,10 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	}
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 
+
 	/***************************************
 	 * 	SOLVE W!
+	 * 	no need to reset KSP context and Mat
 	 ***************************************/
 	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xw,&xsol);CHKERRQ(ierr); 
 	ierr = VecAssemblyBegin(xsol);			CHKERRQ(ierr);
@@ -295,6 +298,7 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
 
 	if(reason<0){
+		return 3;
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{

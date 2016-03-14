@@ -18,51 +18,28 @@ int NavierStokesSolver::CalculateVelocity( )
 	BuildVelocityMatrix(dataPartition->Au,dataPartition->bu,dataPartition->bv,dataPartition->bw );
 	
 
-	// solve U
-	dataPartition->solveVelocity_GMRES(1.e-6,1000,Un,Vn,Wn);	
-		
-		
+	// solve U,V,W
+	switch( dataPartition->solveVelocity_GMRES(1.e-6,1000,Un,Vn,Wn) ){
+		case 1:
+			throw runtime_error("U not converge\n");
+			break;
+		case 2:
+			throw runtime_error("V not converge\n");
+			break;
+		case 3:
+			throw runtime_error("W not converge\n");
+			break;
+		default:
+			break;
+	}
 	
-	for(int i=0;i!=Ncel;++i){
+	//check	
+	for(int i=0;i!=Ncel;++i)
 		dataPartition->PRINT_LOG(Un[i]);
-	}
 	
-/*
-	for( i=0; i<Ncel; i++ ) ;
-//		xsol.Cmp[i+1]= Un[i];
-//	SolveLinearEqu( GMRESIter, &As, &xsol, &bu, 500, SSORPrecond, 1.2, 1.e-8, &Iter, &IterRes );
-	if( Iter>=500 && IterRes>1.e-8 ){ // ErrorStop( "U cannot converge" );
-		cout<<"U cannot converge."<<Iter<<" "<<IterRes<<endl;
-		exit(0);
-	}
-	for( i=0; i<Ncel; i++ ){
-//		Residual[0] += fabs( Un[i] - xsol.Cmp[i+1] )*Cell[i].vol;
-//		Un[i] = xsol.Cmp[i+1];
-	}
-
-
-	// solve V
-	for( i=0; i<Ncel; i++ )
-//		xsol.Cmp[i+1]= Vn[i];
-//	SolveLinearEqu( GMRESIter, &As, &xsol, &bv, 500, SSORPrecond, 1.2, 1.e-8, &Iter, &IterRes );
-	if( Iter>=500 && IterRes>1.e-8 ) ErrorStop( "V cannot converge" );
-	for( i=0; i<Ncel; i++ ) {
-//		Residual[1] += fabs( Vn[i] - xsol.Cmp[i+1] )*Cell[i].vol;
-//		Vn[i] = xsol.Cmp[i+1];
-	}
-
-	// solve W
-	for( i=0; i<Ncel; i++ )
-//		xsol.Cmp[i+1]= Wn[i];
-//	SolveLinearEqu( GMRESIter, &As, &xsol, &bw, 500, SSORPrecond, 1.2, 1.e-8, &Iter, &IterRes );
-	if( Iter>=500 && IterRes>1.e-8 ) ErrorStop( "W cannot converge" );
-	for( i=0; i<Ncel; i++ ){
-//		Residual[2] += fabs( Wn[i] - xsol.Cmp[i+1] )*Cell[i].vol;
-//		Wn[i] = xsol.Cmp[i+1];
-	}
-
-//	Q_Destr ( &As );
-*/
+	dataPartition->interfaceCommunication(Un);//update boundary
+	dataPartition->interfaceCommunication(Vn);
+	dataPartition->interfaceCommunication(Wn);
 
 	return 0;
 }

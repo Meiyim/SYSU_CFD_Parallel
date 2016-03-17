@@ -712,12 +712,7 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 		{
 			vec_minus( dx,Cell[ic2].x,Cell[ic1].x,3 );
 			// Face[i].rlencos= Face[i].area/vec_len(dx,3);
-			Face[i].rlencos = Face[i].area / (vec_dot( dx,Face[i].n,3 )/Face[i].area);
-			if(Face[i].rlencos>100){
-				dataPartition->PRINT_LOG(i);
-				dataPartition->PRINT_LOG(Face[i].cell1);
-				dataPartition->PRINT_LOG(Face[i].cell2);
-			}
+			Face[i].rlencos = Face[i].area / fabs(vec_dot( dx,Face[i].n,3 )/Face[i].area);
 		}
 
 

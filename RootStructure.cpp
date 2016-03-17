@@ -151,7 +151,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 			&edgecut, epart, npart);
 
 	if(ret!=METIS_OK)throw runtime_error("METIS Partition error!\n");
-	printf("METIS return successfuly, partitioned into %d part, totally edgecut%lld \n",N,edgecut);
+	printf("METIS create graph successfuly, partitioned into %d part, totally edgecut%lld \n",N,edgecut);
 	//for(int i=0;i!=rootNVert;++i)
 	//	PetscPrintf(MPI_COMM_WORLD,"!!!!!!!!!!!!!!!!npart: %d , %lld\n",i,npart[i]);
 	delete []eptr;delete eind; eptr=NULL;eptr=NULL;

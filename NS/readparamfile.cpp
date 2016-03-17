@@ -92,7 +92,7 @@ void NavierStokesSolver::ReadParamFile( )
 			{
 				char temp[256];
 				sprintf(temp,"Error in raading param.in\tline: %d\n unknown time scheme: %s\n",_linecounter,keyw[3]);
-				throw std::logic_error(temp);
+				errorHandler.fatalLogicError(temp);
 			}
 		}
 		else if( strcmp(keyw[0],"energy")==0 )
@@ -104,7 +104,7 @@ void NavierStokesSolver::ReadParamFile( )
 			else{
 				char temp[256];
 				sprintf(temp,"Error in raading param.in\tline: %d\n unknown energy model\n",_linecounter);
-				throw std::logic_error(temp);
+				errorHandler.fatalLogicError(temp);
 			}
 		}
 		else if( strcmp(keyw[0],"density")==0 )
@@ -120,7 +120,7 @@ void NavierStokesSolver::ReadParamFile( )
 			else{
 				char temp[256];
 				sprintf(temp,"Error in raading param.in\tline: %d\n unknown turbulence model\n",_linecounter);
-				throw std::logic_error(temp);
+				errorHandler.fatalLogicError(temp);
 			}
 		}
 		else if( strcmp(keyw[0],"gravity")==0 )
@@ -155,7 +155,7 @@ void NavierStokesSolver::ReadParamFile( )
 			else{
 				char temp[256];
 				sprintf(temp,"Error in raading param.in\tline: %d\n unknown limiter definition\n",_linecounter);
-				throw std::logic_error(temp);
+				errorHandler.fatalLogicError(temp);
 			}
 		}
 
@@ -170,7 +170,7 @@ void NavierStokesSolver::ReadParamFile( )
 			else{
 				char temp[256];
 				sprintf(temp,"Error in raading param.in\tline: %d\n unknown restart command\n",_linecounter);
-				throw std::logic_error(temp);
+				errorHandler.fatalLogicError(temp);
 			}
 		}
 		else if( strcmp(keyw[0],"initflow")==0 )
@@ -211,7 +211,7 @@ void NavierStokesSolver::ReadParamFile( )
 			{
 				char temp[256];
 				sprintf(temp,"Error in reading param.in\t line: %d \nunknown boundary type:%s\n",_linecounter,keyw[2]);
-				throw std::logic_error(temp);
+				errorHandler.fatalLogicError(temp);
 			}
 		}
 
@@ -230,7 +230,7 @@ void NavierStokesSolver::ReadParamFile( )
 		{
 			char temp[256];
 			sprintf(temp,"Error in reading param.in\t line: %d \nno such command: %s\n",_linecounter,keyw[0]);
-			throw std::logic_error(temp);
+			errorHandler.fatalLogicError(temp);
 		}
 
 	}

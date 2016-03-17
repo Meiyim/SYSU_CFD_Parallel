@@ -68,7 +68,7 @@ void SolveLinearEqu(Vector* Func(QMatrix*, Vector*, Vector*, int,PrecondProcType
 */
 void ErrorStop( string str )
 {
-	throw std::runtime_error(str);
+	errorHandler.fatalRuntimeError(str);
 }
 
 char *trimwhitespace(char *str)
@@ -102,6 +102,41 @@ double ttime (void)
 /********************************************
  * below is implement by CHENXUYI
  ********************************************/
+
+/********************************************
+ * 	DEBUG TOOL
+ *******************************************/
+std::ostream& operator<<(std::ostream& out,const CellData& cel){
+	out<<"nface:"<<cel.nface<<std::endl;
+	out<<"globalIDx "<<cel.globalIdx<<std::endl;
+	out<<"face\tvertices:\tcell\n";
+	for(int i=0;i!=6;++i)
+		out<<cel.face[i]<<'\t'<<cel.vertices[i]<<'\t'<<cel.cell[i]<<std::endl;
+	out<<"vol: "<<cel.vol<<std::endl;
+	out<<"x:\t";
+	for(int i=0;i!=3;++i)
+		out<<cel.x[i]<<'\t';
+	out<<std::endl;
+	return out;
+
+}
+std::ostream& operator<<(std::ostream& out,const FaceData& fac){
+	out<<"cel1: "<<	fac.cell1<<" cel2: "<<fac.cell2<<endl;
+	out<<"area: "<<fac.area<<endl;
+	out<<"lambda: "<<fac.lambda<<endl;
+	out<<"rlencos: "<<fac.rlencos<<endl;
+	out<<"x\tn"<<endl;
+	for(int i=0;i!=3;++i){
+		out<<fac.x[i]<<"\t"<<fac.n[i]<<endl;
+	}
+
+	out<<"xpac\txnac"<<endl;
+	for(int i=0;i!=3;++i){
+		out<<fac.Xpac[i]<<"\t"<<fac.Xnac[i]<<endl;
+	}
+
+	return out;
+}
 
 
 /********************************************

@@ -69,6 +69,68 @@ void init_Array2D(T **arr, int row, int col, T val )
  * below is implement by CHENXUYI
  ********************************************/
 
+//------for PRINT_LOG----------------------
+//
+//-----------------------------------------
+std::ostream& operator<<(std::ostream&,const CellData& cel);
+std::ostream& operator<<(std::ostream&,const FaceData& fac);
+
+class Checker{
+	string varname;
+	vector<double> pool;
+public:
+	Checker(string n):varname(n){}
+	void check(double v){
+		pool.push_back(v);
+	}
+	void report(){
+		double ret = 0.0;
+		double reduceResult = 0.0;
+		int count = pool.size();
+		int countRes = 0;
+		for(auto it=pool.begin();it!=pool.end();++it)
+			ret += (*it);
+		MPI_Reduce(&ret,&reduceResult,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);	
+		MPI_Reduce(&count,&countRes,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);	
+		PetscPrintf(MPI_COMM_WORLD,"%s:\t%e\tcount:%d\n",varname.c_str(),reduceResult,countRes);
+
+	}
+};
+
+
+#define CHECK_ARRAY(arr,len) checkArray(arr,len,#arr)
+#define CHECK_MEMBER_ARRAY(arr,mem,len) checkMemberArray(arr,len,mem,#arr #mem)
+template<typename T>
+void checkArray(T* arr, size_t len,char* name){
+	double ret = 0.0;
+	double reduceResult = 0.0;
+	for(int i=0;i!=len;++i){
+		ret += (arr[i])*(arr[i]);
+	}
+
+	MPI_Reduce(&ret,&reduceResult,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);	
+	
+	char temp[256];
+	sprintf(temp,"%s: norm %e\n",name,reduceResult);
+	PetscPrintf(MPI_COMM_WORLD,"%s",temp);
+}
+
+template<typename T>
+void checkMemberArray(T* arr, size_t len, double T::* m_ptr,char* name){
+	double ret = 0.0;
+	double reduceResult = 0.0;
+	for(int i=0;i!=len;++i){
+		ret += (arr[i].*m_ptr) * (arr[i].*m_ptr);
+
+	}
+
+	MPI_Reduce(&ret,&reduceResult,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);	
+	
+	char temp[256];
+	sprintf(temp,"%s: norm %e\n",name,reduceResult);
+	PetscPrintf(MPI_COMM_WORLD,"%s",temp);
+}
+
 
 /********************************************
  * MPI Parallel I/O

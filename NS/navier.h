@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <algorithm>
 #include "BasicType.h"
 #ifndef CYCAS_DEBUG_MODE
 #define NDEBUG
@@ -16,9 +17,12 @@
 
 using std::cout;
 using std::endl;
+
+//Error class used at Krylov iteration
+
+
+
 // geometry, face & cell data
-
-
 class NavierStokesSolver
 {
 public:
@@ -152,7 +156,7 @@ public:
 	void CalRUFace2( );
 	// pressure
 	int  CalculatePressure( );
-	void BuildPressureMatrix( );
+	void BuildPressureMatrix( Mat&, Vec&);
 	void CorrectRUFace2(double*);
 	// scalar. temperature, other passive variables
 	// void ScalarTranport   ( double *Phi, double *BPhi, double *DiffCoef, double *source );

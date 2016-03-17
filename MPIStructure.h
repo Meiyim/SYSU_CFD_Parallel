@@ -145,6 +145,8 @@ public:
 	Vec bp;
 	Vec bs;   //universal scarlar solver
 
+	Vec xdp;  //for pressure correction
+
 	Vec xsol; //determined when solve
 
 	Mat Au;
@@ -204,10 +206,12 @@ public:
 
 	int solveVelocity_GMRES(double tol,int maxIter,double const* xu,double const* xv,double const* xw); //return 0 if good solve, retrun 1 if not converge
 
+	int solvePressureCorrection(double tol, int maxIter,bool isSymmetric);
+
+	
 	/*************MPI INTERFACE COMMUNICATION***********************
 	 *	collective
 	 ***************************************************************/
-
 	template<typename T>
 	int interfaceCommunication(T var){
 		MPI_Barrier(comm);
@@ -225,7 +229,7 @@ public:
 		int ierr = 0;
 		ierr = MPI_Waitall(nInter,recvReq,MPI_STATUS_IGNORE);//blocking wait
 		if(ierr!=MPI_SUCCESS){
-			throw std::runtime_error("error occured when recving interface value\n");
+			errorHandler.fatalRuntimeError("error occured when recving interface value\n");
 		}
 		delete []recvReq;recvReq = NULL;
 
@@ -235,7 +239,7 @@ public:
 
 		ierr = MPI_Waitall(nInter,sendReq,MPI_STATUS_IGNORE);//blocking wait //perhaps redundant
 		if(ierr!=MPI_SUCCESS){
-			throw std::runtime_error("error occured when sending interface value\n");
+			errorHandler.fatalRuntimeError("error occured when sending interface value\n");
 		}
 		delete []sendReq;sendReq=NULL;
 		
@@ -255,13 +259,7 @@ private:
 	int errorCounter;
 	std::ofstream logfile; //for test purpose
 	void throwError(const std::string& msg){ // only check error when SHOULD_CHECK_MPI_ERROR is defined
-		char temp[256];
-		printf("*****************************ON ERROR***************************************");
-		sprintf(temp,"MPI_Failure in process %d\n message: %s\n",comRank,msg.c_str()); 
-		printf("error msg: %s",temp);
-		printf("error in call: %d",errorCounter++);
-		printf("*****************************END ERROR***************************************");
-		throw std::runtime_error(temp);
+		errorHandler.fatalRuntimeError(msg);
 	}
 	int pushVectorToRoot(const Vec& petscVec, double* rootbuffer,int rootRank);
 

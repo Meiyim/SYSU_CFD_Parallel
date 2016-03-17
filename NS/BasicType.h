@@ -1,5 +1,6 @@
 #include<iostream>
 #include<petscksp.h>
+#include<numeric>
 /********************************************************
  * define the basic type in NavierStorkesSolver
  ********************************************************/
@@ -7,6 +8,8 @@
 #define CYCAS_DEBUG_MODE
 
 #define SMALL 1.e-16
+#define CYCASHUGE_D std::numeric_limits<double>::max()
+#define CYCASHUGE_I std::numeric_limits<int>::max()
 #define INT_OPTION_NO 114 
 #define DB_OPTION_NO  132
 #define TECPLOT_NVAR  13
@@ -15,16 +18,70 @@
 #ifndef BASIC_TYPE_H
 #define BASIC_TYPE_H
 
+class ErrorHandler{
+public:
+	void fatalRuntimeError(std::string msg){
+		int r;
+		MPI_Comm_rank(MPI_COMM_WORLD,&r);
+		printf("!!!!!!!!!!!!!!!!run time error occured in rank: %d!!!!!!!!!!!!!!!!!\n",r);
+		std::cout<<msg;
+		printf("!!!!!!!!!!!!!!!!System will Abort!!!!!!!!!!!!!!!!!\n");
+		getchar();
+		MPI_Abort(MPI_COMM_WORLD,0);
+		PetscFinalize();
+	}
+	void fatalLogicError(std::string msg){
+		int r;
+		MPI_Comm_rank(MPI_COMM_WORLD,&r);
+		printf("!!!!!!!!!!!!!!!!run time error occured in rank: %d!!!!!!!!!!!!!!!!!\n",r);
+		std::cout<<msg;
+		printf("!!!!!!!!!!!!!!!!System will Abort!!!!!!!!!!!!!!!!!\n");
+		getchar();
+		MPI_Abort(MPI_COMM_WORLD,0);
+		PetscFinalize();
+	}
+};
+extern ErrorHandler errorHandler;
 
-struct FaceData
+
+/******************************************
+ *	Throw Error when not Converge
+ ******************************************/
+class ConvergeError{
+public:
+	int iter;
+	double residual;
+	std::string varname;
+	ConvergeError(int i,double r,std::string v):iter(i),residual(r),varname(v){}
+};
+
+
+/******************************************
+ *	Navier Stokes Data Structure
+ ******************************************/
+class FaceData
 {
+public:
     int    bnd;
     int    vertices[4];
     int    cell1,cell2;
     double x[3],n[3],area;   // face center and normal vector
-    double lambda,   // lambda for left, (1.-lambda) for right
-		rlencos;     // area/(|Xpn|*vect_cosangle(n,Xpn))
-	double Xpac[3],Xnac[3]; // auxiliary points
+    double lambda;   // lambda for left, (1.-lambda) for right
+    double rlencos;     // area/(|Xpn|*vect_cosangle(n,Xpn))
+    double Xpac[3],Xnac[3]; // auxiliary points
+    FaceData():
+	    bnd(CYCASHUGE_I),
+	    cell1(CYCASHUGE_I),
+	    cell2(CYCASHUGE_I),
+	    area(CYCASHUGE_D),
+	    lambda(CYCASHUGE_D),
+	    rlencos(CYCASHUGE_D)
+	{
+		for(int i=0;i!=4;++i)
+			vertices[i] = CYCASHUGE_I;
+		for(int i=0;i!=3;++i)
+			x[i] = n[i] = Xpac[i] = Xnac[i] = CYCASHUGE_D;
+	}
 };
 
 
@@ -39,39 +96,38 @@ public:
     double vol;
     double x[3];
     CellData():
-	    nface(-1),
-	    globalIdx(-1),
-	    vol(-1.0)
+	    nface(CYCASHUGE_I),
+	    globalIdx(CYCASHUGE_I),
+	    vol(CYCASHUGE_D)
 	    {
 		    for(int i=0;i!=6;++i)
-			    face[i] = cell[i]  = -1;
+			    face[i] = cell[i]  = CYCASHUGE_I;
 		    for(int i=0;i!=8;++i)
-			    vertices[i] = -1;
+			    vertices[i] = CYCASHUGE_I;
 		    for(int i=0;i!=3;++i)
-			    x[i] = -1;
+			    x[i] = CYCASHUGE_D;
 	    }
 
     CellData& operator=(CellData& rhs){
 	    this->nface = rhs.nface;
-	    this->vol = rhs.vol;
+	    this->globalIdx = rhs.globalIdx;
 	    for(int i=0;i!=6;++i){
 		   this->face[i] = rhs.face[i];
 		   this->cell[i] = rhs.cell[i];
 	    }
 	    for(int i=0;i!=8;++i)
 		    this->vertices[i] = rhs.vertices[i];
+
+	    this->vol = rhs.vol;
 	    for(int i=0;i!=3;++i)
 		    this->x[i] = rhs.x[i];
 
-	    this->globalIdx = rhs.globalIdx;
 
 	    return *this;
     }
 
 };
 
-//------for PRINT_LOG
-std::ostream& operator<<(std::ostream&,const CellData& cel);
 
 
 // connect boundary to faces, boundary to BdRegion
@@ -108,6 +164,7 @@ struct BdRegion
 	                // = 1 : specific mass flux (0 for default,means no diffusion flux in Fluent)
 	double *speCon; // mass fraction
 };
+
 
 #endif
 

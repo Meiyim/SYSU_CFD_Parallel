@@ -48,7 +48,7 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 		default:
 			char temp[256];
 			sprintf(temp,"no such boundary type: %d at bnd: %d\n ",rid,i);
-			throw std::logic_error(temp);
+			errorHandler.fatalLogicError(temp);
 		}
 	}
 
@@ -127,7 +127,7 @@ void NavierStokesSolver::SetBCPressure(double*bp)
 		default:
 			char temp[256];
 			sprintf(temp,"no such boundary type %d \n ",rid);
-			throw std::logic_error(temp);
+			errorHandler.fatalLogicError(temp);
 		}
 	}
 }
@@ -150,7 +150,7 @@ void NavierStokesSolver::SetBCDeltaP(double*bp, double *dp)
 		default:
 			char temp[256];
 			sprintf(temp,"no such boundary type %d \n ",rid);
-			throw std::logic_error(temp);
+			errorHandler.fatalLogicError(temp);
 		}
 	}
 }
@@ -179,7 +179,7 @@ void NavierStokesSolver::SetBCTemperature( double *bt )
 		default:
 			char temp[256];
 			sprintf(temp,"no such boundary type %d \n ",rid);
-			throw std::logic_error(temp);
+			errorHandler.fatalLogicError(temp);
 		}
 	}
 }
@@ -262,7 +262,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		default:
 			char temp[256];
 			sprintf(temp,"no such boundary type %d \n ",rid);
-			throw std::logic_error(temp);			
+			errorHandler.fatalLogicError(temp);
 		}
 	}
 }

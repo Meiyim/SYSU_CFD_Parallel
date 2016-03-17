@@ -2,21 +2,6 @@
 #include "MPIStructure.h"
 
 using namespace std;
-//------------for PRINT_LOG(CellData);
-std::ostream& operator<<(std::ostream& out,const CellData& cel){
-	out<<"nface:"<<cel.nface<<std::endl;
-	out<<"globalIDx "<<cel.globalIdx<<std::endl;
-	out<<"face\tvertices:\tcell\n";
-	for(int i=0;i!=6;++i)
-		out<<cel.face[i]<<'\t'<<cel.vertices[i]<<'\t'<<cel.cell[i]<<std::endl;
-	out<<"vol: "<<cel.vol<<std::endl;
-	out<<"x:\t";
-	for(int i=0;i!=3;++i)
-		out<<cel.x[i]<<'\t';
-	out<<std::endl;
-	return out;
-
-}
 
 
 int DataPartition::initPetsc(){ //collcetive
@@ -31,12 +16,15 @@ int DataPartition::initPetsc(){ //collcetive
 	ierr = VecDuplicate(bu,&bw);CHKERRQ(ierr);
 	ierr = VecDuplicate(bu,&bp);CHKERRQ(ierr);
 	ierr = VecDuplicate(bu,&bs);CHKERRQ(ierr);
+	ierr = VecDuplicate(bu,&xdp);CHKERRQ(ierr);
 
 	ierr = VecSet(bu,0.0);CHKERRQ(ierr);
 	ierr = VecSet(bv,0.0);CHKERRQ(ierr);
 	ierr = VecSet(bw,0.0);CHKERRQ(ierr);
 	ierr = VecSet(bp,0.0);CHKERRQ(ierr);
 	ierr = VecSet(bs,0.0);CHKERRQ(ierr);
+	ierr = VecSet(xdp,0.0);CHKERRQ(ierr);
+
 
 	//init PETSC mat
 	ierr = MatCreate(comm,&Au);CHKERRQ(ierr);     
@@ -45,7 +33,7 @@ int DataPartition::initPetsc(){ //collcetive
 	ierr = MatMPIAIJSetPreallocation(Au,MAX_LOCAL_PREALLOCATION,NULL,MAX_LOCAL_PREALLOCATION,NULL);CHKERRQ(ierr);	
 
 
-	ierr = MatCreate(comm,&Ap);CHKERRQ(ierr);     
+	ierr = MatCreate(comm,&Ap);CHKERRQ(ierr); //symmetric or not, determined when solve
 	ierr = MatSetSizes(Ap,nLocal,nLocal,nGlobal,nGlobal);CHKERRQ(ierr);
 	ierr = MatSetType(Ap,MATAIJ);CHKERRQ(ierr);
 	ierr = MatMPIAIJSetPreallocation(Ap,MAX_LOCAL_PREALLOCATION,NULL,MAX_LOCAL_PREALLOCATION,NULL);CHKERRQ(ierr);	
@@ -211,11 +199,14 @@ int DataPartition::buildMatrix(){ //local but should involked in each processes
 int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,double const *xv,double const* xw){
 	KSPConvergedReason reason;
 	int iters;
+	double residule;
 
 	MPI_Barrier(comm);
-	PetscPrintf(comm,"begine GMRES velocity solve\n");
-	ierr = VecAssemblyEnd(bv);CHKERRQ(ierr);
-	ierr = VecAssemblyEnd(bw);CHKERRQ(ierr);
+	PetscPrintf(comm,"begin GMRES velocity solve\n");
+
+	ierr = MatAssemblyEnd(Au,MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+	//doubtful: Au Structurally Symmetric ???
+	//ierr = MatSetOption(Au,MAT_STRUCTURALLY_SYMMETRIC,PETSC_TRUE);CHKERRQ(ierr);
 	
 	KSPSetOperators(ksp,Au,Au);
 	KSPSetType(ksp,KSPGMRES);
@@ -240,7 +231,6 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xu,&xsol);CHKERRQ(ierr);
 	ierr = VecAssemblyBegin(xsol);CHKERRQ(ierr);
 
-	ierr = MatAssemblyEnd(Au,MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
 	ierr = VecAssemblyEnd(bu);		      CHKERRQ(ierr);
 	ierr = VecAssemblyEnd(xsol);		      CHKERRQ(ierr);
 	ierr = KSPSolve(ksp,bu,xsol);		      CHKERRQ(ierr);
@@ -250,14 +240,26 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	KSPGetConvergedReason(ksp,&reason);
 
 	if(reason<0){
-		return 1;
+		KSPGetIterationNumber(ksp,&iters);
+		KSPGetResidualNorm(ksp,&residule);
+		throw ConvergeError(iters,residule,"Un");
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - U converged in %d step! :)\n",iters);
 	}
+	//VecView(bu,PETSC_VIEWER_STDOUT_WORLD);//test
+	double unorm;
+	double bnorm;
+	VecNorm(xsol,NORM_2,&unorm);
+	VecNorm(bu,NORM_2,&bnorm);
+
+	PetscPrintf(comm,"unorm:  %e\n",unorm);
+	PetscPrintf(comm,"bnorm:  %e\n",bnorm);
+	
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
+	return 0;
 	
 
 	/***************************************
@@ -274,7 +276,9 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
 
 	if(reason<0){
-		return 2;
+		KSPGetIterationNumber(ksp,&iters);
+		KSPGetResidualNorm(ksp,&residule);
+		throw ConvergeError(iters,residule,"Vn");
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
@@ -298,7 +302,9 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	ierr = KSPGetConvergedReason(ksp,&reason);	CHKERRQ(ierr);
 
 	if(reason<0){
-		return 3;
+		KSPGetIterationNumber(ksp,&iters);
+		KSPGetResidualNorm(ksp,&residule);
+		throw ConvergeError(iters,residule,"Wn");
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
@@ -309,6 +315,76 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 
 	return 0;	
 }
+
+
+int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmetric){
+	KSPConvergedReason reason;
+	int iters;
+	double residule;
+
+	MPI_Barrier(comm);
+	PetscPrintf(comm,"begin Pressure Correction solve\n");
+
+	ierr = MatAssemblyEnd(Ap,MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+
+	KSPSetOperators(ksp,Ap,Ap);
+
+	if(isSymmetric){
+		ierr = MatSetOption(Ap,MAT_SYMMETRIC,PETSC_TRUE);CHKERRQ(ierr);
+		ierr = KSPSetType(ksp,KSPCG);CHKERRQ(ierr);
+	}else{
+		ierr = KSPSetType(ksp,KSPGMRES);CHKERRQ(ierr);
+	}
+
+	KSPSetInitialGuessNonzero(ksp,PETSC_FALSE);//xdp(:)=0
+
+	/***************************************
+	 *      SET  TOLERENCE
+	 ***************************************/
+	KSPSetTolerances(ksp,tol,PETSC_DEFAULT,PETSC_DEFAULT,maxIter);	//absolute residule
+
+	/***************************************
+	 * 	ILU preconditioner:
+	 ***************************************/
+	//KSPGetPC(ksp,&pc);
+	KSPSetFromOptions(ksp);//can override settings from command line
+	KSPSetUp(ksp); //the precondition is done at this step
+
+
+	/***************************************
+	 * 	SOLVE Pressure Correction!
+	 ***************************************/
+	/*
+	ierr = VecAssemblyBegin(xdp);  CHKERRQ(ierr);// no need to assembly xdp
+	ierr = VecAssemblyEnd(xdp); CHKERRQ(ierr);
+	*/
+	
+	ierr = VecAssemblyEnd(bp);  CHKERRQ(ierr);
+
+	//ierr = VecView(bp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+
+	ierr = MatView(Ap,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+
+	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+	
+	ierr = KSPSolve(ksp,bp,xdp);CHKERRQ(ierr);
+
+	KSPGetConvergedReason(ksp,&reason);
+
+	if(reason<0){
+		KSPGetIterationNumber(ksp,&iters);
+		KSPGetResidualNorm(ksp,&residule);
+		throw ConvergeError(iters,residule,"Pn");
+	}else if(reason ==0){
+		PetscPrintf(comm,"why is this program still running?\n");
+	}else{
+		KSPGetIterationNumber(ksp,&iters);
+		PetscPrintf(comm,"KSP GMRES - Pressure Correction converged in %d step! :)\n",iters);
+	}
+	return 0;
+
+}
+
 
 
 /*****************************************

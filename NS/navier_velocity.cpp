@@ -2,6 +2,7 @@
 #include <fstream>
 #include <math.h>
 #include "navier.h"
+#include "tools.h"
 
 using namespace std;
 
@@ -17,29 +18,42 @@ int NavierStokesSolver::CalculateVelocity( )
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
 	BuildVelocityMatrix(dataPartition->Au,dataPartition->bu,dataPartition->bv,dataPartition->bw );
 	
+	double *const _array1 = new double[Ncel];
+	double *const _array2 = new double[Ncel];
+	double *const _array3 = new double[Ncel];
+	std::copy(Un,Un+Ncel,_array1);
+	std::copy(Vn,Vn+Ncel,_array2);
+	std::copy(Wn,Wn+Ncel,_array3);
 
 	// solve U,V,W
-	switch( dataPartition->solveVelocity_GMRES(1.e-6,1000,Un,Vn,Wn) ){
-		case 1:
-			throw runtime_error("U not converge\n");
-			break;
-		case 2:
-			throw runtime_error("V not converge\n");
-			break;
-		case 3:
-			throw runtime_error("W not converge\n");
-			break;
-		default:
-			break;
+	try{
+		dataPartition->solveVelocity_GMRES(1.e-6,1000,Un,Vn,Wn);
+	}catch(ConvergeError& err){
+		char temp[256];	
+		sprintf(temp,"%s not converge in iter: %d, res %f\n",err.varname.c_str(),err.iter,err.residual);
+		errorHandler.fatalRuntimeError(temp);//perhaps calculation might continue?
 	}
 	
+
 	//check	
-	for(int i=0;i!=Ncel;++i)
-		dataPartition->PRINT_LOG(Un[i]);
 	
 	dataPartition->interfaceCommunication(Un);//update boundary
 	dataPartition->interfaceCommunication(Vn);
 	dataPartition->interfaceCommunication(Wn);
+	
+	Residual[0] = 0.0;
+	Residual[1] = 0.0;
+	Residual[2] = 0.0;
+
+	for(int i=0;i!=Ncel;++i){//optimizeable
+		Residual[0] += fabs(_array1[i]-Un[i])*Cell[i].vol;
+		Residual[1] += fabs(_array2[i]-Vn[i])*Cell[i].vol;
+		Residual[2] += fabs(_array3[i]-Wn[i])*Cell[i].vol;
+	}
+
+	delete [] _array1;
+	delete [] _array2;
+	delete [] _array3;
 
 	return 0;
 }
@@ -62,6 +76,18 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 	Gradient ( Vn, BV,   dVdX );
 	Gradient ( Wn, BW,   dWdX );
 	Gradient ( Pn, BPre, dPdX );
+	//debug check
+	Checker ck_app("app");
+	Checker ck_su("su");
+	Checker ck_dum("nFaces");
+	Checker ck_n1("x1");
+	Checker ck_n2("x2");
+	Checker ck_n3("x3");
+	Checker ck_rlc("rlencos");
+	Checker ck_cell1("cellx1");
+	Checker ck_cell2("cellx2");
+	Checker ck_cell3("cellx3");
+
 	PetscPrintf(dataPartition->comm,"begin build velocity matrix\n");
 	
 	/* This will lead to turbulence problem, wierd !!
@@ -166,47 +192,53 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 				}
 				
 
-			// convection boundary
-			switch( rid ){
-			case(1):     //---- Wall ----
-				// convection to implicit, nothing
-				fcs[0] = 0.;
-				fcs[1] = 0.;
-				fcs[2] = 0.;
-				break;
-			case(2):     //---- Inlet ----
-				// convection to implicit
-				if( RUnormal>0 ){
-					cout<<"warning!! reverse flow get out of inlet. It may stop!"<<endl;
-					// exit(0);
+				// convection boundary
+				switch( rid ){
+				case(1):     //---- Wall ----
+					// convection to implicit, nothing
+					fcs[0] = 0.;
+					fcs[1] = 0.;
+					fcs[2] = 0.;
+					break;
+				case(2):     //---- Inlet ----
+					// convection to implicit
+					if( RUnormal>0 ){
+						cout<<"warning!! reverse flow get out of inlet. It may stop!"<<endl;
+						// exit(0);
+					}
+					f      = CYCASMIN( RUnormal , 0.0 );
+					app   -= f;
+					fcs[0] = f*BU[bnd];
+					fcs[1] = f*BV[bnd];
+					fcs[2] = f*BW[bnd];
+					break;
+				case(3):     //---- Outlet ----??????????? boundary equal inner cell, so ???
+					if( RUnormal<0 ){
+						// cout<<"warning reverse flow get in of outlet. It may stop!"<<endl;
+						// exit(0);
+					}
+					f      = CYCASMIN( RUnormal , 0.0 );
+					app   -= f;
+					fcs[0] = f*BU[bnd];
+					fcs[1] = f*BV[bnd];
+					fcs[2] = f*BW[bnd];
+					break;
+				case(4):     //---- Symmetric ----
+					// RUnormal = 0.
+					fcs[0] = 0.;
+					fcs[1] = 0.;
+					fcs[2] = 0.;
+					break;
+				default:
+					char temp[256];
+					sprintf(temp,"unknown rid: %d\n in BuildVelocityMatrix",rid);
+					errorHandler.fatalRuntimeError(temp);
 				}
-				f      = CYCASMIN( RUnormal , 0.0 );
-				app   -= f;
-				fcs[0] = f*BU[bnd];
-				fcs[1] = f*BV[bnd];
-				fcs[2] = f*BW[bnd];
-				break;
-			case(3):     //---- Outlet ----??????????? boundary equal inner cell, so ???
-				if( RUnormal<0 ){
-					// cout<<"warning reverse flow get in of outlet. It may stop!"<<endl;
-					// exit(0);
-				}
-				f      = CYCASMIN( RUnormal , 0.0 );
-				app   -= f;
-				fcs[0] = f*BU[bnd];
-				fcs[1] = f*BV[bnd];
-				fcs[2] = f*BW[bnd];
-				break;
-			case(4):     //---- Symmetric ----
-				// RUnormal = 0.
-				fcs[0] = 0.;
-				fcs[1] = 0.;
-				fcs[2] = 0.;
-				break;
-			default:
-				cout<<"no this type of boundary! rid="<<rid<<endl;
-				exit(0);
-			}
+				/*
+				ck_n1.check(Cell[Face[iface].cell1].x[0]);
+				ck_n2.check(Cell[Face[iface].cell1].x[1]);
+				ck_n3.check(Cell[Face[iface].cell1].x[2]);
+				*/
 				
 			}
 			else // inner cell
@@ -304,6 +336,13 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 				fdi[0] = ViscAreaLen*( dudx*dxc[0]+dudy*dxc[1]+dudz*dxc[2] );
 				fdi[1] = ViscAreaLen*( dvdx*dxc[0]+dvdy*dxc[1]+dvdz*dxc[2] );
 				fdi[2] = ViscAreaLen*( dwdx*dxc[0]+dwdy*dxc[1]+dwdz*dxc[2] );
+				ck_n1.check(Cell[in].x[0]);
+				ck_n2.check(Cell[in].x[1]);
+				ck_n3.check(Cell[in].x[2]);
+				ck_rlc.check(Face[iface].rlencos);
+				ck_dum.check(1.0);
+				//dataPartition->PRINT_LOG(Face[iface].rlencos);
+
 			}
 
 			su += fde[0]-fdi[0] - fcs[0]; // convective and diffusion part to source term aka right hand side of the LA
@@ -313,6 +352,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 
 		// central cell coef is stored for later use
 		// app   += Rn[i]/dt*Cell[i].vol;
+
 		app   /= URF[0];  // relaxation
 
 		// SIMPLE method
@@ -322,6 +362,12 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 		for( j=0; j<nj; j++ )
 			App[i] += apn[j];
 		App[i] = 1./App[i];  */
+
+		ck_su.check(su);
+		ck_app.check(app);
+		ck_cell1.check(Cell[i].x[0]);
+		ck_cell2.check(Cell[i].x[1]);
+		ck_cell3.check(Cell[i].x[2]);
 
 		PetscInt row = Cell[i].globalIdx;
 		assert(row>=0&&row<dataPartition->nGlobal);
@@ -335,6 +381,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 		// right hand side, including
 		//   pressure, gravity and part of convection&diffusion terms (explicit - implicit), 
 		//   relaxation terms
+
 		VecSetValue(bu,row,su + (1.-URF[0])*app*Un[i] + ( -dPdX[i][0] + Rn[i]*gravity[0] )*Cell[i].vol , INSERT_VALUES);
 		VecSetValue(bv,row,sv + (1.-URF[0])*app*Vn[i] + ( -dPdX[i][1] + Rn[i]*gravity[1] )*Cell[i].vol , INSERT_VALUES);
 		VecSetValue(bw,row,sw + (1.-URF[0])*app*Wn[i] + ( -dPdX[i][2] + Rn[i]*gravity[2] )*Cell[i].vol , INSERT_VALUES);
@@ -342,6 +389,16 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 
 	}
 
+	ck_su.report();
+	ck_app.report();
+	ck_n1.report();
+	ck_n2.report();
+	ck_n3.report();
+	ck_rlc.report();
+	ck_cell1.report();
+	ck_cell2.report();
+	ck_cell3.report();
+	ck_dum.report();
 	MatAssemblyBegin(Au,MAT_FINAL_ASSEMBLY);
 	VecAssemblyBegin(bu);
 	VecAssemblyBegin(bv);

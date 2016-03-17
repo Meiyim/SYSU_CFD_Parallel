@@ -21,7 +21,7 @@ void NavierStokesSolver::NSSolve( )
 	tstart = ttime( );
 	cur_time = 0.0;
 	if(IfSteady)
-		dt = numeric_limits<double>::max();/*MAX*/	
+		dt = CYCASHUGE_D;
 
 	cur_time += dt;
 	MaxStep = 1;//test purpose
@@ -40,13 +40,16 @@ void NavierStokesSolver::NSSolve( )
 			dataPartition->interfaceCommunication(Vn);
 			dataPartition->interfaceCommunication(Wn);
 			dataPartition->interfaceCommunication(Pn);
+			dataPartition->interfaceCommunication(Rn);
 			dataPartition->interfaceCommunication(VisLam);
 			dataPartition->interfaceCommunication(VisTur);
 
 			CalculateVelocity ( );
+			
 			break;
+			CalculatePressure ( ); //calculate deltaP and correct P,[R], U,V,W
+
 			/*
-			CalculatePressure ( );
 
 			// scalar transportation
 			//1. turbulence model
@@ -288,7 +291,7 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 	if(ierr!=MPI_SUCCESS){
 		char temp[256];
 		sprintf(temp,"MPI receive failure in geometry transfering\n");
-		throw runtime_error(temp);
+		errorHandler.fatalRuntimeError(temp);
 	}else{
 		//printf("rank: %d received geometry buffer\n",dataPartition->comRank);
 	}	
@@ -298,7 +301,7 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 	if(dataPartition->comRank == root.rank){//check completion in root
 		ierr = MPI_Waitall(3*_size,sendRequests,MPI_STATUS_IGNORE);
 		if(ierr!=MPI_SUCCESS){
-			throw runtime_error("MPI send failure in geometry transfering!\n ");
+			errorHandler.fatalRuntimeError("MPI send failure in geometry transfering!\n ");
 		}
 
 		for(int i=0;i!=_size;++i){
@@ -490,7 +493,7 @@ void NavierStokesSolver::SaveTransientOldData( )
 	}
 	else
 	{
-		throw std::logic_error("No unsteady time advance scheme? Are you f**king kidding?\n");
+		errorHandler.fatalLogicError("No unsteady time advance scheme? Are you kidding?\n");
 	}
 }
 

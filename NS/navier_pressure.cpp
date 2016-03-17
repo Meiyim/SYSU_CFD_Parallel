@@ -8,80 +8,75 @@ using namespace std;
 
 int NavierStokesSolver::CalculatePressure( )
 {
-    int i,pIter=0;
-    double pIterRes=0,coef=0; //, roinv,Tem;
+	int i,pIter=0;
+	double pIterRes=0,coef=0; //, roinv,Tem;
 
-	if( DensityModel==0 ){
-//		Q_Constr(&Ap,   "matrix",    Ncel, True,  Rowws, Normal, True);
-	}
-	else
-//		Q_Constr(&Ap,   "matrix",    Ncel, False, Rowws, Normal, True);
+	// Build matrix
+	BuildPressureMatrix(dataPartition->Ap,dataPartition->bp );
 
-	// Init value for iteration
-//    V_SetAllCmp(&xsol, 0.);
-    // Build matrix
-    BuildPressureMatrix( );
-    // Solve pressure Poisson equation. Symmetric sparse linear equations solver
-	if( DensityModel==0 );
-//		SolveLinearEqu( CGIter,    &Ap, &xsol, &bp, 1000, SSORPrecond, 1.3, 1.e-9, &pIter, &pIterRes );
-	else
-//		SolveLinearEqu( GMRESIter, &Ap, &xsol, &bp, 1000, SSORPrecond, 1.3, 1.e-9, &pIter, &pIterRes );
-	if( pIterRes>1. ){
-		cout<<"Pressure iteration cannot converge! "<<pIter<<" "<<pIterRes<<endl;
-		exit(0);
+	//Solve Matrix
+	// Solve pressure Poisson equation. Symmetric sparse linear equations solver
+	try{
+		dataPartition->solvePressureCorrection(1.e-9,1000,DensityModel==0);
+	}catch(ConvergeError& err){
+		char temp[256];	
+		sprintf(temp,"%s not converge in iter: %d, res %f\n",err.varname.c_str(),err.iter,err.residual);
+		errorHandler.fatalRuntimeError(temp);//perhaps calculation might continue?
 	}
+
 
 
 	
-    // update other variables
-//	SetBCDeltaP( BPre, &xsol.Cmp[1] );
-//     Gradient   ( &xsol.Cmp[1], BPre, dPdX );  // note the first parameter
-    for( i=0; i<Ncel; i++ )
-    {
-//		Residual[3] += fabs( xsol.Cmp[i+1] - xsol.Cmp[cellPressureRef+1] )*Cell[i].vol;
+   	// update other variables
+	double* deltaP = NULL;
+	VecGetArray(dataPartition->xdp,&deltaP);
+   	SetBCDeltaP( BPre,deltaP);
+        Gradient   ( deltaP, BPre, dPdX );  // note the first parameter
 
+	Residual[3] = 0;
+	for( i=0; i<Ncel; i++ )//optimizeable
+	{
+		Residual[3] += fabs( deltaP[i] - deltaP[cellPressureRef] )*Cell[i].vol;
+	
 		// pressure (and density) correction
-		if(      DensityModel==0 );
-//			Pn[i] = Pn[i] + URF[3] * (xsol.Cmp[i+1]-xsol.Cmp[cellPressureRef+1]);  //under-relaxation factor: 
+		if(      DensityModel==0 )
+			Pn[i] +=  URF[3] * (deltaP[i]-deltaP[cellPressureRef]);  //under-relaxation factor: 
 		else if( DensityModel==1 ){ // perfect gas
-//			Pn[i] = Pn[i] + URF[3] *  xsol.Cmp[i+1];
-//			Rn[i] += xsol.Cmp[i+1]/(Rcpcv*Tn[i]);
+			Pn[i] +=  URF[3] *  deltaP[i];
+			Rn[i] += deltaP[i]/(Rcpcv*Tn[i]);
 			// Rn[i] = (Pn[i]+PressureReference)/(Rcpcv*Tn[i]);
 		}
 
 		// velocity correction
 		coef  = Cell[i].vol*Apr[i];
-        Un[i] = Un[i] - coef*dPdX[i][0];
-        Vn[i] = Vn[i] - coef*dPdX[i][1];
-        Wn[i] = Wn[i] - coef*dPdX[i][2];
+	        Un[i] -= coef*dPdX[i][0];
+       	 	Vn[i] -= coef*dPdX[i][1];
+        	Wn[i] -= coef*dPdX[i][2];
 	}
 
 	// correct face normal velocity to satify the mass balance equ
-//	CorrectRUFace2( &xsol.Cmp[1] );
+	CorrectRUFace2( deltaP );
 	// SetBCVelocity( BRo,BU,BV,BW );
 	// CalRUFace2( );
 	
-	// clipping work in case of divergence
-
-//	Q_Destr ( &Ap );
-    return 0;
+	VecRestoreArray(dataPartition->xdp, &deltaP);
+	return 0;
 }
 
-void NavierStokesSolver::BuildPressureMatrix( ) //no second pressure correctio is used in this funtion .CXY e.g. equation 8.62
+void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second pressure correctio is used in this funtion .CXY e.g. equation 8.62
 {
-    int i,j, nj,in, cn[7], iface,bnd,rid;
-    double Acn[7], roapf,lambda,lambda2,valcen,bpv,tmp,tmp2,vol, rof,Tf,RUnormal;
+	int i,j, nj,in, cn[7], iface,bnd,rid;
+	double Acn[7], roapf,lambda,lambda2,valcen,bpv,tmp,tmp2,vol, rof,Tf,RUnormal;
 
 	SetBCVelocity( BRo,BU,BV,BW );
 	CalRUFace2   ( ); // it doesn't need re-calculation ???
                         //calculated with u*   this is the m*
 
-    for( i=0; i<Ncel; i++ )
-    {
-        valcen = 0.;
+	for( i=0; i<Ncel; i++ )
+	{
+        	valcen = 0.;
 		bpv    = 0.;
-        nj     = 0 ;
-
+        	nj     = 0 ;
 		// compressible gas, perfect gas
 		// ?? d_ro/d_t = d_p/d_t /(RT) ?? source term and diagonal terms ,how to change?
 		if( !IfSteady && DensityModel==1 )
@@ -89,33 +84,38 @@ void NavierStokesSolver::BuildPressureMatrix( ) //no second pressure correctio i
 			// only Euler, or BDF 2nd can also be used ? Both, I guess
 			valcen += -Cell[i].vol/( dt*Rcpcv*Tn[i] );
 		}
-        for( j=0; j<Cell[i].nface; j++ )
-        {
-            iface= Cell[i].face[j];
+		for( j=0; j<Cell[i].nface; j++ )
+        	{
+            		iface= Cell[i].face[j];
 			// right hand side
 			if( i==Face[iface].cell1 )
 				bpv += RUFace[iface];
 			else
 				bpv -= RUFace[iface];
 
-            in   = Cell[i].cell[j]; //j-face neighbor cell
-            if( in<0  ){  // ???????????????????
+            		in   = Cell[i].cell[j]; //j-face neighbor cell
+            		if( in<0  ){  		// ???????????????????
 				if( DensityModel==0 )continue;
-				// DensityModel==1
-				bnd= Face[iface].bnd;
-				rid= Bnd[bnd].rid;
-				RUnormal = RUFace[iface];
-				if(      rid==2 ) // inlet
-				{
-					rof = BRo[bnd];
-					Tf  = Tn[i];
-					// valcen  +=  CYCASMIN(RUnormal,0.) / (rof*Rcpcv*Tf);
-				}
-				else if( rid==3 ) // outlet
-				{
-					rof = Rn[i];
-					Tf  = Tn[i];
-					valcen  +=  CYCASMAX(RUnormal,0.) / (rof*Rcpcv*Tf);
+				else if( DensityModel==1){
+					bnd= Face[iface].bnd;
+					rid= Bnd[bnd].rid;
+					RUnormal = RUFace[iface];
+					if(      rid==2 ) // inlet
+					{
+						rof = BRo[bnd];
+						Tf  = Tn[i];
+						// valcen  +=  CYCASMIN(RUnormal,0.) / (rof*Rcpcv*Tf);
+					}
+					else if( rid==3 ) // outlet
+					{
+						rof = Rn[i];
+						Tf  = Tn[i];
+						valcen  +=  CYCASMAX(RUnormal,0.) / (rof*Rcpcv*Tf);
+					}
+				}else{
+					char temp[256];
+					sprintf(temp,"unknown DensityModel found: %d\n",DensityModel);
+					errorHandler.fatalLogicError(temp);
 				}
 			}
 			else
@@ -138,15 +138,13 @@ void NavierStokesSolver::BuildPressureMatrix( ) //no second pressure correctio i
 				// incompressible flow
 				//-- neighbor cell. Since it's symmetric, only consider upper triangle
 				if( DensityModel==0 ){
-				if( in>i ){
 					nj ++ ;
 					Acn[nj] = tmp;
-					cn [nj] = in;
-				}
+					cn [nj] = Cell[in].globalIdx;
 				}
 				// compressible correction
 				// perfect gas, density change --> pressure change
-				if( DensityModel==1 ){
+				else if( DensityModel==1 ){
 					rof = lambda*Rn[i] + lambda2*Rn[in];
 					if( RUnormal>0. ){
 						Tf  = Tn [i];
@@ -160,24 +158,44 @@ void NavierStokesSolver::BuildPressureMatrix( ) //no second pressure correctio i
 						Tf  = Tn [in];
 						Acn[nj] += -RUnormal/(rof*Rcpcv*Tf); //CXY: addition to neighbooring Coef due to compressible correction
 					}
-					cn [nj] = in;
+					cn [nj] = Cell[in].globalIdx;
+				}else{
+					char temp[256];
+					sprintf(temp,"unknown DensityModel found: %d\n",DensityModel);
+					errorHandler.fatalLogicError(temp);
 				}
-			}
-        }
 
-        // use laspack library to prepare the sparse matrix
+			}
+        	}
+
 		// (i+1)th row, nj+1 non-zero values
-//        Q_SetLen  ( &Ap, i+1, nj+1 );
-		// diagonal
-//		Q_SetEntry( &Ap, i+1, 0, i+1, valcen );
-		// off-diagonal
-		for( j=1; j<=nj; j++ ){
-//		Q_SetEntry( &Ap, i+1, j, cn[j]+1, Acn[j] );
-		}
+		
+		PetscInt row = Cell[i].globalIdx;
+		assert(row>=0&&row<dataPartition->nGlobal);//check
+		for(int ii=1; ii<=nj; ii++ )
+			assert(cn[ii]>=0&&cn[ii]<dataPartition->nGlobal);//check
+
+		MatSetValue(Ap,row,row,valcen,INSERT_VALUES);// diagonal
+		MatSetValues(Ap,1,&row,nj,cn,Acn,INSERT_VALUES);// off-diagonal
+
 		// right hand side
-//        bp.Cmp[i+1]= bpv;
-    }
+		VecSetValue(bp,row,bpv,INSERT_VALUES);
+
+		// check
+		dataPartition->PRINT_LOG(row);
+		for(int ii=1;ii!=nj;++ii){
+			dataPartition->PRINT_LOG(cn[ii]);
+			dataPartition->PRINT_LOG(Acn[ii]);
+		}
+		dataPartition->PRINT_LOG(bpv);
+    	}
+
+	//begin assembly
+	MatAssemblyBegin(Ap,MAT_FINAL_ASSEMBLY);
+	VecAssemblyBegin(bp);
+
 }
+
 
 void NavierStokesSolver::CorrectRUFace2( double *dp )
 {

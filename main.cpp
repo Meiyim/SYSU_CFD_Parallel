@@ -14,7 +14,10 @@
 #include<petscksp.h>
 #include"MPIStructure.h"
 #include"NS/navier.h"
-int main(int argc, char* argv[])try{
+
+ErrorHandler errorHandler;//abort when fatal error
+
+int main(int argc, char* argv[]){
 	PetscErrorCode ierr;
 	PetscBool shouldReadLocal = PETSC_FALSE;
 
@@ -72,23 +75,5 @@ int main(int argc, char* argv[])try{
 	return 0;
 
 
-}catch(std::logic_error& err){
-	int r;
-	MPI_Comm_rank(MPI_COMM_WORLD,&r);
-	printf("!!!!!!!!!!!!!!!!Logic error occured in rank: %d!!!!!!!!!!!!!!!!!\n",r);
-	std::cout<<err.what();
-	printf("!!!!!!!!!!!!!!!!System will Abort!!!!!!!!!!!!!!!!!\n");
-	getchar();
-	MPI_Abort(MPI_COMM_WORLD,0);
-	PetscFinalize(); //is this necessary?
-}catch(std::runtime_error& err){
-	int r;
-	MPI_Comm_rank(MPI_COMM_WORLD,&r);
-	printf("!!!!!!!!!!!!!!!!run time error occured in rank: %d!!!!!!!!!!!!!!!!!\n",r);
-	std::cout<<err.what();
-	printf("!!!!!!!!!!!!!!!!System will Abort!!!!!!!!!!!!!!!!!\n");
-	getchar();
-	MPI_Abort(MPI_COMM_WORLD,0);
-	PetscFinalize();
 }
 

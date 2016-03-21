@@ -127,10 +127,9 @@ void NavierStokesSolver::broadcastSolverParam(){
 	//------other constant, nProcess, gridList, nCell etc.
 	
 	int* _sendbuf = NULL;
-	int* _sendbuf1 = NULL;
 
-	if(root.rootgridList!=NULL){//root only
-		dataPartition->nProcess = root.rootgridList->size();
+	if(dataPartition->comRank == root.rank){//root only
+		dataPartition->nProcess = root.rootgridList.size();
 		dataPartition->nGlobal = root.rootNGlobal;
 	}
 
@@ -138,20 +137,16 @@ void NavierStokesSolver::broadcastSolverParam(){
 
 	MPI_Bcast(&(dataPartition->nGlobal),1,MPI_INT,sourceRank,dataPartition->comm);//nGlobal
 
-
 	dataPartition->gridList = new int[dataPartition->nProcess];
-	if(root.rootgridList!=NULL){//root only
+
+	if(dataPartition->comRank == root.rank){//root only
 		for(int i=0;i!=dataPartition->nProcess;++i)
-			dataPartition->gridList[i] = root.rootgridList->at(i);
+			dataPartition->gridList[i] = root.rootgridList[i];
 
 		_sendbuf = new int[dataPartition->nProcess]; //only significant in root
-		_sendbuf1 = new int[dataPartition->nProcess];
 
 		for(int i=0;i!=dataPartition->nProcess;++i)
-			_sendbuf[i] = root.rootNCells->at(i);
-
-		for(int i=0;i!=dataPartition->nProcess;++i)
-			_sendbuf1[i] = root.nodesPool[i].size();
+			_sendbuf[i] = root.rootNCells[i];
 
 	}
 	
@@ -160,7 +155,6 @@ void NavierStokesSolver::broadcastSolverParam(){
 	//scatter: sendbuf, sendcount(number of element to EACH process), sendtype, recvbuf, recvcount, recvtype, rootrank, communicator
 	MPI_Scatter(_sendbuf,1, MPI_INT, &(this->Ncel), 1, MPI_INT,root.rank,dataPartition->comm  );//nCell
 
-	MPI_Scatter(_sendbuf1,1, MPI_INT, &(this->Nvrt), 1, MPI_INT,root.rank,dataPartition->comm  );//nVert
 
 	//some configuration...
 	int _nlocalElement = dataPartition->gridList[dataPartition->comRank];
@@ -177,7 +171,6 @@ void NavierStokesSolver::broadcastSolverParam(){
 	printf("rank %d, nProcess %d, nLocal %d, nGlobal %d, nCell %d, nBnd %d\n",
 			dataPartition->comRank, dataPartition->nProcess, dataPartition->nLocal, dataPartition->nGlobal, Ncel, Nbnd);
 	delete []_sendbuf;
-	delete []_sendbuf1;
 }
 
 
@@ -219,9 +212,7 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 
 		for(int pid = 0;pid!=_size;++pid){
 			//printf("root: sending geometry to grid: %d\n",pid);
-			_sendSize[0] = root.getVertexSendBuffer(dataPartition, pid, buffer1 + pid);
-			_sendSize[1] = root.getElementSendBuffer(dataPartition,pid, buffer2+pid);
-			_sendSize[2] = root.getInterfaceSendBuffer(dataPartition, pid, buffer3 + pid);
+			root.getBuffer(dataPartition,pid,_sendSize,buffer1+pid, buffer2+pid, buffer3+pid);
 			//printf("prepared buffer for pid %d, %d,%d,%d\n",pid,_sendSize[0],_sendSize[1],_sendSize[2]);
 
 			//non-blocking buffered send
@@ -579,7 +570,9 @@ NavierStokesSolver::~NavierStokesSolver()
 	// output the result before error
 	// Output2Tecplot ();
 	
-	cout<<"desturct object and free space"<<endl;
+	PetscPrintf(dataPartition->comm,"clean up NavierStokesSolver\n");
+	delete []iOptions;
+	delete []dbOptions;
 	// delete primitive variable
 	delete [] Vert;
 	delete [] Face;
@@ -594,28 +587,27 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] Wn;
 	delete [] Pn;
 	delete [] Tn;
-	if(!IfSteady){
-		if(TimeScheme>=1){
-			delete [] Rnp;
-			delete [] Unp;
-			delete [] Vnp;
-			delete [] Wnp;
-			delete [] Tnp;
-			delete [] TEp;
-			delete [] EDp;
-			delete_Array2D(RSnp,Nspecies,Ncel);
-		}
-		if(TimeScheme>=2){
-			delete [] Rnp2;
-			delete [] Unp2;
-			delete [] Vnp2;
-			delete [] Wnp2;
-			delete [] Tnp2;
-			delete [] TEp2;
-			delete [] EDp2;
-			delete_Array2D(RSnp2,Nspecies,Ncel);
-		}
-	}
+	delete [] TE;
+	delete [] ED;
+	delete_Array2D<double>(RSn,Nspecies,Ncel+dataPartition->nVirtualCell);
+	
+
+	delete [] Rnp;
+	delete [] Unp;
+	delete [] Vnp;
+	delete [] Wnp;
+	delete [] Tnp;
+	delete [] TEp;
+	delete [] EDp;
+	delete_Array2D(RSnp,Nspecies,Ncel);
+	delete [] Rnp2;
+	delete [] Unp2;
+	delete [] Vnp2;
+	delete [] Wnp2;
+	delete [] Tnp2;
+	delete [] TEp2;
+	delete [] EDp2;
+	delete_Array2D(RSnp2,Nspecies,Ncel);
 
 	delete [] VisLam;
 	delete [] VisTur;
@@ -626,6 +618,7 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] Apr;
 	delete_Array2D( dPhidX,Ncel,3 );
 
+	
 	delete [] BRo ;
 	delete [] BU  ;
 	delete [] BV  ;
@@ -633,16 +626,14 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] BTem;
 	delete [] BPre;
 
-	delete_Array2D(BRS,Nspecies,Nbnd);
 
+	delete_Array2D(BRS,Nspecies,Nbnd);
 	delete [] BTE;
 	delete [] BED;
 	delete [] RUFace;
 	/*****************THIS PART IS ADDED BY CHENXUYI*******************/
 	delete dataPartition;
 
-	delete iOptions;
-	delete dbOptions;
 	/*
         V_Destr ( &bs );
 	V_Destr ( &bu );

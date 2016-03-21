@@ -49,22 +49,16 @@ public:
 		selfRank(-1),
 		otherRank(-1),
 		sendBuffer(NULL),
-		recvBuffer(NULL),
 		sendBufferGradient(NULL),
-		recvBufferGradient(NULL),
-		sendBufferCell(NULL),
-		recvBufferCell(NULL)
+		sendBufferCell(NULL)
 	{}
 
 	Interface(int s,int o,MPI_Comm c): //recvlist & sendlist must be setted by Caller dataGroup
 		selfRank(s),	
 		otherRank(o),
 		sendBuffer(NULL),
-		recvBuffer(NULL),
 		sendBufferGradient(NULL),
-		recvBufferGradient(NULL),
 		sendBufferCell(NULL),
-		recvBufferCell(NULL),
 		comm(c)
 	{
 		CellData cellSample;
@@ -92,11 +86,8 @@ public:
 
 	~Interface(){
 		if(sendBuffer!=NULL) delete [] sendBuffer;
-		if(recvBuffer!=NULL) delete [] recvBuffer;
 		if(sendBufferGradient!=NULL) delete [] sendBufferGradient;
-		if(recvBufferGradient!=NULL) delete [] recvBufferGradient;
 		if(sendBufferCell!=NULL) delete []sendBufferCell;
-		if(recvBufferCell!=NULL) delete []recvBufferCell;
 	}
 
 	// MPI non blocking communication method !
@@ -114,18 +105,16 @@ public:
 	size_t getWidth(){return sendposis.size();}
 public:
 	/****************************************/
-	vector<int> recvposis;//indexes of the head of off_process cells
-	vector<int> sendposis;//indexes of on_process cells
+	vector<set<int> > boundNodes;
+	vector<int> sendposis;//indexes of cells needs to communicate
+	int recvposi;         //index head of position > Ncel
 
 private:	
 	int selfRank;
 	int otherRank;
 	double *sendBuffer;		//copy to this buffer and send;
-	double *recvBuffer;
 	double *sendBufferGradient;
-	double *recvBufferGradient;
 	CellData *sendBufferCell;
-	CellData *recvBufferCell;
 	MPI_Comm comm;
 	MPI_Datatype MPI_CellData; //a variable to hold the customized MPI TYPE, contains 22 Ints, 4 Doubles
 };
@@ -193,12 +182,13 @@ public:
 		/*******DESTROY PETSC OBJECTS**********/
 		logfile.close();
 		delete []gridList;	
-		gridList = NULL;
 	}
 
 	int initPetsc(); //build petsc vectors, collective call
 
 	int deinit(); // a normal deconstructor seems not working in MPI
+
+	int buildInterfaceFromBuffer(int* buffer);
 
 	int fetchDataFrom(RootProcess& root);  //MPI_ScatterV
 
@@ -233,9 +223,11 @@ public:
 		}
 		delete []recvReq;recvReq = NULL;
 
+		/*
 		for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
 			iter->second.getData(var); //copy to local
 		}
+		*/
 
 		ierr = MPI_Waitall(nInter,sendReq,MPI_STATUS_IGNORE);//blocking wait //perhaps redundant
 		if(ierr!=MPI_SUCCESS){
@@ -276,6 +268,8 @@ class InputElement{// this small structure is only used in this file
 public:
 	int type;
 	int pid; 	//use to sort, no need to send
+	int idx;
+	vector< vector<int> > interfaceInfo; //<partID,<globalIdx, intersectionNode1,2,3... > >
 	int ntag; 
 	int* tag;	//the length is fixed in order to send through MPI
 	int* vertex;	
@@ -289,6 +283,7 @@ public:
 	}
 
 };
+
 
 struct InputVert{
 	double x,y,z;	
@@ -306,11 +301,9 @@ public:
 	/***************used when partitioning*************************/
 	InputElement** rootElems;   	 //a pointer array //for faster sorting
 	InputVert* rootVerts; 		
-	std::map<int, set<int> >* boundNodesPool ; //one for each partition, <partID,nodesPool>
-	std::map<int,int>* nodesPool;			     //one for each partition, <globalID, localID>;
 
-	std::vector<int>* rootgridList;	// the element number of each parition
-	std::vector<int>* rootNCells;	// the cell number of each partition
+	std::vector<int> rootgridList;	// the element number of each parition
+	std::vector<int> rootNCells;	// the cell number of each partition
 	/*********************************************************/
 	RootProcess(int r):
 		rank(r),
@@ -318,13 +311,11 @@ public:
 		rootNVert(-1),
 		rootArrayBuffer(NULL), //NULL if not root
 		rootElems(NULL),
-		rootVerts(NULL),
-		boundNodesPool(NULL),
-		nodesPool(NULL),
-		rootgridList(NULL)
+		rootVerts(NULL)
 	{}
 	~RootProcess(){
 		clean();
+		delete []rootArrayBuffer;
 	}
 
 	void init(DataPartition* dg); 		//init for patitioning
@@ -343,21 +334,8 @@ public:
 	void partition(DataPartition* dg, int N);
 
 
-	/*********************************************
-	 * 	build MPI transfer buffer for vertex  element interfaceinfo
-	 * 	
-	 * 	WARNING: this 3 function MUST be called in specifig sequence!
-	 * 	calling sequence :
-	 * 		getvertex[pid]
-	 * 		getelement[pid]
-	 * 		getinterface[pid]
-	 *
-	 * 	WARNING: it is the user's responsibility to free buffer return bu these functions
-	 *********************************************/
-	
-	int getElementSendBuffer(DataPartition* dg,int pid, int** buffer); 	 
-	int getVertexSendBuffer(DataPartition* dg,int pid, double** buffer);	
-	int getInterfaceSendBuffer(DataPartition* dg,int pid, int** buffer);   
+
+	int getBuffer(DataPartition* dg, int pid,int* sendsizes, double** vbuffer, int** ebuffer, int** ibuffer);
 
 
 	/***************************************************
@@ -377,6 +355,20 @@ public:
 	void printTecplotHead(DataPartition* dg, std::ofstream& file);
 
 private:
+	/*********************************************
+	 * 	build MPI transfer buffer for vertex  element interfaceinfo
+	 * 	
+	 * 	WARNING: this 3 function MUST be called in specifig sequence!
+	 * 	calling sequence :
+	 * 		getvertex[pid]
+	 * 		getelement[pid]
+	 * 		getinterface[pid]
+	 *
+	 * 	WARNING: it is the user's responsibility to free buffer return by these functions
+	 *********************************************/
+	int getElementSendBuffer(int pid, int** buffer,map<int,int>* nodesPool); 	 
+	int getVertexSendBuffer(int pid, double** buffer,map<int,int>* nodesPool);	
+	int getInterfaceSendBuffer(int pid, int** buffer,map<int,int>* nodesPool);   
 
 };
 #endif

@@ -29,31 +29,30 @@ int main(int argc, char* argv[]){
 	 ******************************************/
 
 	NavierStokesSolver* nsSolver = new NavierStokesSolver;
+
 	nsSolver->initSolverParam(); 	//root only : read param.in and check
 	nsSolver->readAndPartition();	//root only : read msh and partition
+
 	nsSolver->broadcastSolverParam(); 	//collective fetch param from root
 
 	int* elementBuffer 	= NULL;
 	double* vertexBuffer 	= NULL;
 	int*  interfaceBuffer 	= NULL;
-
 	if(shouldReadLocal == PETSC_FALSE){ //transfer geometry through MPI
 		nsSolver->scatterGridFile(&elementBuffer,&vertexBuffer,&interfaceBuffer);//collective
 	}else{
 		//read geometry locally
 	}
 
-	map<int,set<int> >* interfaceNodes= new map<int,set<int> >;
 
 	//parse the gridfile as original, buffer freeed, boundInfo got;
-	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer,interfaceNodes);
+	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer);
 
 	nsSolver->dataPartition->initPetsc();
 
 	//build faces. same sequence as Original;
 	nsSolver->CreateFaces();
-	nsSolver->CellFaceInfo(interfaceNodes);
-	delete interfaceNodes;
+	nsSolver->CellFaceInfo();
 	nsSolver->CheckAndAllocate();
 	nsSolver->InitFlowField();
 	
@@ -61,7 +60,7 @@ int main(int argc, char* argv[]){
 	 * NS_solve
 	 * MAIN CFD 
 	 ******************************************/
-	nsSolver->NSSolve();
+	//nsSolver->NSSolve();
 
 	/******************************************
 	 * Post Process
@@ -69,6 +68,7 @@ int main(int argc, char* argv[]){
 	 ******************************************/
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	delete nsSolver;
 	PetscPrintf(MPI_COMM_WORLD,"done\n");
 	getchar();
 	ierr = PetscFinalize(); CHKERRQ(ierr);

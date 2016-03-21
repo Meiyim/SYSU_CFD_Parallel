@@ -50,11 +50,11 @@ T** new_Array2D(int row, int col)
 template <typename T>
 void delete_Array2D(T **arr, int row, int col)
 {
+	if(arr==NULL) return;
     for (int i = 0; i < row; ++i)
         for (int j = 0; j < col; ++j)
             arr[i][j].~T();
-    if (arr != NULL)
-        free((void**)arr);
+    free((void**)arr);
 }
 template <typename T>
 void init_Array2D(T **arr, int row, int col, T val )

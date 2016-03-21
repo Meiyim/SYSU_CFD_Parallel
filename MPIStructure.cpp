@@ -70,6 +70,43 @@ int DataPartition::deinit(){
 };
 
 
+int DataPartition::buildInterfaceFromBuffer(int* buffer){
+	size_t counter = 0;	
+	size_t ninterfaces = buffer[counter++];
+	for(size_t i=0;i!=ninterfaces;++i){
+		int interfaceID  = buffer[counter++];
+		int interfaceWidth = buffer[counter++];
+		
+		PRINT_LOG(interfaceID);
+		PRINT_LOG(interfaceWidth);
+		if(interfaces.find(interfaceID) == interfaces.end()){
+			interfaces.insert(make_pair(interfaceID,Interface(comRank,interfaceID,comm)));
+		}
+		Interface* theInterface = &interfaces[interfaceID];
+		for(size_t j=0;j!=interfaceWidth;++j){ //for each cell
+			int recordLength = buffer[counter++];
+			PRINT_LOG(recordLength);
+			theInterface->sendposis.push_back(buffer[counter++]); //in_processor position //the sequence of senposis is really important
+			set<int> cellIntersection;
+			for(int k=0;k!=recordLength-1;++k){		      //record Length - 1 is the length of nodes list
+				cellIntersection.insert( buffer[counter++]  );
+			}
+			theInterface->boundNodes.push_back(cellIntersection);
+		}
+	}
+
+
+	printf("partition %d: ninterface: %d\n",comRank,ninterfaces);
+	/*
+	for( auto& iter : interfaces ){
+		printf("-->%d : width %d\n",iter.first,iter.second.getWidth());
+		//printf("\n");
+	}
+	*/
+	return 0;
+}
+
+
 /*****************************************************
  *	MPI ScatterV / Send routine
  *	scatter geometry data to each partition
@@ -409,8 +446,7 @@ int Interface::send(MPI_Request* req, double* phi){
 
 int Interface::recv(MPI_Request* req, double* phi){
 	size_t width = getWidth();
-	if(recvBuffer==NULL)
-		recvBuffer = new double[width];
+	double* recvBuffer = phi+recvposi;
 
 	MPI_Irecv(recvBuffer,width,MPI_DOUBLE,
 			otherRank,
@@ -441,8 +477,8 @@ int Interface::send(MPI_Request* req, CellData* phi){
 
 int Interface::recv(MPI_Request* req, CellData* phi){
 	size_t width = getWidth();
-	if(recvBufferCell==NULL)
-		recvBufferCell = new CellData[width];
+
+	CellData* recvBufferCell = phi+recvposi;
 
 	MPI_Irecv(recvBufferCell,width,MPI_CellData,
 			otherRank,
@@ -475,8 +511,8 @@ int Interface::send(MPI_Request* req, double* phi[3]){
 
 int Interface::recv(MPI_Request* req, double* phi[3]){
 	size_t width = getWidth();
-	if(recvBufferGradient==NULL)
-		recvBufferGradient = new double[3*width];
+
+	double* recvBufferGradient = &phi[recvposi][0];
 
 	MPI_Irecv(recvBufferGradient,3*width,MPI_DOUBLE,
 			otherRank,
@@ -489,26 +525,34 @@ int Interface::recv(MPI_Request* req, double* phi[3]){
 
 
 void Interface::getData(CellData* phi){
+	/*
 	size_t width = getWidth();
 	for(int i=0;i!=width;++i){
 		phi[recvposis[i]] = recvBufferCell[i];
 	}
+	*/
 
 }
 
 void Interface::getData(double* phi){
+	/*
 	size_t width = getWidth();
 	for(int i=0;i!=width;++i)
 		phi[recvposis[i]] = recvBuffer[i];
+	*/
 }
 
 
+
 void Interface::getData(double* phi[3]){
+	/*
 	size_t width = getWidth();
 	for(int i=0;i!=width;++i)
 		for(int j=0;j!=3;++j)
 			phi[recvposis[i]][j] = recvBufferGradient[i*3+j];
+	*/
 }
+
 
 
 

@@ -5,6 +5,7 @@ void OutArray2File(double arr[],int N, stringstream& of){
 		of<<arr[i]<<"  ";
 		if( i%5==0 ) of<<endl;
 	}
+	of<<endl;
 }
 
 void outputVTKScalar( const char name[], double arr[],int N, ofstream &of)
@@ -14,6 +15,78 @@ void outputVTKScalar( const char name[], double arr[],int N, ofstream &of)
 	of<<"LOOKUP_TABLE default"<<endl;
 	for( i=0; i<N; i++ )
 		of<<float(arr[i])<<endl;
+}
+
+
+// output grid to tecplot for validation
+void NavierStokesSolver::OutputGrid()
+{
+	int i;
+	string title("grid.dat");
+	ofstream of;
+	int head =0;
+	
+	of.open(title.c_str());
+	string sbuffer;
+	char cbuffer[256];
+
+	sprintf(cbuffer,"title = \"cycas partition grid\"\nvariables=\"x\",\"y\",\"z\",\"p\"\n");
+	sbuffer = cbuffer;
+	head = sbuffer.size();
+	if(dataPartition->comRank == root.rank){//print head in root
+		of<<sbuffer;
+	}
+
+	sbuffer="";
+	//sprintf(cbuffer,"ZONE T=part%d N=%d, E=%d, VARLOCATION=([1-3]=NODAL,[4-%d]=CELLCENTERED) DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n",dataPartition->comRank,Nvrt,Ncel,4);
+	sprintf(cbuffer,"zone n=%d, e=%d, f=fepoint, et=BRICK\n",Nvrt,Ncel);
+	sbuffer=cbuffer;
+
+	map<int, set<int> > nodesSets;
+	for(map<int,Interface>::iterator it = dataPartition->interfaces.begin(); it!=dataPartition->interfaces.end(); ++it){
+		set<int> nodesSet;
+		for(vector<set<int> >::iterator iter = it->second.boundNodes.begin(); iter!=it->second.boundNodes.end(); ++iter){
+			for(set<int>::iterator iter2 = iter->begin();iter2!=iter->end();++iter2){
+				nodesSet.insert(*iter2);
+			}
+		}
+		nodesSets[it->first] = nodesSet;
+	}
+	
+	for(i =0;i!=Nvrt;++i){
+		double _iinfo = 0.0;
+		for(map<int,set<int> >::iterator iter = nodesSets.begin();iter!=nodesSets.end();++iter){
+			if( iter->second.find(i)!=iter->second.end()){
+				_iinfo = (double) iter->first + 1; 
+				break;
+			}
+		}
+		sprintf(cbuffer,"%f %f %f %f\n",Vert[i][0],Vert[i][1],Vert[i][2],_iinfo);
+		sbuffer.append(cbuffer);
+
+	}
+
+	for( i=0; i<Ncel; i++ ){
+		sprintf(cbuffer,"%8d %8d %8d %8d %8d %8d %8d %8d\n",
+				Cell[i].vertices[0]+1,
+				Cell[i].vertices[1]+1,
+				Cell[i].vertices[2]+1,
+				Cell[i].vertices[3]+1,
+				Cell[i].vertices[4]+1,
+				Cell[i].vertices[5]+1,
+				Cell[i].vertices[6]+1,
+				Cell[i].vertices[7]+1
+				);
+		sbuffer.append(cbuffer);
+	}
+
+	//printf("rank:%d printing %lu to buffer\n",dataPartition->comRank,sbuffer.size());
+
+	parallelWriteBuffer(title,sbuffer,dataPartition,head);
+
+
+	of.close( );
+	PetscPrintf(dataPartition->comm,"complete writing grid.dat\n");
 }
 
  /*******************************************************
@@ -128,7 +201,7 @@ void NavierStokesSolver::writeGeometryBackup(int* ebuffer, double* vbuffer, int*
 	}
 
 	of.close();
-	printf("backup file written: %s\n",title);
+	PetscPrintf(dataPartition->comm,"backup file written: %s\n",title);
 }
 
 

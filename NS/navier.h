@@ -101,7 +101,7 @@ public:
 	double  *Rn, *Un, *Vn, *Wn,  *Pn, *Tn, *TE, *ED;     // primitive vars CXY: this vars is to be replaced by DataPartition
 	double  **RSn;                             // species density
 	double  *VisLam, *VisTur;
-	double  **dPdX, **dUdX,**dVdX,**dWdX, *Apr, **dPhidX;
+	double  **dPdX, **dUdX,**dVdX,**dWdX, *Apr, **dPhidX	;
 	// variables at face center
 	double  *RUFace;   // RUFace[Nfac]
 	// Boundary faces values
@@ -126,14 +126,14 @@ public:
  	//first 3 parameter is input buffer:
 	//last 1 parameter is output boundaryinfo;
 	////read geometry from a buffer,
-	int  ReadGridFile    (int*,double*,int*,map<int,set<int> >*);
+	int  ReadGridFile    (int*,double*,int*);
 
 // Geometry
 
-	void OutputGrid      (map<int,set<int> >*); //modified by CXY
+	void OutputGrid      (); //modified by CXY
 	int  CreateFaces     ( );
 	void FindFace( int, int,int,int,int, int&, int*,int** );
-	int  CellFaceInfo    (map<int,set<int> >* );//modified by CXY //the return value indicates the number of virtual cell beyond Ncel
+	int  CellFaceInfo    ();//modified by CXY //the return value indicates the number of virtual cell beyond Ncel
 	int  CheckAndAllocate();		    //modified by CXY: input the number of virtual cells
 
 // Init flow field

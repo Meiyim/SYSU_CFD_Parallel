@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <stack>
 #include <algorithm>
 #include "navier.h"
 #include "tools.h"
@@ -35,7 +36,7 @@ void NavierStokesSolver::readAndPartition(){
 //	local
 //	last parameter is ouput value, containing the boundaryInfo
 /*******************************************************/
-int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int* interfaceBuffer,map<int,set<int> >* interfaceNodes)// free buffer after use
+int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int* interfaceBuffer)// free buffer after use
 {
 	string   line;
 	int      NumNodeInCell[8]={0,2,3,4,4,8,6,5},vertices[8],
@@ -45,22 +46,16 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	MPI_Barrier(dataPartition->comm);
 	PetscPrintf(dataPartition->comm,"begin parsing grid file buffer\n");
 
-	writeGeometryBackup(elementBuffer,vertexBuffer,interfaceBuffer);//back up binary
 
 	/******************************************
 	 *	Read Vertices
 	 ******************************************/
+
+	size_t counter = 0;
+	Nvrt = vertexBuffer[counter++];
     	assert (Nvrt > 0);
 	Vert = new_Array2D<double>(Nvrt,3);
 
-	dataPartition->PRINT_LOG(Nvrt);
-	/*
-	for(int i=0;i!=3*Nvrt;++i){
-		dataPartition->PRINT_LOG(vertexBuffer[i]);
-	}
-	*/
-
-	size_t counter = 0;
 	for(i=0; i<Nvrt; i++){
              Vert[i][0] = vertexBuffer[counter++];
              Vert[i][1] = vertexBuffer[counter++];
@@ -68,11 +63,26 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
     	}
 	delete []vertexBuffer;
 
+
+	/******************************************
+	 *	Read Interface Info
+	 ******************************************/
+	dataPartition->buildInterfaceFromBuffer(interfaceBuffer);
+	delete []interfaceBuffer;
+
+
 	/******************************************
 	 *	Read Cells
 	 ******************************************/
 	Bnd = new BoundaryData[Nbnd];	//pre_allocation
-	Cell = new CellData[Ncel];
+	int width = 0;
+	for(map<int,Interface>::iterator iter = dataPartition->interfaces.begin();iter!=dataPartition->interfaces.end();++iter){
+		width += iter->second.getWidth();
+	}
+
+	dataPartition->nVirtualCell = width;
+	Cell = new CellData[Ncel + width]; //pre_allocation
+		
 	//printf("read cell: %d and %d\n",Nbnd,Ncel);
 
    	counter = 0; 
@@ -167,114 +177,30 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
         	}
 
 	}
+	assert(icel==Ncel);
+	assert(ibnd==Nbnd);
 	delete[] elementBuffer;
 
-	/******************************************
-	 *	Read Interface Info
-	 ******************************************/
-	counter = 0;
-	int _nInterfaces = interfaceBuffer[counter++];	
-	for(int i=0;i!=_nInterfaces;++i){
-		int _interfaceID = interfaceBuffer[counter++];
-		int _width = interfaceBuffer[counter++];
-		set<int> _nodesSet;
-		for(int _inode = 0; _inode!=_width; ++_inode){
-			_nodesSet.insert(interfaceBuffer[counter++]);
-		}
-		interfaceNodes->insert(make_pair<int,set<int> >(_interfaceID,_nodesSet));
-	}		
+
 
 	//printf("rank: %d complete reading geo: icell %d, ncel %d\tibnd %d,nbnd %d\t,nvert%d \n",dataPartition->comRank,icel,Ncel,ibnd,Nbnd,Nvrt);
 
+	/*
+	for(int i=0;i!=Ncel;++i){
+		dataPartition->PRINT_LOG(Cell[i]);
+	}
+	*/
 
-	OutputGrid(interfaceNodes); //output tecplot: grid.dat
+	MPI_Barrier(dataPartition->comm);
+	writeGeometryBackup(elementBuffer,vertexBuffer,interfaceBuffer);//back up binary
+	OutputGrid(); //output tecplot: grid.dat
+	
 	PetscPrintf(dataPartition->comm,"complete parsing grid file buffer\n");
 	MPI_Barrier(dataPartition->comm);
     	return 0;
 }
 
-// output grid to tecplot for validation
-void NavierStokesSolver::OutputGrid(map<int,set<int> >* boundinfo)
-{
-	int i;
-	string title("grid.dat");
-	ofstream of;
-	int head =0;
-	
-	of.open(title.c_str());
-	string sbuffer;
-	char cbuffer[256];
 
-	sprintf(cbuffer,"variables=\"x\",\"y\",\"z\",\"i\"\n");
-	sbuffer = cbuffer;
-	head = sbuffer.size();
-	if(dataPartition->comRank == root.rank){//print head in root
-		of<<sbuffer;
-	}
-
-	sbuffer="";
-	sprintf(cbuffer,"zone n=%d, e=%d, f=fepoint, et=BRICK\n",Nvrt,Ncel);
-	sbuffer=cbuffer;
-
-	for( i=0; i<Nvrt; i++ ){
-		double _iinfo = 0.0;
-		for(map<int,set<int> >::iterator it=boundinfo->begin(); it!=boundinfo->end(); ++it){
-			set<int>& _bset = it->second;
-			if( _bset.find(i) != _bset.end() ){
-				_iinfo = it->first + 1;
-				break;
-			}
-		}
-		sprintf(cbuffer,"%f %f %f %f\n",Vert[i][0],Vert[i][1],Vert[i][2],_iinfo);
-		sbuffer.append(cbuffer);
-	}
-	for( i=0; i<Ncel; i++ ){
-		sprintf(cbuffer,"%8d %8d %8d %8d %8d %8d %8d %8d\n",
-				Cell[i].vertices[0]+1,
-				Cell[i].vertices[1]+1,
-				Cell[i].vertices[2]+1,
-				Cell[i].vertices[3]+1,
-				Cell[i].vertices[4]+1,
-				Cell[i].vertices[5]+1,
-				Cell[i].vertices[6]+1,
-				Cell[i].vertices[7]+1
-				);
-		sbuffer.append(cbuffer);
-	}
-
-	//printf("rank:%d printing %lu to buffer\n",dataPartition->comRank,sbuffer.size());
-
-	parallelWriteBuffer(title,sbuffer,dataPartition,head);
-
-	/*
-	char temp[256];
-	sprintf(temp,"gridtemp%0d.dat",dataPartition->comRank);
-	ofstream _of(temp);
-	_of<<sbuffer;
-	_of.close();
-
-	// output cells
-	of<<"zone n="<<Nvrt<<", e="<<Ncel<<", f=fepoint, et=BRICK"<<endl;
-	for( i=0; i<Nvrt; i++ )
-		of<<Vert[i][0]<<" "<<Vert[i][1]<<" "<<Vert[i][2]<<endl;
-	for( i=0; i<Ncel; i++ ){
-		for(j=0;j<8;j++)
-			of<<Cell[i].vertices[j]+1<<" ";
-		of<<endl;
-	}
-	*/
-
-	/* // output boundary
-	of<<"zone n="<<Nvrt<<", e="<<Ncel<<", f=fepoint, et=Quadrilateral"<<
-		"VARSHARELIST = ([1-3]=1)"<<endl;
-	for( i=0; i<Nbnd; i++ )
-	{
-	} 
-	*/
-
-	of.close( );
-	PetscPrintf(dataPartition->comm,"complete writing grid.dat\n");
-}
 #define VOID_CELL_ON_BOUNDARY -10
 #define VOID_CELL_ON_INTERFACE -20
 
@@ -433,12 +359,13 @@ double TetVolum(double x1[], double x2[], double x3[], double x4[])
     return 1./6.*fabs( vec_dot( v1, dx3, 3 ) );
 }
 
+
 /************************************************
  *	modified by CXY:
  *	input : interfaceNodes, the nodesPool of interfaces
  *	return value: indicates the number of virtual cell;
  ************************************************/
-int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
+int NavierStokesSolver::CellFaceInfo()
 {
     int i,j, n1,n2,n3,n4, ic1,ic2,ic, iface,nc,jf,jc;
     double area1,area2, r1,r2, 
@@ -459,62 +386,6 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
                              Vert[ Cell[i].vertices[6] ][j] +
                              Vert[ Cell[i].vertices[7] ][j] );
     }
-
-
-    //-- cell neighbouring
-    int interfaceVoidCellCounter = Ncel;//out of Ncel range!
-    int nVirtualCell = 0;
-    for( i=0; i!=Ncel; ++i){
-	        // neighbored cells
-        for( j=0; j<Cell[i].nface; j++ )
-        {
-        	iface = Cell[i].face[j];
-		nc    = Face[iface].cell1;
-        	if( nc==i )
-        		nc = Face[iface].cell2;
-		if(nc==VOID_CELL_ON_INTERFACE){ //insert virtual cell for the interfaces
-			set<int> verts;
-			for(int i=0;i!=4;++i)
-				verts.insert(Face[iface].vertices[i]);
-			for(map<int,set<int> >::iterator it = interfaceNodes->begin();it!=interfaceNodes->end();++it){//for each interfaces
-				vector<int> _intersectionVector;//hold result of intersection
-				set<int>& _st = it->second;
-				int partID    = it->first;
-				set_difference(verts.begin(),verts.end(),_st.begin(),_st.end(),back_inserter(_intersectionVector));
-				
-				if(_intersectionVector.empty()){//verts belong to _st
-					map<int,Interface>& _interfaces = dataPartition->interfaces;
-					if(_interfaces.find(partID) == _interfaces.end() ){
-						//create a new interface
-						_interfaces.insert(make_pair<int,Interface>(partID,Interface(dataPartition->comRank,partID,dataPartition->comm)));
-					}
-					_interfaces[partID].sendposis.push_back(i);	//i --> icell
-					_interfaces[partID].recvposis.push_back(interfaceVoidCellCounter);
-					assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE);
-
-					//dynamic memory adjustment, might result in bad performance
-					Cell = (CellData*) realloc(Cell,(interfaceVoidCellCounter+1)*sizeof(CellData) );
-
-					Cell[i].cell[j] = interfaceVoidCellCounter;	//add void cell
-					Face[iface].cell2 = interfaceVoidCellCounter;
-
-					//dataPartition->PRINT_LOG(partID);
-					//dataPartition->PRINT_LOG(Face[iface].cell1);
-					//dataPartition->PRINT_LOG(Face[iface].cell2);
-					
-					interfaceVoidCellCounter++;
-					nVirtualCell++;
-					break;	
-				}
-			}		
-
-		}else{
-        		Cell[i].cell[j]= nc; //nc = -10 when boundary
-		}
-        }
-    }
-
-
 
     //-- cell volumn and center cordinate
     for( i=0; i<Ncel; i++ )
@@ -562,10 +433,75 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 
     }
 
+    //-- cell neighbouring
+    for( i=0; i!=Ncel; ++i){
+	        // neighbored cells
+        for( j=0; j<Cell[i].nface; j++ )
+        {
+        	iface = Cell[i].face[j];
+		nc    = Face[iface].cell1;
+        	if( nc==i )
+        		nc = Face[iface].cell2;
+		
+        	Cell[i].cell[j]= nc; //nc = -10 when boundary nc = -20 when interface
+        }
+    }
+
+
+    //-- config interface cell neighbouring
+    size_t voidCellCounter = Ncel; //out of Ncel range
+    for(map<int,Interface>::iterator iter = dataPartition->interfaces.begin();iter!=dataPartition->interfaces.end();++iter){
+	    Interface* interface = &iter->second;
+	    interface->recvposi = voidCellCounter;
+	    for(int i = 0;i!=interface->sendposis.size();++i){ //for each send posis
+		CellData* thisCell = &Cell[ interface->sendposis[i] ];
+
+		//debug
+		/*
+		 dataPartition->PRINT_LOG(iter->first);
+		 for(int i=0;i!=8;++i){
+			 dataPartition->PRINT_LOG(thisCell->vertices[i]);
+		 }
+		 set<int> debugset(thisCell->vertices,thisCell->vertices+8);
+		 vector<int> debugvec;
+		 set_intersection(debugset.begin(), debugset.end(),interface->boundNodes.begin(),interface->boundNodes.end(),back_inserter(debugvec));
+		 assert(debugvec.size()>=3);
+		 */
+
+		for(int k=0;k!=thisCell->nface;++k){
+			int iface = thisCell->face[k];
+			set<int> _st(Face[iface].vertices,Face[iface].vertices+4);
+			if(_st.size() < 3) continue; //not a actual face
+			//vector<int> _res;
+			//set_difference(_st.begin(),_st.end(),interface->boundNodes[i].begin(),interface->boundNodes[i].end(),back_inserter(_res));
+			if(_st == interface->boundNodes[i]){
+				/*
+				if(Face[iface].cell2!=VOID_CELL_ON_INTERFACE){
+					dataPartition->PRINT_LOG(*thisCell);
+					dataPartition->PRINT_LOG( Cell[thisCell->cell[k]] );
+				}
+				*/
+				assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE);
+				Face[iface].cell2 = voidCellCounter;
+				assert(thisCell->cell[k] = VOID_CELL_ON_INTERFACE);
+				thisCell->cell[k] = voidCellCounter;
+				voidCellCounter++;
+				break;
+			}else {
+				if(k==thisCell->nface-1){
+					assert(false);//debug
+				}
+
+			}
+
+		}
+	    }
+		    
+    }
+    assert(voidCellCounter==Ncel+dataPartition->nVirtualCell);
     /*************************************************
      *	configure cellGlobalIdx, CXY
      *************************************************/
-	dataPartition->nVirtualCell = nVirtualCell;
     //-- set Global index for each cell
 	PetscInt iStart,iEnd;	
 
@@ -577,13 +513,6 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 
 	//--------------interface communication to get gloabl index for virtual cell
 	dataPartition->interfaceCommunication(Cell);
-	/*
-	for(int i=0;i!=Ncel+nVirtualCell;++i){
-		dataPartition->PRINT_LOG(Cell[i]);
-	}
-	*/
-
-
 
 
     //-- face
@@ -702,6 +631,8 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 	{
 		ic1= Face[i].cell1;
 		ic2= Face[i].cell2;
+		dataPartition->PRINT_LOG(ic1);
+		dataPartition->PRINT_LOG(ic2);
 		if( ic2==VOID_CELL_ON_BOUNDARY )
 		{
 			vec_minus( dx,Face[i].x,Cell[ic1].x,3 );
@@ -733,11 +664,14 @@ int NavierStokesSolver::CellFaceInfo(map<int,set<int> >* interfaceNodes)
 		}
 	}
 	//debug
+	MPI_Barrier(dataPartition->comm);
+	printf("complete build cell info \n");
 
+	MPI_Barrier(dataPartition->comm);
 	for(int i=0;i!=Ncel;++i)
 		dataPartition->PRINT_LOG(Cell[i]);
 	dataPartition->PRINT_LOG("**************");
-	for(int i=Ncel;i!=Ncel+nVirtualCell;++i){
+	for(int i=Ncel;i!=Ncel+dataPartition->nVirtualCell;++i){
 		dataPartition->PRINT_LOG(Cell[i]);
 	}
 	/*
@@ -844,6 +778,12 @@ int NavierStokesSolver::CheckAndAllocate()
 
 	cur_time = 0.;
 		
+	printf("Partition: %d, nCel %d/(%d), nbnd %d, nvrt %d, ninterface %ld. ready to solve\n",
+			dataPartition->comRank,
+			Ncel,dataPartition->nGlobal,
+			Nbnd,Nvrt,dataPartition->interfaces.size()
+			);
+	
 
 	return 0;
 }

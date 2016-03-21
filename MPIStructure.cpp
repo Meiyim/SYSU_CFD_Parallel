@@ -77,15 +77,12 @@ int DataPartition::buildInterfaceFromBuffer(int* buffer){
 		int interfaceID  = buffer[counter++];
 		int interfaceWidth = buffer[counter++];
 		
-		PRINT_LOG(interfaceID);
-		PRINT_LOG(interfaceWidth);
 		if(interfaces.find(interfaceID) == interfaces.end()){
 			interfaces.insert(make_pair(interfaceID,Interface(comRank,interfaceID,comm)));
 		}
 		Interface* theInterface = &interfaces[interfaceID];
 		for(size_t j=0;j!=interfaceWidth;++j){ //for each cell
 			int recordLength = buffer[counter++];
-			PRINT_LOG(recordLength);
 			theInterface->sendposis.push_back(buffer[counter++]); //in_processor position //the sequence of senposis is really important
 			set<int> cellIntersection;
 			for(int k=0;k!=recordLength-1;++k){		      //record Length - 1 is the length of nodes list
@@ -286,17 +283,16 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - U converged in %d step! :)\n",iters);
 	}
-	//VecView(bu,PETSC_VIEWER_STDOUT_WORLD);//test
-	double unorm;
-	double bnorm;
-	VecNorm(xsol,NORM_2,&unorm);
-	VecNorm(bu,NORM_2,&bnorm);
+	//VecView(bu,PETSC_VIEWER_STDOUT_WORLD);//debug
+	//double unorm;
+	//double bnorm;
+	//VecNorm(xsol,NORM_2,&unorm);
+	//VecNorm(bu,NORM_2,&bnorm);
 
-	PetscPrintf(comm,"unorm:  %e\n",unorm);
-	PetscPrintf(comm,"bnorm:  %e\n",bnorm);
+	//PetscPrintf(comm,"unorm:  %e\n",unorm);
+	//PetscPrintf(comm,"bnorm:  %e\n",bnorm);
 	
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
-	return 0;
 	
 
 	/***************************************

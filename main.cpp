@@ -60,7 +60,7 @@ int main(int argc, char* argv[]){
 	 * NS_solve
 	 * MAIN CFD 
 	 ******************************************/
-	//nsSolver->NSSolve();
+	nsSolver->NSSolve();
 
 	/******************************************
 	 * Post Process

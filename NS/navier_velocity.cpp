@@ -77,16 +77,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 	Gradient ( Wn, BW,   dWdX );
 	Gradient ( Pn, BPre, dPdX );
 	//debug check
-	Checker ck_app("app");
-	Checker ck_su("su");
-	Checker ck_dum("nFaces");
-	Checker ck_n1("x1");
-	Checker ck_n2("x2");
-	Checker ck_n3("x3");
-	Checker ck_rlc("rlencos");
-	Checker ck_cell1("cellx1");
-	Checker ck_cell2("cellx2");
-	Checker ck_cell3("cellx3");
+
 
 	PetscPrintf(dataPartition->comm,"begin build velocity matrix\n");
 	
@@ -234,11 +225,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 					sprintf(temp,"unknown rid: %d\n in BuildVelocityMatrix",rid);
 					errorHandler.fatalRuntimeError(temp);
 				}
-				/*
-				ck_n1.check(Cell[Face[iface].cell1].x[0]);
-				ck_n2.check(Cell[Face[iface].cell1].x[1]);
-				ck_n3.check(Cell[Face[iface].cell1].x[2]);
-				*/
+
 				
 			}
 			else // inner cell
@@ -336,11 +323,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 				fdi[0] = ViscAreaLen*( dudx*dxc[0]+dudy*dxc[1]+dudz*dxc[2] );
 				fdi[1] = ViscAreaLen*( dvdx*dxc[0]+dvdy*dxc[1]+dvdz*dxc[2] );
 				fdi[2] = ViscAreaLen*( dwdx*dxc[0]+dwdy*dxc[1]+dwdz*dxc[2] );
-				ck_n1.check(Cell[in].x[0]);
-				ck_n2.check(Cell[in].x[1]);
-				ck_n3.check(Cell[in].x[2]);
-				ck_rlc.check(Face[iface].rlencos);
-				ck_dum.check(1.0);
+
 				//dataPartition->PRINT_LOG(Face[iface].rlencos);
 
 			}
@@ -363,11 +346,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 			App[i] += apn[j];
 		App[i] = 1./App[i];  */
 
-		ck_su.check(su);
-		ck_app.check(app);
-		ck_cell1.check(Cell[i].x[0]);
-		ck_cell2.check(Cell[i].x[1]);
-		ck_cell3.check(Cell[i].x[2]);
+
 
 		PetscInt row = Cell[i].globalIdx;
 		assert(row>=0&&row<dataPartition->nGlobal);
@@ -389,16 +368,6 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 
 	}
 
-	ck_su.report();
-	ck_app.report();
-	ck_n1.report();
-	ck_n2.report();
-	ck_n3.report();
-	ck_rlc.report();
-	ck_cell1.report();
-	ck_cell2.report();
-	ck_cell3.report();
-	ck_dum.report();
 	MatAssemblyBegin(Au,MAT_FINAL_ASSEMBLY);
 	VecAssemblyBegin(bu);
 	VecAssemblyBegin(bv);

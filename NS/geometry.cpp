@@ -631,8 +631,6 @@ int NavierStokesSolver::CellFaceInfo()
 	{
 		ic1= Face[i].cell1;
 		ic2= Face[i].cell2;
-		dataPartition->PRINT_LOG(ic1);
-		dataPartition->PRINT_LOG(ic2);
 		if( ic2==VOID_CELL_ON_BOUNDARY )
 		{
 			vec_minus( dx,Face[i].x,Cell[ic1].x,3 );
@@ -689,8 +687,9 @@ int NavierStokesSolver::CellFaceInfo()
 
 	for(int i=0;i!=Ncel;++i)
 		dataPartition->PRINT_LOG(Cell[i]);
+
 	for(int i=0;i!=Nfac;++i)
-		dataPartition->PRINT_LOG(Face[i]);
+		dataPartition->PRINT_LOG(Face[i].rlencos);
 	*/
 
     return 0;

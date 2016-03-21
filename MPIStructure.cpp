@@ -93,7 +93,7 @@ int DataPartition::buildInterfaceFromBuffer(int* buffer){
 	}
 
 
-	printf("partition %d: ninterface: %d\n",comRank,ninterfaces);
+	//printf("partition %d: ninterface: %lu\n",comRank,ninterfaces);
 	/*
 	for( auto& iter : interfaces ){
 		printf("-->%d : width %d\n",iter.first,iter.second.getWidth());
@@ -284,10 +284,10 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 		PetscPrintf(comm,"KSP GMRES - U converged in %d step! :)\n",iters);
 	}
 	//VecView(bu,PETSC_VIEWER_STDOUT_WORLD);//debug
-	//double unorm;
-	//double bnorm;
-	//VecNorm(xsol,NORM_2,&unorm);
-	//VecNorm(bu,NORM_2,&bnorm);
+	double unorm;
+	double vnorm;
+	double wnorm;
+	VecNorm(xsol,NORM_2,&unorm);
 
 	//PetscPrintf(comm,"unorm:  %e\n",unorm);
 	//PetscPrintf(comm,"bnorm:  %e\n",bnorm);
@@ -318,6 +318,9 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - V converged in %d step! :)\n",iters);
 	}
+
+	VecNorm(xsol,NORM_2,&vnorm);
+
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 
 
@@ -344,7 +347,12 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - W converged in %d step! :)\n",iters);
 	}
+	VecNorm(xsol,NORM_2,&wnorm);
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
+
+	PetscPrintf(comm,"Unorm %f\n",unorm);
+	PetscPrintf(comm,"Vnorm %f\n",vnorm);
+	PetscPrintf(comm,"Wnorm %f\n",wnorm);
 
 	return 0;	
 }
@@ -387,22 +395,22 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 	/***************************************
 	 * 	SOLVE Pressure Correction!
 	 ***************************************/
-	/*
+	ierr = VecAssemblyEnd(bp);  CHKERRQ(ierr);
 	ierr = VecAssemblyBegin(xdp);  CHKERRQ(ierr);// no need to assembly xdp
 	ierr = VecAssemblyEnd(xdp); CHKERRQ(ierr);
-	*/
 	
-	ierr = VecAssemblyEnd(bp);  CHKERRQ(ierr);
 
 	//ierr = VecView(bp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
-	ierr = MatView(Ap,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+	//ierr = MatView(Ap,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
-	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+	//ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 	
 	ierr = KSPSolve(ksp,bp,xdp);CHKERRQ(ierr);
 
+
 	KSPGetConvergedReason(ksp,&reason);
+
 
 	if(reason<0){
 		KSPGetIterationNumber(ksp,&iters);
@@ -414,6 +422,11 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - Pressure Correction converged in %d step! :)\n",iters);
 	}
+
+	double pnorm;
+	VecNorm(xdp,NORM_2,&pnorm);
+	PetscPrintf(comm,"pnorm %e\n",pnorm);
+	
 	return 0;
 
 }

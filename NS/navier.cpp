@@ -24,7 +24,7 @@ void NavierStokesSolver::NSSolve( )
 		dt = CYCASHUGE_D;
 
 	cur_time += dt;
-	MaxStep = 1;//test purpose
+	MaxStep = 1;//test 
     	for( step=1; step<=MaxStep; step++ ) //step : total time step
     	{
 		if( (step-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
@@ -46,7 +46,6 @@ void NavierStokesSolver::NSSolve( )
 
 			CalculateVelocity ( );
 			
-			break;
 			CalculatePressure ( ); //calculate deltaP and correct P,[R], U,V,W
 
 			/*
@@ -65,6 +64,7 @@ void NavierStokesSolver::NSSolve( )
 
 			//check if should break
 			if( IfSteady ){
+				break;//test
 				//steady
 				root.printSteadyStatus(dataPartition,step,ResMax);
 				if( ResMax<ResidualSteady )break;

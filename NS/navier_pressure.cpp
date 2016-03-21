@@ -24,6 +24,9 @@ int NavierStokesSolver::CalculatePressure( )
 		errorHandler.fatalRuntimeError(temp);//perhaps calculation might continue?
 	}
 
+	
+
+	return 0;
 
 
 	
@@ -138,9 +141,9 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 				// incompressible flow
 				//-- neighbor cell. Since it's symmetric, only consider upper triangle
 				if( DensityModel==0 ){
-					nj ++ ;
 					Acn[nj] = tmp;
 					cn [nj] = Cell[in].globalIdx;
+					nj ++ ;
 				}
 				// compressible correction
 				// perfect gas, density change --> pressure change
@@ -152,13 +155,13 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 						valcen  += tmp2;
 					}
 
-					nj ++ ;
 					Acn[nj] = tmp ;
 					if( RUnormal<0. ){
 						Tf  = Tn [in];
 						Acn[nj] += -RUnormal/(rof*Rcpcv*Tf); //CXY: addition to neighbooring Coef due to compressible correction
 					}
 					cn [nj] = Cell[in].globalIdx;
+					nj ++ ;
 				}else{
 					char temp[256];
 					sprintf(temp,"unknown DensityModel found: %d\n",DensityModel);
@@ -172,7 +175,7 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 		
 		PetscInt row = Cell[i].globalIdx;
 		assert(row>=0&&row<dataPartition->nGlobal);//check
-		for(int ii=1; ii<=nj; ii++ )
+		for(int ii=0; ii!=nj; ii++ )
 			assert(cn[ii]>=0&&cn[ii]<dataPartition->nGlobal);//check
 
 		MatSetValue(Ap,row,row,valcen,INSERT_VALUES);// diagonal
@@ -183,7 +186,7 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 
 		// check
 		dataPartition->PRINT_LOG(row);
-		for(int ii=1;ii!=nj;++ii){
+		for(int ii=0;ii!=nj;++ii){
 			dataPartition->PRINT_LOG(cn[ii]);
 			dataPartition->PRINT_LOG(Acn[ii]);
 		}

@@ -663,7 +663,7 @@ int NavierStokesSolver::CellFaceInfo()
 	}
 	//debug
 	MPI_Barrier(dataPartition->comm);
-	printf("complete build cell info \n");
+	PetscPrintf(dataPartition->comm,"complete build cell info \n");
 
 	MPI_Barrier(dataPartition->comm);
 	for(int i=0;i!=Ncel;++i)

@@ -109,7 +109,7 @@ struct _SortAccordingToPart{
 void RootProcess::partition(DataPartition* dg, int N){
 	if(dg->comRank!=rank) return;//only in root
 
-	printf("start partitioning in root...\n");
+	printf("start partitioning in root...");
 	fflush(stdout);
 
 	/*****************DATA PARTITION*******************
@@ -200,12 +200,13 @@ void RootProcess::partition(DataPartition* dg, int N){
 	std::sort(rootElems,rootElems + rootNElement, op); //sort according to npart;
 
 	int iE = 0;	
+	int iEhead = 0;
 	for(int i=0;i!=N;++i){ //each part
 		int localCellIdxCounter = 0;
 		int nElementsPerPart = rootgridList.at(i);
 		for(int j=0;j!=nElementsPerPart;++j){ 	//each elements
 			if(rootElems[iE]->type > 3){    //is a volume
-				rootElems[iE]->idx = localCellIdxCounter;//local idx of matrx 
+				rootElems[iE]->idx = localCellIdxCounter + iEhead;// local idx of matrx + partition Segmentor(remove after sort in _connectionMap)
 				localCellIdxCounter++;
 			}else{
 				rootElems[iE]->idx = -1; //boundary does not have a idx
@@ -213,6 +214,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 			iE++;
 		}
 		rootNCells[i] = localCellIdxCounter; //record Ncel;
+		iEhead += rootgridList[i];  
 	}	
 
 
@@ -431,8 +433,7 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 
 	ComplicatedType _connectionMap;//<interfaceID <thisID+thatID,<thisID,thatID> > > 
 							 //must ensure that the order in  connection map of both side of interface are the SAME!
-
-
+	size_t debugcounter = 0;
 	
 	size_t iEhead = 0;
 	for(int i=0;i!=pid;++i)
@@ -444,8 +445,9 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 			int interfaceID = iter->at(0);
 			int thisID = _thisEle->idx;
 			int thatID = iter->at(1);
-			double key = (double)(thisID+thatID)+fabs(thisID-thatID)/(rootgridList[pid]);
-			vector<int> vec(1,thisID);
+			double key = (double)(thisID+thatID)+(double)fabs(thisID-thatID)/(rootNGlobal);
+
+			vector<int> vec(1,thisID - iEhead);// thisID - iE is the real local Index
 			for(int i=2;i!=iter->size();++i){
 				vec.push_back (iter->at(i) );
 			}
@@ -453,6 +455,7 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 
 		}
 	}	
+	if(pid==11) cout<<_connectionMap[10].size()<<endl;
 
 	size_t nI = 0;
 	nI++;	// number of interfaces

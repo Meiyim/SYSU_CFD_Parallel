@@ -463,7 +463,6 @@ int NavierStokesSolver::CellFaceInfo()
 	    interface->recvposi = voidCellCounter;
 	    for(int i = 0;i!=interface->sendposis.size();++i){ //for each send posis
 		CellData* thisCell = &Cell[ interface->sendposis[i] ];
-
 		//debug
 		/*
 		 dataPartition->PRINT_LOG(iter->first);

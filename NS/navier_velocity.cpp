@@ -27,7 +27,7 @@ int NavierStokesSolver::CalculateVelocity( )
 
 	// solve U,V,W
 	try{
-		dataPartition->solveVelocity_GMRES(1.e-6,1000,Un,Vn,Wn);
+		dataPartition->solveVelocity_GMRES(1.e-8,1000,Un,Vn,Wn);
 	}catch(ConvergeError& err){
 		char temp[256];	
 		sprintf(temp,"%s not converge in iter: %d, res %f\n",err.varname.c_str(),err.iter,err.residual);

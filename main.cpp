@@ -39,6 +39,7 @@ int main(int argc, char* argv[]){
 	double* vertexBuffer 	= NULL;
 	int*  interfaceBuffer 	= NULL;
 	if(shouldReadLocal == PETSC_FALSE){ //transfer geometry through MPI
+		nsSolver->broadcastPartitionInfo();
 		nsSolver->scatterGridFile(&elementBuffer,&vertexBuffer,&interfaceBuffer);//collective
 	}else{
 		//read geometry locally
@@ -51,6 +52,7 @@ int main(int argc, char* argv[]){
 	nsSolver->dataPartition->initPetsc();
 
 	//build faces. same sequence as Original;
+	//
 	nsSolver->CreateFaces();
 	nsSolver->CellFaceInfo();
 	nsSolver->CheckAndAllocate();

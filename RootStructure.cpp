@@ -41,7 +41,8 @@ void RootProcess::read(DataPartition* dg,const string& title){
 	int numberOfNodesInElementTypeOf[8] = {
 		0,2,3,4,4,8,6,5
 	};
-	printf("start reading in root\n");
+	printf("start reading in root...");
+	fflush(stdout);
 	std::ifstream infile(title.c_str());
 	
 	//skip 6 lines
@@ -95,7 +96,7 @@ void RootProcess::read(DataPartition* dg,const string& title){
 	}
 
 	infile.close();
-	printf("complete reading in root\n");
+	printf("done\n");
 }
 
 /***************functor object used by partition routine*****************/
@@ -108,7 +109,8 @@ struct _SortAccordingToPart{
 void RootProcess::partition(DataPartition* dg, int N){
 	if(dg->comRank!=rank) return;//only in root
 
-	printf("start partitioning in root \n");
+	printf("start partitioning in root...\n");
+	fflush(stdout);
 
 	/*****************DATA PARTITION*******************
 	 * 	phase2 :data partition with METIS
@@ -255,7 +257,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	METIS_Free(adjncy);	adjncy = NULL;
 
 	
-	printf("complete partitioning in root \n");
+	printf("done\n");
 	/*****************DATA PARTITION*******************
 	 * 	phase5 : translate global idx of vertex list to local idx
 	 * 		 
@@ -270,7 +272,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 		}
 	}
 	delete []_boundCells;
-
+ 
 
 }
 

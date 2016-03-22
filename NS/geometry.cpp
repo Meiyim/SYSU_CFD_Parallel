@@ -44,7 +44,8 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 		// bndType[10]={4,2,3,1,4,4,0}; // bndType change the tag in gmsh file to navier_bc types ( 4 types currently )
 
 	MPI_Barrier(dataPartition->comm);
-	PetscPrintf(dataPartition->comm,"begin parsing grid file buffer\n");
+	PetscPrintf(dataPartition->comm,"parsing grid file buffer...");
+	fflush(stdout);
 
 
 	/******************************************
@@ -192,10 +193,9 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	*/
 
 	MPI_Barrier(dataPartition->comm);
-	writeGeometryBackup(elementBuffer,vertexBuffer,interfaceBuffer);//back up binary
 	OutputGrid(); //output tecplot: grid.dat
 	
-	PetscPrintf(dataPartition->comm,"complete parsing grid file buffer\n");
+	PetscPrintf(dataPartition->comm,"done\n");
 	MPI_Barrier(dataPartition->comm);
     	return 0;
 }
@@ -209,6 +209,10 @@ int NavierStokesSolver::CreateFaces( )
     int i,j,id,n1,n2,n3,n4,n5,n6,n7,n8;
     int *NumNodeFace, **NodeFace;
     
+	fflush(stdout);
+	PetscPrintf(dataPartition->comm,"constructing faces...");
+	fflush(stdout);
+
     NumNodeFace = new int[Nvrt];
     NodeFace    = new_Array2D<int>( Nvrt,500 ); //CXY: not a good idea
 	for( i=0; i<Nvrt; i++ )
@@ -222,7 +226,6 @@ int NavierStokesSolver::CreateFaces( )
 	}
 	*/
     
-	PetscPrintf(dataPartition->comm,"begin faces construction\n");
     	//Nfac = 0;
    	// first boundary faces
    	 
@@ -266,12 +269,15 @@ int NavierStokesSolver::CreateFaces( )
         	FindFace( i,n1,n4,n8,n5, Nfac, NumNodeFace,NodeFace );//Nface++
     	}
 
-	printf("Rank: %d Number of faces: %d\n",dataPartition->comRank,Nfac);
+	//printf("Rank: %d Number of faces: %d\n",dataPartition->comRank,Nfac);
 
 	delete [] NumNodeFace;
 	delete_Array2D<int>( NodeFace, Nvrt, 500 );
-    	PetscPrintf(dataPartition->comm,"finish face construction\n");
 
+    	PetscPrintf(dataPartition->comm,"done\n");
+	MPI_Barrier(dataPartition->comm);
+
+	
 	return 0;
 }
 
@@ -373,6 +379,8 @@ int NavierStokesSolver::CellFaceInfo()
        xv1[3],xv2[3],xv3[3],xv4[3],xv5[3],xv6[3],xv7[3],xv8[3], 
        V1,V2,V3,V4,V5,V6;
 
+	PetscPrintf(dataPartition->comm,"builing cell face info...");
+	fflush(stdout);
     // cell ceneter estimation, not final ones
     for( i=0; i<Ncel; i++ )
     {
@@ -663,7 +671,7 @@ int NavierStokesSolver::CellFaceInfo()
 	}
 	//debug
 	MPI_Barrier(dataPartition->comm);
-	PetscPrintf(dataPartition->comm,"complete build cell info \n");
+	PetscPrintf(dataPartition->comm,"done\n");
 
 	MPI_Barrier(dataPartition->comm);
 	for(int i=0;i!=Ncel;++i)
@@ -692,6 +700,8 @@ int NavierStokesSolver::CellFaceInfo()
 		dataPartition->PRINT_LOG(Face[i].rlencos);
 	*/
 
+    	PetscPrintf(dataPartition->comm,"done\n");
+	MPI_Barrier(dataPartition->comm);
     return 0;
 }
 
@@ -699,6 +709,8 @@ int NavierStokesSolver::CheckAndAllocate()
 {
 	int i,c1,c2;
 	// check if all boundaries are marked
+	PetscPrintf(dataPartition->comm,"checking...");
+	fflush(stdout);
 	for( i=0; i<Nfac; i++ )
 	{
 		c1= Face[i].cell1;
@@ -777,6 +789,9 @@ int NavierStokesSolver::CheckAndAllocate()
 
 	cur_time = 0.;
 		
+    	PetscPrintf(dataPartition->comm,"done\n");
+	MPI_Barrier(dataPartition->comm);
+
 	printf("Partition: %d, nCel %d/(%d), nbnd %d, nvrt %d, ninterface %ld. ready to solve\n",
 			dataPartition->comRank,
 			Ncel,dataPartition->nGlobal,

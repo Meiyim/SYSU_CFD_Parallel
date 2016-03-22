@@ -112,7 +112,8 @@ bool NavierStokesSolver::shouldPostProcess(int step){
 //	collective
 /*******************************************************/
 void NavierStokesSolver::broadcastSolverParam(){
-	PetscPrintf(dataPartition->comm,"begin broadcast basic parameter\n");
+	PetscPrintf(dataPartition->comm,"Broadcasting basic parameter...");
+	fflush(stdout);
 	int sourceRank = root.rank;
 
 	MPI_Barrier(dataPartition->comm);
@@ -123,9 +124,21 @@ void NavierStokesSolver::broadcastSolverParam(){
 	//------double option pool
 	MPI_Bcast(dbOptions,DB_OPTION_NO,MPI_DOUBLE,sourceRank,dataPartition->comm);
 
+	PetscPrintf(dataPartition->comm,"done\n");
 
-	//------other constant, nProcess, gridList, nCell etc.
-	
+}
+
+
+/*******************************************************/
+//	fetch mesh Partition info From root
+//	nProcess, gridlist, Ncel, Nbnd...
+//	MPI_Broadcast routine
+//	collective
+/*******************************************************/
+void NavierStokesSolver::broadcastPartitionInfo(){
+	PetscPrintf(dataPartition->comm,"Broadcasting partition info...");
+	fflush(stdout);
+	int sourceRank = root.rank;
 	int* _sendbuf = NULL;
 
 	if(dataPartition->comRank == root.rank){//root only
@@ -162,22 +175,24 @@ void NavierStokesSolver::broadcastSolverParam(){
 	this->Nbnd = _nlocalElement - Ncel;
 	dataPartition->nLocal = Ncel;
 
-	PetscPrintf(dataPartition->comm,"complete broadcast basic parameter\n");
 
 	/*
 	printf("check parameter\n");
 	printf("vert------>%d\n",Nvrt);
 	*/
+	/*
 	printf("rank %d, nProcess %d, nLocal %d, nGlobal %d, nCell %d, nBnd %d\n",
 			dataPartition->comRank, dataPartition->nProcess, dataPartition->nLocal, dataPartition->nGlobal, Ncel, Nbnd);
+	*/
 	delete []_sendbuf;
+	MPI_Barrier(dataPartition->comm);
+	PetscPrintf(dataPartition->comm,"done\n");
 }
 
 
-
 /*******************************************************/
-//	fetch param and mesh Data From root
-//	MPI_Broadcast routine
+//	fetch mesh Data From root
+//	MPI_Issend routine
 //	collective
 //
 //	parameter is for input, pass NULL to this routine
@@ -189,6 +204,9 @@ void NavierStokesSolver::broadcastSolverParam(){
 #define SEND_TAG_INTERFACEINFO 200
 void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer, int** interfaceBuffer){
 	//scatterv and multiple send operation are both good for this subroutine
+	PetscPrintf(dataPartition->comm,"scattering geometry...");
+	fflush(stdout);
+
 	MPI_Request* sendRequests = NULL;	
 	MPI_Request* recvRequtests = NULL;
 	double** buffer1       = NULL; //vertex send buffer
@@ -252,7 +270,7 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 	MPI_Recv(_recvSize,3,MPI_INT,root.rank,244,dataPartition->comm,MPI_STATUS_IGNORE);
 
 	
-	printf("rank:%d recving buffersize: %d, %d, %d\n",dataPartition->comRank,_recvSize[0],_recvSize[1],_recvSize[2]);
+	//printf("rank:%d recving buffersize: %d, %d, %d\n",dataPartition->comRank,_recvSize[0],_recvSize[1],_recvSize[2]);
 
 	*vertexBuffer = new double[_recvSize[0]];
 	*elemBuffer = new int[_recvSize[1]];
@@ -283,9 +301,12 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 		char temp[256];
 		sprintf(temp,"MPI receive failure in geometry transfering\n");
 		errorHandler.fatalRuntimeError(temp);
-	}else{
-		//printf("rank: %d received geometry buffer\n",dataPartition->comRank);
-	}	
+	}
+	
+	//printf("rank: %d received geometry buffer\n",dataPartition->comRank);
+
+	writeGeometryBackup(_recvSize[0],*vertexBuffer,_recvSize[1],*elemBuffer,_recvSize[2],*interfaceBuffer);
+
 	delete []recvRequtests;
 
 
@@ -307,7 +328,7 @@ void NavierStokesSolver::scatterGridFile(int** elemBuffer, double** vertexBuffer
 		root.clean();//OK to free root data
 	}
 	MPI_Barrier(dataPartition->comm);
-	PetscPrintf(dataPartition->comm,"complete scatter grid\n");
+	PetscPrintf(dataPartition->comm,"done\n");
 }
 
 

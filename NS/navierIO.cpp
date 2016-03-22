@@ -86,7 +86,7 @@ void NavierStokesSolver::OutputGrid()
 
 
 	of.close( );
-	PetscPrintf(dataPartition->comm,"complete writing grid.dat\n");
+	//PetscPrintf(dataPartition->comm,"complete writing grid.dat\n");
 }
 
  /*******************************************************
@@ -165,43 +165,38 @@ void NavierStokesSolver::Output2Tecplot()
 }
 
 
+
 /***************************************************
  *	write binary geometry backup to local storage
  *	this routine is local
  ***************************************************/
-void NavierStokesSolver::writeGeometryBackup(int* ebuffer, double* vbuffer, int* ibuffer){
+void NavierStokesSolver::writeGeometryBackup(int vsize,double* vbuffer,int esize, int* ebuffer, int isize, int* ibuffer){
 	char title[256];	
 	sprintf(title,"localGeometryBackup/grid_backup_rank%04d.dat",dataPartition->comRank);
 	ofstream of(title);
-	of.write((char*)&Ncel,sizeof(Ncel));
-	of.write((char*)&Nbnd,sizeof(Nbnd));
-	of.write((char*)&(dataPartition->nProcess),sizeof(dataPartition->nProcess));
-	for(int i=0;i!=dataPartition->nProcess;++i){
-		of.write((char*)&(dataPartition->gridList[i]),sizeof(dataPartition->gridList[i]));
-	}
-	for(int i=0;i!=Ncel+Nbnd;++i)
-		of.write((char*)&(ebuffer[i]),sizeof(ebuffer[i]));
 
-	of.write((char*)&Nvrt,sizeof(Nvrt));
-	for(int i=0;i!=Nvrt;++i)
+	//partition info	
+	of.write((char*)&(dataPartition->nProcess),sizeof(dataPartition->nProcess));
+	of.write((char*)&(dataPartition->nLocal),sizeof(dataPartition->nLocal));	
+	for(int i=0;i!=dataPartition->nProcess;++i){
+		of.write((char*)&(dataPartition->gridList[i]),sizeof(dataPartition->gridList[i]));	
+	}
+
+	//geometry buffer
+	for(int i=0;i!=vsize;++i)
 		of.write((char*)&(vbuffer[i]),sizeof(vbuffer[i]));
 
-	int ninterface = ibuffer[0];
-	of.write((char*)&(ninterface),sizeof(ninterface));
+	for(int i=0;i!=esize;++i)
+		of.write((char*)&(ebuffer[i]),sizeof(ebuffer[i]));
 
-	size_t counter = 1;
-	for(int i=0;i!=ninterface;++i){
-		int pid = ibuffer[counter++];
-		int width = ibuffer[counter++];
-		of.write((char*)&(pid),sizeof(pid));
-		of.write((char*)&(width),sizeof(width));
 
-		for(int j=0;j!=width;++j)
-			of.write((char*)&(ibuffer[counter++]),sizeof(int));
-	}
+	for(int i=0;i!=isize;++i)
+		of.write((char*)&(ibuffer[i]),sizeof(ibuffer[i]));
+
 
 	of.close();
-	PetscPrintf(dataPartition->comm,"backup file written: %s\n",title);
+	//PetscPrintf(dataPartition->comm,"backup file written: %s\n",title);
+	//printf("backup file written: %s\n",title);
 }
 
 

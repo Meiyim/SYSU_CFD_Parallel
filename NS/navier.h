@@ -138,8 +138,9 @@ public:
 
 // Init flow field
     // read solver param, material, post, everything except 
-	void initSolverParam(); 		//CXY: root ONLY	
+	void initSolverParam(); 	//CXY: root ONLY	
 	void broadcastSolverParam();	//CXY: now a MPI BROADCAST routine
+	void broadcastPartitionInfo();  //CXY: a MPI BROADCAST routine
 	void scatterGridFile(int** elemBuffer,double** vertexBuffer,int** interfaceBuffer);		//CXY: a MPI ScatterV routine
 
 	void InitFlowField  ( );
@@ -191,7 +192,7 @@ public:
 
 private:
 	//backup
-	void writeGeometryBackup(int* ebuffer, double* vbuffer,int* ibuffer); //local binary backup of the grid
+	void writeGeometryBackup(int vsize,double* vbuffer,int esize,int* ebuffer,int isize, int* ibuffer); //local binary backup of the grid
 	//initiation
 	void ReadParamFile   ( );
 	//post process

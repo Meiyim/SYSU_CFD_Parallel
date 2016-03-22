@@ -8,7 +8,6 @@ int DataPartition::initPetsc(){ //collcetive
 
 	MPI_Barrier(comm);
 
-	PetscPrintf(comm,"PETSC initing\n");
 		
 	//init PETSC vec
 	ierr = VecCreateMPI(comm,nLocal,nGlobal,&bu);CHKERRQ(ierr); 
@@ -47,7 +46,8 @@ int DataPartition::initPetsc(){ //collcetive
 	//init KSP context
 	ierr = KSPCreate(comm,&ksp);
 
-	printf("dataPartition PETSC NO. %d init complete, dimension %d x %d = %d\n",comRank,nLocal,nProcess,nGlobal);
+//	printf("PETSC NO. %d init complete, dimension %d x %d = %d\n",comRank,nLocal,nProcess,nGlobal);
+	MPI_Barrier(comm);
 
 	return 0;
 }

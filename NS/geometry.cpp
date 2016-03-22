@@ -670,6 +670,7 @@ int NavierStokesSolver::CellFaceInfo()
 		}
 	}
 	//debug
+	/*
 	MPI_Barrier(dataPartition->comm);
 	PetscPrintf(dataPartition->comm,"done\n");
 
@@ -680,7 +681,6 @@ int NavierStokesSolver::CellFaceInfo()
 	for(int i=Ncel;i!=Ncel+dataPartition->nVirtualCell;++i){
 		dataPartition->PRINT_LOG(Cell[i]);
 	}
-	/*
 	for(int i=0;i!=Nfac;++i){
 		if(Face[i].bnd>=0) continue;
 		if(Face[i].cell2 >= Ncel) continue;
@@ -717,6 +717,7 @@ int NavierStokesSolver::CheckAndAllocate()
 		c2= Face[i].cell2;
 		if( c2==VOID_CELL_ON_BOUNDARY || c2>=0 ) continue;
 		char temp[256];
+		dataPartition->PRINT_LOG(Face[i]);
 		sprintf(temp,"error in face right hand side\nfaceID: %d, cell1:%d cell2 %d\n",i,c1,c2);
 		errorHandler.fatalLogicError(temp);
 	}

@@ -41,6 +41,10 @@ void NavierStokesSolver::NSSolve( )
 			dataPartition->interfaceCommunication(Wn);
 			dataPartition->interfaceCommunication(Pn);
 			dataPartition->interfaceCommunication(Rn);
+			dataPartition->interfaceCommunication(Tn);
+			dataPartition->interfaceCommunication(TE);
+			dataPartition->interfaceCommunication(ED);
+			
 			dataPartition->interfaceCommunication(VisLam);
 			dataPartition->interfaceCommunication(VisTur);
 

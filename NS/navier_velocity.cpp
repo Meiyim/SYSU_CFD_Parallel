@@ -40,6 +40,7 @@ int NavierStokesSolver::CalculateVelocity( )
 	dataPartition->interfaceCommunication(Un);//update boundary
 	dataPartition->interfaceCommunication(Vn);
 	dataPartition->interfaceCommunication(Wn);
+	dataPartition->interfaceCommunication(Apr);
 	
 	Residual[0] = 0.0;
 	Residual[1] = 0.0;

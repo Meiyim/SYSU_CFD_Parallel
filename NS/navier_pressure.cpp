@@ -195,7 +195,9 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 
 	//begin assembly
 	MatAssemblyBegin(Ap,MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Ap,MAT_FINAL_ASSEMBLY);
 	VecAssemblyBegin(bp);
+	VecAssemblyEnd(bp);
 
 }
 

@@ -54,15 +54,17 @@ int DataPartition::initPetsc(){ //collcetive
 
 
 int DataPartition::deinit(){
-	printf("datagroup NO. %d died\n",comRank);
 	ierr = VecDestroy(&bu);CHKERRQ(ierr);
 	ierr = VecDestroy(&bv);CHKERRQ(ierr);
 	ierr = VecDestroy(&bw);CHKERRQ(ierr);
 	ierr = VecDestroy(&bp);CHKERRQ(ierr);
 	ierr = VecDestroy(&bs);CHKERRQ(ierr);
+	ierr = VecDestroy(&xdp);CHKERRQ(ierr);
+
 	ierr = MatDestroy(&Au);CHKERRQ(ierr);
 	ierr = MatDestroy(&Ap);CHKERRQ(ierr);
 	ierr = MatDestroy(&As);CHKERRQ(ierr);
+
 	ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
 	delete []gridList;
 	gridList=NULL;
@@ -350,6 +352,8 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	VecNorm(xsol,NORM_2,&wnorm);
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 
+	ierr = MatZeroEntries(Au);CHKERRQ(ierr);
+	
 	PetscPrintf(comm,"Unorm %f\n",unorm);
 	PetscPrintf(comm,"Vnorm %f\n",vnorm);
 	PetscPrintf(comm,"Wnorm %f\n",wnorm);
@@ -366,7 +370,6 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 	MPI_Barrier(comm);
 	PetscPrintf(comm,"begin Pressure Correction solve\n");
 
-	ierr = MatAssemblyEnd(Ap,MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
 
 	KSPSetOperators(ksp,Ap,Ap);
 
@@ -395,10 +398,15 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 	/***************************************
 	 * 	SOLVE Pressure Correction!
 	 ***************************************/
-	ierr = VecAssemblyEnd(bp);  CHKERRQ(ierr);
-	ierr = VecAssemblyBegin(xdp);  CHKERRQ(ierr);// no need to assembly xdp
-	ierr = VecAssemblyEnd(xdp); CHKERRQ(ierr);
+	//ierr = VecAssemblyBegin(xdp);  CHKERRQ(ierr);// no need to assembly xdp
+	//ierr = VecAssemblyEnd(xdp); CHKERRQ(ierr);
 	
+	double bpnorm;
+	double matnorm;
+	VecNorm(bp,NORM_2,&bpnorm);
+	MatNorm(Ap,NORM_FROBENIUS,&matnorm);
+	PetscPrintf(comm,"bpnorm %e\n",bpnorm);
+	PetscPrintf(comm,"matnorm %e\n",matnorm);
 
 	//ierr = VecView(bp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 

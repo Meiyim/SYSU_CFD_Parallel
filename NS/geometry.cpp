@@ -718,6 +718,7 @@ int NavierStokesSolver::CheckAndAllocate()
 		if( c2==VOID_CELL_ON_BOUNDARY || c2>=0 ) continue;
 		char temp[256];
 		dataPartition->PRINT_LOG(Face[i]);
+		dataPartition->PRINT_LOG(Cell[c1]);
 		sprintf(temp,"error in face right hand side\nfaceID: %d, cell1:%d cell2 %d\n",i,c1,c2);
 		errorHandler.fatalLogicError(temp);
 	}

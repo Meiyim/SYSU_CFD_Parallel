@@ -36,6 +36,11 @@ public:
 	DataPartition* dataPartition;	
 	RootProcess root;
 
+	FlowField* field;
+	FlowField* oldField;  //eular time scheme
+	FlowField* oldField2; //bdf 2nd time scheme
+
+
 	//option Sets
 	int* iOptions; 	  //len 13       //handles for integer & bool option pool, for bool, 0 = false, 1 = true
 	double* dbOptions;//len 33	//handles for double option pool
@@ -97,9 +102,20 @@ public:
    	CellData     *Cell;
     	BoundaryData *Bnd;
 
+	/**************POINTERS TO this->field*******************/
     	// physical variables at cell center, all local
-	double  *Rn, *Un, *Vn, *Wn,  *Pn, *Tn, *TE, *ED;     // primitive vars CXY: this vars is to be replaced by DataPartition
-	double  **RSn;                             // species density
+	double  *Rn, *Un, *Vn, *Wn, *Tn, *TE, *ED,**RSn;     // primitive vars CXY: this vars is to be replaced by DataPartition
+	double  *Pn;//not a part of the flow field
+
+	/**************POINTERS TO this->oldfield*******************/
+	// dual time unsteady simulation backup data, p = previous
+	double  *Rnp, *Unp,  *Vnp,  *Wnp,  *Tnp,  *TEp,  *EDp, **RSnp;    // Euler
+
+
+	/**************POINTERS TO this->oldfield2*******************/
+	double  *Rnp2,*Unp2, *Vnp2, *Wnp2, *Tnp2, *TEp2, *EDp2,**RSnp2;   // BDF 2nd
+
+
 	double  *VisLam, *VisTur;
 	double  **dPdX, **dUdX,**dVdX,**dWdX, *Apr, **dPhidX	;
 	// variables at face center
@@ -112,9 +128,6 @@ public:
 	//QMatrix As,Ap;                // As for non-sysmmetric, Ap for sysmmetric matrix
 	//Vector  bs,bu,bv,bw,bp, xsol; // right-hand-side vector
 
-	// dual time unsteady simulation backup data, p = previous
-	double  *Rnp, *Unp,  *Vnp,  *Wnp,  *Tnp,  *TEp,  *EDp, **RSnp,    // Euler
-		    *Rnp2,*Unp2, *Vnp2, *Wnp2, *Tnp2, *TEp2, *EDp2,**RSnp2;   // BDF 2nd
 
 /********************************************	
  *	   METHODS
@@ -190,14 +203,16 @@ public:
 	void WriteBackupFile( );
 	void ReadBackupFile ( );
 
+	void writeTotFile();//added by CXY:
+
 private:
 	//backup
 	void writeGeometryBackup(int vsize,double* vbuffer,int esize,int* ebuffer,int isize, int* ibuffer); //local binary backup of the grid
 	//initiation
 	void ReadParamFile   ( );
 	//post process
-	bool shouldPostProcess(int step);		//should output
-	void writeTecZoneParallel(const string& title); //collective on MPI
+	bool shouldPostProcess(int step,double now);		//should output
+	bool shouldBackup(int step,double now);
 };
 
 namespace TurKEpsilonVar

@@ -80,7 +80,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 	//debug check
 
 
-	PetscPrintf(dataPartition->comm,"begin build velocity matrix\n");
+	//PetscPrintf(dataPartition->comm,"begin build velocity matrix\n");
 	
 	/* This will lead to turbulence problem, wierd !!
 	   limiter on velocity seems to affect turbulence generation */

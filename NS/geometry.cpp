@@ -723,39 +723,44 @@ int NavierStokesSolver::CheckAndAllocate()
 	int nVirtualCell = dataPartition->nVirtualCell;	
 	//below is moved into NavierStokerSolver::Init
 	// allocate variables
-   	Rn = new double[Ncel+nVirtualCell];
-	Un = new double[Ncel+nVirtualCell];
-	Vn = new double[Ncel+nVirtualCell];
-	Wn = new double[Ncel+nVirtualCell];
-	Pn = new double[Ncel+nVirtualCell];
-	Tn = new double[Ncel+nVirtualCell];
-	TE = new double[Ncel+nVirtualCell];
-	ED = new double[Ncel+nVirtualCell];
-	RSn= new_Array2D<double>(Nspecies,Ncel+nVirtualCell);
+	
+	field = new FlowField(Ncel+nVirtualCell,TurModel==1,SolveSpecies==1,Nspecies);
+	field->attachBasic(&Rn,&Un,&Vn,&Wn,&Pn,&Tn);
 
+	double* voidptr = NULL;	//pn in the flow-field doesnt needs to store;
 	if( !IfSteady ){
 		if( TimeScheme>=1 ){
-			Rnp = new double[Ncel+nVirtualCell];
-			Unp = new double[Ncel+nVirtualCell];
-			Vnp = new double[Ncel+nVirtualCell];
-			Wnp = new double[Ncel+nVirtualCell];
-			Tnp = new double[Ncel+nVirtualCell];
-			TEp = new double[Ncel+nVirtualCell];
-			EDp = new double[Ncel+nVirtualCell];
-			RSnp= new_Array2D<double>(Nspecies,Ncel+nVirtualCell);
+			oldField = new FlowField(Ncel+nVirtualCell,TurModel==1,SolveSpecies==1,Nspecies);
+			oldField->attachBasic(&Rnp,&Unp,&Vnp,&Wnp,&voidptr,&Tnp);
 		}
 		if( TimeScheme>=2 ){
-			Rnp2 = new double[Ncel+nVirtualCell];
-			Unp2 = new double[Ncel+nVirtualCell];
-			Vnp2 = new double[Ncel+nVirtualCell];
-			Wnp2 = new double[Ncel+nVirtualCell];
-			Tnp2 = new double[Ncel+nVirtualCell];
-			TEp2 = new double[Ncel+nVirtualCell];
-			EDp2 = new double[Ncel+nVirtualCell];
-			RSnp2= new_Array2D<double>(Nspecies,Ncel+nVirtualCell);
+			oldField2 = new FlowField(Ncel+nVirtualCell,TurModel==1,SolveSpecies==1,Nspecies);
+			oldField2->attachBasic(&Rnp2,&Unp2,&Vnp2,&Wnp2,&voidptr,&Tnp2);
 		}
 	}
 
+	if(TurModel==1){
+		field->attachTurb(&TE,&ED);		
+		if(!IfSteady){
+			if(TimeScheme>=1){
+				oldField->attachTurb(&TEp,&EDp);
+			}
+			if(TimeScheme>=2){
+				oldField2->attachTurb(&TEp2,&EDp2);
+			}
+		}
+	}
+	if(SolveSpecies==1){
+		field->attachSpecices(&RSn);
+		if(!IfSteady){
+			if(TimeScheme>=1){
+				oldField->attachSpecices(&RSnp);
+			}
+			if(TimeScheme>=2){
+				oldField2->attachSpecices(&RSnp2);
+			}
+		}
+	}
 
 	VisLam = new double[Ncel+nVirtualCell];
 	VisTur = new double[Ncel+nVirtualCell];

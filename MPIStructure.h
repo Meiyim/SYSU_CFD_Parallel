@@ -352,7 +352,6 @@ public:
 	 * *************************************************/
 	void write(DataPartition* dg);
 
-	void printTecplotHead(DataPartition* dg, std::ofstream& file);
 
 private:
 	/*********************************************

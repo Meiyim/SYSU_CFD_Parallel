@@ -59,6 +59,83 @@ public:
 /******************************************
  *	Navier Stokes Data Structure
  ******************************************/
+class FlowField{
+public:
+	int nVar;
+private:
+	int basicSize;
+	int turbSize;
+	int speciesSize;
+	double* const basicflowField;
+	double* turbField;
+	double* speciesField;
+public:
+	double* const R;	
+	double* const U;	
+	double* const V;	
+	double* const W;	
+	double* const P;	
+	double* const T;	
+	double* TE;	
+	double* ED;	
+	double** RS;	
+	FlowField(size_t size1,bool useturb, bool useMultySpecies,size_t size2)://size2 is nSpecies
+		nVar(6),
+		basicSize(nVar*size1),
+		basicflowField(new double[basicSize]),
+		turbField(NULL),
+		speciesField(NULL),
+		R(basicflowField + 0*size1),
+		U(basicflowField + 1*size1),
+		V(basicflowField + 2*size1),
+		W(basicflowField + 3*size1),
+		P(basicflowField + 4*size1),
+		T(basicflowField + 5*size1),
+		TE(NULL),
+		ED(NULL),
+		RS(NULL)
+	{
+		if(useturb){
+			nVar+=2;
+			turbSize =2;
+			turbField = new double[size1*turbSize];
+			TE = turbField;
+			ED = turbField + size1;
+		}
+		if(useMultySpecies){
+			printf("hals \n");
+			speciesSize = size2;
+			speciesField = new double[speciesSize*size1];
+			RS = new double* [size2];
+			for(int i=0;i!=size2;++i){
+				RS[i] = speciesField + i*size1;
+			}
+		}
+	}
+	~FlowField(){
+		delete []basicflowField;
+		delete []turbField;
+		delete []speciesField;
+		delete []RS;
+	}
+	void attachSpecices(double***rs){
+		*rs = RS;	
+	}
+	void attachTurb(double** te, double**ed){
+		*te = TE;
+		*ed = ED;
+	}
+	void attachBasic(double** r,double** u,double** v,double** w,double** p,double** t){
+		*r = R; 
+		*u = U;
+		*v = V;
+		*w = W;
+		*p = P;
+		*t = T;
+	}
+};
+
+
 class FaceData
 {
 public:

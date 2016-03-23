@@ -185,12 +185,14 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 		VecSetValue(bp,row,bpv,INSERT_VALUES);
 
 		// check
+		 /*
 		dataPartition->PRINT_LOG(row);
 		for(int ii=0;ii!=nj;++ii){
 			dataPartition->PRINT_LOG(cn[ii]);
 			dataPartition->PRINT_LOG(Acn[ii]);
 		}
 		dataPartition->PRINT_LOG(bpv);
+		*/
     	}
 
 	//begin assembly

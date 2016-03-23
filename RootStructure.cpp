@@ -29,7 +29,7 @@ void RootProcess::clean(){
 	delete []rootElems;
 	delete []rootVerts;
 
-	rootElems = NULL;
+	rootElems = NULL; //put NULL avoid dangling pointer. a good habit
 	rootVerts = NULL;
 }
 
@@ -294,18 +294,7 @@ void RootProcess::write(DataPartition* dg){
 }
 
 
-/*********************************************
- *	tecplot printer
- *	call after allocate
- *	call after data collection
- *********************************************/
-void RootProcess::printTecplotHead(DataPartition* dg, ofstream& file){
-	if(dg->comRank!=rank) return; //root only
-	file<<"variables="<<"\"x\","<<"\"y\","<<"\"z\""
-		<<"\"p\","<<"\"u\","<<"\"v\","<<"\"w\","<<"\"ro\","<<"\"T\","
-		<<"\"Mach\","<<"\"mu\""<<endl;
-	return ;
-}
+
 
 
 /*********************************************

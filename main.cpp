@@ -52,7 +52,6 @@ int main(int argc, char* argv[]){
 	nsSolver->dataPartition->initPetsc();
 
 	//build faces. same sequence as Original;
-	//
 	nsSolver->CreateFaces();
 	nsSolver->CellFaceInfo();
 	nsSolver->CheckAndAllocate();
@@ -73,7 +72,6 @@ int main(int argc, char* argv[]){
 	nsSolver->dataPartition->deinit();
 	delete nsSolver;
 	PetscPrintf(MPI_COMM_WORLD,"done\n");
-	getchar();
 	ierr = PetscFinalize(); CHKERRQ(ierr);
 	return 0;
 

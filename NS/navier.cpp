@@ -24,7 +24,9 @@ void NavierStokesSolver::NSSolve( )
 		dt = CYCASHUGE_D;
 
 	cur_time += dt;
-	MaxStep = 1;//test 
+	if(IfSteady){
+		MaxOuterStep = MaxStep;
+	}
     	for( step=1; step<=MaxStep; step++ ) //step : total time step
     	{
 		if( (step-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
@@ -34,26 +36,12 @@ void NavierStokesSolver::NSSolve( )
 
 		// outer iteration, drive residual to zero for every physical time step
 		for( iter=1; iter<MaxOuterStep; iter++ ){
-
-			//-----MPI interface communication-------//
-			dataPartition->interfaceCommunication(Un);
-			dataPartition->interfaceCommunication(Vn);
-			dataPartition->interfaceCommunication(Wn);
-			dataPartition->interfaceCommunication(Pn);
-			dataPartition->interfaceCommunication(Rn);
-			dataPartition->interfaceCommunication(Tn);
-			dataPartition->interfaceCommunication(TE);
-			dataPartition->interfaceCommunication(ED);
-			
-			dataPartition->interfaceCommunication(VisLam);
-			dataPartition->interfaceCommunication(VisTur);
-
+			MPI_Barrier(dataPartition->comm);
 			CalculateVelocity ( );
 			
 			CalculatePressure ( ); //calculate deltaP and correct P,[R], U,V,W
 
 			/*
-
 			// scalar transportation
 			//1. turbulence model
 			if( TurModel==1  ) UpdateTurKEpsilon( );
@@ -64,13 +52,32 @@ void NavierStokesSolver::NSSolve( )
 			//4. other physical models
 			//    e.g., condensation, combustion, wall heat conduction
 			*/
-			ResMax = vec_max( Residual,10 );
 
-			//check if should break
+			ResMax = vec_max( Residual,10 );
+			//-----MPI interface communication-------//
+			dataPartition->interfaceCommunication(Un);
+			dataPartition->interfaceCommunication(Vn);
+			dataPartition->interfaceCommunication(Wn);
+			dataPartition->interfaceCommunication(Pn);
+			dataPartition->interfaceCommunication(Rn);
+			dataPartition->interfaceCommunication(Tn);
+			if(TurModel==1){
+				dataPartition->interfaceCommunication(TE);
+				dataPartition->interfaceCommunication(ED);
+			}
+			
+			dataPartition->interfaceCommunication(VisLam);
+			dataPartition->interfaceCommunication(VisTur);
+
+			/*-----------record,tot file, restart file, etc.----------*/
+			writeTotFile();
+			if( shouldBackup(iter,cur_time) )
+				WriteBackupFile();
+
+			/*-----------check if should break----------*/
 			if( IfSteady ){
-				break;//test
 				//steady
-				root.printSteadyStatus(dataPartition,step,ResMax);
+				root.printSteadyStatus(dataPartition,iter,ResMax);
 				if( ResMax<ResidualSteady )break;
 			}else{
 				//unsteady
@@ -80,8 +87,9 @@ void NavierStokesSolver::NSSolve( )
 					break; // more reasonal to break : order drop 2
 				}
 			}
-			if( shouldPostProcess(step) ){
+			if( shouldPostProcess(iter,cur_time) ){
 				PetscPrintf(dataPartition->comm,"ouput...\n");
+				Output2Tecplot();
 				/*
 				tend   = ttime( );
 				tstart = tend;
@@ -99,13 +107,23 @@ void NavierStokesSolver::NSSolve( )
 			cur_time+=dt;
 		}	
 	}
+	return;
 }
 
 
 /*******************************************************/
 //	determint if should output to tecplot, vtk...
 /*******************************************************/
-bool NavierStokesSolver::shouldPostProcess(int step){
+bool NavierStokesSolver::shouldBackup(int step,double now){
+	return step%noutput == 0;
+}
+
+
+/*******************************************************/
+//	determint if should backUp
+//	currently the same frequency as post process
+/*******************************************************/
+bool NavierStokesSolver::shouldPostProcess(int step, double now){
 	return step%noutput == 0;
 }
 
@@ -462,6 +480,21 @@ void NavierStokesSolver::InitFlowField( ){
 
 	for( i=0;i<Nfac;i++ )
 		RUFace[i] = 0.;
+
+	//---------init interface-------
+	dataPartition->interfaceCommunication(Un);
+	dataPartition->interfaceCommunication(Vn);
+	dataPartition->interfaceCommunication(Wn);
+	dataPartition->interfaceCommunication(Pn);
+	dataPartition->interfaceCommunication(Rn);
+	dataPartition->interfaceCommunication(Tn);
+	if(TurModel==1){
+		dataPartition->interfaceCommunication(TE);
+		dataPartition->interfaceCommunication(ED);
+	}
+	
+	dataPartition->interfaceCommunication(VisLam);
+	dataPartition->interfaceCommunication(VisTur);
 }
 
 
@@ -522,6 +555,9 @@ NavierStokesSolver::NavierStokesSolver():
 	outputCounter(0), 
 	dataPartition(new DataPartition),
 	root(0),			// the root rank is 0
+	field(NULL),
+	oldField(NULL),
+	oldField2(NULL),
 	iOptions(new int[INT_OPTION_NO]),
 	dbOptions(new double[DB_OPTION_NO]),
 	//option sets
@@ -570,19 +606,20 @@ NavierStokesSolver::NavierStokesSolver():
 
 	//all put NULL to avoid wild pointer
 	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL),
-	Rn(NULL),Un(NULL),Vn(NULL),Wn(NULL),Pn(NULL),Tn(NULL),TE(NULL),ED(NULL),
+	Rn(NULL),Un(NULL),Vn(NULL),Wn(NULL),Tn(NULL),TE(NULL),ED(NULL),
 	RSn(NULL),
 
-	VisLam(NULL),VisTur(NULL),
+	Pn(NULL),
+	
+	Rnp(NULL),Unp(NULL),Vnp(NULL),Wnp(NULL),Tnp(NULL),TEp(NULL),EDp(NULL),RSnp(NULL),
+	Rnp2(NULL),Unp2(NULL),Vnp2(NULL),Wnp2(NULL),Tnp2(NULL),TEp2(NULL),EDp2(NULL),RSnp2(NULL),
 
+	VisLam(NULL),VisTur(NULL),
 	dPdX(NULL),dUdX(NULL),dVdX(NULL),dWdX(NULL),Apr(NULL),dPhidX(NULL),
 
 	RUFace(NULL),
 
-	BRo(NULL),BU(NULL),BV(NULL),BW(NULL),BPre(NULL),BTem(NULL),BRS(NULL),BTE(NULL),BED(NULL),
-
-	Rnp(NULL),Unp(NULL),Vnp(NULL),Wnp(NULL),Tnp(NULL),TEp(NULL),EDp(NULL),RSnp(NULL),
-	Rnp2(NULL),Unp2(NULL),Vnp2(NULL),Wnp2(NULL),Tnp2(NULL),TEp2(NULL),EDp2(NULL),RSnp2(NULL)
+	BRo(NULL),BU(NULL),BV(NULL),BW(NULL),BPre(NULL),BTem(NULL),BRS(NULL),BTE(NULL),BED(NULL)
 {
 }
 
@@ -596,6 +633,12 @@ NavierStokesSolver::~NavierStokesSolver()
 	// Output2Tecplot ();
 	
 	PetscPrintf(dataPartition->comm,"clean up NavierStokesSolver\n");
+	delete field;
+	delete oldField;
+	delete oldField2;
+	PetscPrintf(dataPartition->comm,"clean up NavierStokesSolver\n");
+	
+
 	delete []iOptions;
 	delete []dbOptions;
 	// delete primitive variable
@@ -605,7 +648,9 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] Bnd;
 
 		
+	//these are just pointers.
 	// delete variables
+	/*
    	delete [] Rn;
 	delete [] Un;
 	delete [] Vn;
@@ -633,6 +678,7 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] TEp2;
 	delete [] EDp2;
 	delete_Array2D(RSnp2,Nspecies,Ncel);
+	*/
 
 	delete [] VisLam;
 	delete [] VisTur;
@@ -657,6 +703,9 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] BED;
 	delete [] RUFace;
 	/*****************THIS PART IS ADDED BY CHENXUYI*******************/
+
+	PetscPrintf(dataPartition->comm,"clean up NavierStokesSolver\n");
+	
 	delete dataPartition;
 
 	/*

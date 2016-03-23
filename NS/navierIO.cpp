@@ -1,11 +1,13 @@
 
 #include"navier.h"
-void OutArray2File(double arr[],int N, stringstream& of){
+void OutArray2File(double arr[],int N, string& str){
+	char temp[256];
 	for(int i=0; i<N; i++ ){
-		of<<arr[i]<<"  ";
-		if( i%5==0 ) of<<endl;
+		sprintf(temp,"%f ",arr[i]);
+		str.append(temp);
+		if( i%5==0 ) str.append("\n");
 	}
-	of<<endl;
+	str.append("\n");
 }
 
 void outputVTKScalar( const char name[], double arr[],int N, ofstream &of)
@@ -89,31 +91,54 @@ void NavierStokesSolver::OutputGrid()
 	//PetscPrintf(dataPartition->comm,"complete writing grid.dat\n");
 }
 
- /*******************************************************
-  *		parallel I/O
-  *		collective on MPI
-  *******************************************************/
-void NavierStokesSolver::writeTecZoneParallel(const string& title){
-	size_t charLen = TECPLOT_NVAR * Ncel + 256; //256: zone info length
-	char* tecBuffer = NULL;
-	stringstream _strm;
 
-	_strm<<"zone n="<<Nvrt<<", e="<<Ncel<<", VARLOCATION=([1-3]=NODAL,[4-"<<TECPLOT_NVAR<<"]=CELLCENTERED)"
-		<<"DATAPACKING=BLOCK, ZONETYPE=FEBRICK"
-		<<endl;
-	for( int j=0; j<3; j++ ){
-		for( int i=0; i<Nvrt; i++ ){
-			_strm<<Vert[i][j]<<" ";
-			if( i%5==0 ) _strm<<endl;
+
+
+void NavierStokesSolver::Output2Tecplot()
+{
+	ofstream of;
+	char tecTitle[256];
+	sprintf(tecTitle,"tec/res%04d.dat",int(this->outputCounter++));
+	of.open(tecTitle);
+	
+	string head;
+	char tmpchar[256];
+	sprintf(tmpchar,"variables= \"x\", \"y\", \"z\", \"p\", \"u\", \"v\", \"w\", \"ro\", \"T\",\"Ma\",\"mu\" ");
+	head = tmpchar;
+	if(TurModel==1){
+		sprintf(tmpchar,"\"te\", \"ed\"");
+		head.append(tmpchar);
+	}
+	head.append("\n");
+
+	if(dataPartition->comRank==root.rank){
+		of<<head;
+	}
+
+
+	/*****PRINTING OTHER PARTS...**********/
+
+	string tecBuffer;
+
+	sprintf(tmpchar,"ZONE N=%d, E=%d, VARLOCATION=([1-3]=NODAL,[4-%d]=CELLCENTERED) DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n",Nvrt,Ncel,field->nVar+2);
+	tecBuffer = tmpchar;
+
+	for( int i=0; i<Nvrt; i++ ){
+		for( int j=0; j<3; j++ ){
+			sprintf(tmpchar,"%f ",Vert[i][j]);
+			tecBuffer.append(tmpchar);
+			if( i%5==0 ) tecBuffer.append("\n");
 		}
+		tecBuffer.append("\n");
 	}	
 
-	OutArray2File( Pn,Ncel, _strm);
-	OutArray2File( Un,Ncel, _strm);
-	OutArray2File( Vn,Ncel, _strm);
-	OutArray2File( Wn,Ncel, _strm);
-	OutArray2File( Rn,Ncel, _strm);
-	OutArray2File( Tn,Ncel, _strm);
+
+	OutArray2File( Pn,Ncel, tecBuffer);
+	OutArray2File( Un,Ncel, tecBuffer);
+	OutArray2File( Vn,Ncel, tecBuffer);
+	OutArray2File( Wn,Ncel, tecBuffer);
+	OutArray2File( Rn,Ncel, tecBuffer);
+	OutArray2File( Tn,Ncel, tecBuffer);
 	
 	double* tmp = new double[Ncel];
 	for( int i=0; i<Ncel; i++ ){  // Mach / velocity magnitude
@@ -123,45 +148,37 @@ void NavierStokesSolver::writeTecZoneParallel(const string& title){
 			tmp[i]= sqrt( (Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]) ); 
 	}
 
-	OutArray2File( tmp,Ncel,_strm );
+	OutArray2File( tmp,Ncel,tecBuffer);
 	for(int i=0; i<Ncel; i++ ){  // mu
 		tmp[i]= VisLam[i] + VisTur[i];
 	}
-	OutArray2File( tmp,Ncel,_strm );
-	if( TurModel==1 ){
-		OutArray2File( TE,Ncel,_strm );
-		OutArray2File( ED,Ncel,_strm );
-	}
-
-	for(int i=0; i<Ncel; i++ ){
-		for( int j=0;j<8;j++ )
-			_strm<<Cell[i].vertices[j]+1<<" ";
-		_strm<<endl;
-	}
+	OutArray2File( tmp,Ncel,tecBuffer);
 	delete []tmp;
+	tmp=NULL;
 
-	tecBuffer = new char[charLen];
-	_strm >> tecBuffer;	
+	if( TurModel==1 ){
+		OutArray2File( TE,Ncel,tecBuffer );
+		OutArray2File( ED,Ncel,tecBuffer );
+	}
+
+	for(int i=0; i<Ncel; i++ ){ //connectivity
+			sprintf(tmpchar,"%d %d %d %d %d %d %d %d\n ",
+					Cell[i].vertices[0]+1,
+					Cell[i].vertices[1]+1,
+					Cell[i].vertices[2]+1,
+					Cell[i].vertices[3]+1,
+					Cell[i].vertices[4]+1,
+					Cell[i].vertices[5]+1,
+					Cell[i].vertices[6]+1,
+					Cell[i].vertices[7]+1
+					);
+			tecBuffer.append(tmpchar);
+	}
+
 	/*****************MPI PARALLEL I/O APIs*************************/
-
-	delete tecBuffer;
-}
-
-
-void NavierStokesSolver::Output2Tecplot()
-{
-	ofstream of;
-	char tecTitle[256];
-	sprintf(tecTitle,"res%04d.dat",int(this->outputCounter++));
-	of.open(tecTitle);
-
-	root.printTecplotHead(dataPartition,of);//root only
+	parallelWriteBuffer(tecTitle,tecBuffer,dataPartition, head.size());//collective
 	
-	writeTecZoneParallel(tecTitle);//collective call
-
-	/*****PRINTING OTHER PARTS...**********/
-
-
+	
 }
 
 
@@ -281,12 +298,19 @@ void NavierStokesSolver::Output2VTK( )
 }
 
 
+void NavierStokesSolver::writeTotFile(){
+	return; //to be implemented
+}
+
+
 void NavierStokesSolver::WriteBackupFile( )
 {
 	int i;
 	ofstream of;
-	cout<<"backup data..."<<endl;
-	of.open("res.sav");
+	char title[256];
+	sprintf(title,"localGeometryBackup_%d/res.sav",dataPartition->comRank);
+	of.open(title);
+	
 	for( i=0; i<Ncel; i++ )
 	{
 		of<<Rn[i]<<" "<<Un[i]<<" "<<Vn[i]<<" "<<Wn[i]

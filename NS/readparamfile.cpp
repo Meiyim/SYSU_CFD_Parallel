@@ -28,9 +28,9 @@ void NavierStokesSolver::ReadParamFile( )
 	
 	fin.open(title->c_str());
 	if( ! fin.is_open( ) ){
-		cout<<"param file does not exist!"<<endl;
-		exit(0);
+		errorHandler.fatalLogicError("param file not found\n check your input\n");
 	}
+	
 	int _linecounter=0;
 	while( getline( fin,str ) )
 	{

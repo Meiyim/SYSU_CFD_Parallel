@@ -239,7 +239,9 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	double residule;
 
 	MPI_Barrier(comm);
+#ifdef PETSC_SOLVE_VERBOSE
 	PetscPrintf(comm,"begin GMRES velocity solve\n");
+#endif
 
 	ierr = MatAssemblyEnd(Au,MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
 	//doubtful: Au Structurally Symmetric ???
@@ -283,14 +285,17 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
+#ifdef PETSC_SOLVE_VERBOSE
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - U converged in %d step! :)\n",iters);
+#endif
 	}
 	//VecView(bu,PETSC_VIEWER_STDOUT_WORLD);//debug
+
+#ifdef PETSC_SOLVE_VERBOSE
 	double unorm;
-	double vnorm;
-	double wnorm;
 	VecNorm(xsol,NORM_2,&unorm);
+#endif
 
 	//PetscPrintf(comm,"unorm:  %e\n",unorm);
 	//PetscPrintf(comm,"bnorm:  %e\n",bnorm);
@@ -318,11 +323,16 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
+#ifdef PETSC_SOLVE_VERBOSE
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - V converged in %d step! :)\n",iters);
+#endif
 	}
 
+#ifdef PETSC_SOLVE_VERBOSE
+	double vnorm;
 	VecNorm(xsol,NORM_2,&vnorm);
+#endif
 
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 
@@ -347,17 +357,23 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
+#ifdef PETSC_SOLVE_VERBOSE
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - W converged in %d step! :)\n",iters);
+#endif
 	}
-	VecNorm(xsol,NORM_2,&wnorm);
+	
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 
 	ierr = MatZeroEntries(Au);CHKERRQ(ierr);
 	
+#ifdef PETSC_SOLVE_VERBOSE
+	double wnorm;
+	VecNorm(xsol,NORM_2,&wnorm);
 	PetscPrintf(comm,"Unorm %f\n",unorm);
 	PetscPrintf(comm,"Vnorm %f\n",vnorm);
 	PetscPrintf(comm,"Wnorm %f\n",wnorm);
+#endif
 
 	return 0;	
 }
@@ -369,7 +385,9 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 	double residule;
 
 	MPI_Barrier(comm);
+#ifdef PETSC_SOLVE_VERBOSE
 	PetscPrintf(comm,"begin Pressure Correction solve\n");
+#endif
 
 
 	KSPSetOperators(ksp,Ap,Ap);
@@ -402,12 +420,14 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 	//ierr = VecAssemblyBegin(xdp);  CHKERRQ(ierr);// no need to assembly xdp
 	//ierr = VecAssemblyEnd(xdp); CHKERRQ(ierr);
 	
+#ifdef PETSC_SOLVE_VERBOSE
 	double bpnorm;
 	double matnorm;
 	VecNorm(bp,NORM_2,&bpnorm);
 	MatNorm(Ap,NORM_FROBENIUS,&matnorm);
 	PetscPrintf(comm,"bpnorm %e\n",bpnorm);
 	PetscPrintf(comm,"matnorm %e\n",matnorm);
+#endif
 
 	//ierr = VecView(bp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
@@ -428,13 +448,17 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 	}else if(reason ==0){
 		PetscPrintf(comm,"why is this program still running?\n");
 	}else{
+#ifdef PETSC_SOLVE_VERBOSE
 		KSPGetIterationNumber(ksp,&iters);
 		PetscPrintf(comm,"KSP GMRES - Pressure Correction converged in %d step! :)\n",iters);
+#endif
 	}
 
+#ifdef PETSC_SOLVE_VERBOSE
 	double pnorm;
 	VecNorm(xdp,NORM_2,&pnorm);
 	PetscPrintf(comm,"pnorm %e\n",pnorm);
+#endif
 	
 	return 0;
 

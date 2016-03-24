@@ -24,12 +24,6 @@ int NavierStokesSolver::CalculatePressure( )
 		errorHandler.fatalRuntimeError(temp);//perhaps calculation might continue?
 	}
 
-	
-
-	return 0;
-
-
-	
    	// update other variables
 	double* deltaP = NULL;
 	VecGetArray(dataPartition->xdp,&deltaP);
@@ -57,6 +51,12 @@ int NavierStokesSolver::CalculatePressure( )
         	Wn[i] -= coef*dPdX[i][2];
 	}
 
+	dataPartition->interfaceCommunication(Un);
+	dataPartition->interfaceCommunication(Vn);
+	dataPartition->interfaceCommunication(Wn);
+	dataPartition->interfaceCommunication(Pn);
+	dataPartition->interfaceCommunication(Rn);
+	
 	// correct face normal velocity to satify the mass balance equ
 	CorrectRUFace2( deltaP );
 	// SetBCVelocity( BRo,BU,BV,BW );
@@ -237,4 +237,23 @@ void NavierStokesSolver::CorrectRUFace2( double *dp )
 		RUFace[i] += -coef* ( dp2 - dp1 );
 	}
 	// check if sum of RUFace[i] in one cell is ZERO
+	/*
+	double *sum = new double[Ncel+dataPartition->nVirtualCell];
+	for(int i=0;i!=Ncel+dataPartition->nVirtualCell;++i){
+		sum[i] = 0.0;
+	}
+	
+	for(int i=0;i!=Nfac;++i){
+		c1 = Face[i].cell1;
+		c2 = Face[i].cell2;
+		if(c2<0) continue;
+		sum[c1] -=  RUFace[i];
+		sum[c2] += RUFace[i];
+	}
+	for(int i=0;i!=Ncel;++i){
+		dataPartition->PRINT_LOG(sum[i]);
+	}
+	delete []sum;
+	*/
+	return;
 }

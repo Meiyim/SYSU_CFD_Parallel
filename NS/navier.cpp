@@ -27,6 +27,7 @@ void NavierStokesSolver::NSSolve( )
 	if(IfSteady){
 		MaxOuterStep = MaxStep;
 	}
+	//MaxOuterStep=2;//test
     	for( step=1; step<=MaxStep; step++ ) //step : total time step
     	{
 		if( !IfSteady ){
@@ -38,9 +39,10 @@ void NavierStokesSolver::NSSolve( )
 			if( (iter-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
 			MPI_Barrier(dataPartition->comm);
 			
-			CalculateVelocity ( );
+			CalculateVelocity ( ); //interface communication U, V, W, Apr
 			
 			CalculatePressure ( ); //calculate deltaP and correct P,[R], U,V,W
+					       //interface communication U,V,W,P,R
 
 			/*
 			// scalar transportation
@@ -56,11 +58,7 @@ void NavierStokesSolver::NSSolve( )
 
 			ResMax = vec_max( Residual,10 );
 			//-----MPI interface communication-------//
-			dataPartition->interfaceCommunication(Un);
-			dataPartition->interfaceCommunication(Vn);
-			dataPartition->interfaceCommunication(Wn);
-			dataPartition->interfaceCommunication(Pn);
-			dataPartition->interfaceCommunication(Rn);
+
 			dataPartition->interfaceCommunication(Tn);
 			if(TurModel==1){
 				dataPartition->interfaceCommunication(TE);

@@ -1,13 +1,19 @@
 
 #include"navier.h"
-void OutArray2File(double arr[],int N, string& str){
-	char temp[256];
-	for(int i=0; i<N; i++ ){
-		sprintf(temp,"%f ",arr[i]);
-		str.append(temp);
-		if( i%5==0 ) str.append("\n");
+void OutArray2File(double arr[],int N, string& str,int step){
+	char* tmp = new char[20*N + (N/5)+1] ;
+	int posi = 0;
+	for(int i=0; i< N*step ; i+=step ){
+		sprintf(tmp+posi,"%19.5f ",arr[i]);
+		posi+=20;
+		if( (i/step)%5==4 ){
+			sprintf(tmp+posi,"\n");
+			posi++;
+		}
 	}
+	str.append(tmp);
 	str.append("\n");
+	delete []tmp;
 }
 
 void outputVTKScalar( const char name[], double arr[],int N, ofstream &of)
@@ -115,30 +121,27 @@ void NavierStokesSolver::Output2Tecplot()
 		of<<head;
 	}
 
+	MPI_Barrier(dataPartition->comm);
 
 	/*****PRINTING OTHER PARTS...**********/
 
 	string tecBuffer;
 
-	sprintf(tmpchar,"ZONE N=%d, E=%d, VARLOCATION=([1-3]=NODAL,[4-%d]=CELLCENTERED) DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n",Nvrt,Ncel,field->nVar+2);
+	sprintf(tmpchar,"ZONE N=%d, E=%d, VARLOCATION=([1-3]=NODAL,[4-%d]=CELLCENTERED) DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n",Nvrt,Ncel,3+field->nVar+2);
 	tecBuffer = tmpchar;
 
-	for( int i=0; i<Nvrt; i++ ){
-		for( int j=0; j<3; j++ ){
-			sprintf(tmpchar,"%f ",Vert[i][j]);
-			tecBuffer.append(tmpchar);
-			if( i%5==0 ) tecBuffer.append("\n");
-		}
-		tecBuffer.append("\n");
-	}	
 
 
-	OutArray2File( Pn,Ncel, tecBuffer);
-	OutArray2File( Un,Ncel, tecBuffer);
-	OutArray2File( Vn,Ncel, tecBuffer);
-	OutArray2File( Wn,Ncel, tecBuffer);
-	OutArray2File( Rn,Ncel, tecBuffer);
-	OutArray2File( Tn,Ncel, tecBuffer);
+	OutArray2File(Vert[0]+0,Nvrt,tecBuffer,3);//x
+	OutArray2File(Vert[0]+1,Nvrt,tecBuffer,3);//y
+	OutArray2File(Vert[0]+2,Nvrt,tecBuffer,3);//z
+
+	OutArray2File( Pn,Ncel, tecBuffer,1);
+	OutArray2File( Un,Ncel, tecBuffer,1);
+	OutArray2File( Vn,Ncel, tecBuffer,1);
+	OutArray2File( Wn,Ncel, tecBuffer,1);
+	OutArray2File( Rn,Ncel, tecBuffer,1);
+	OutArray2File( Tn,Ncel, tecBuffer,1);
 	
 	double* tmp = new double[Ncel];
 	for( int i=0; i<Ncel; i++ ){  // Mach / velocity magnitude
@@ -148,17 +151,17 @@ void NavierStokesSolver::Output2Tecplot()
 			tmp[i]= sqrt( (Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]) ); 
 	}
 
-	OutArray2File( tmp,Ncel,tecBuffer);
+	OutArray2File( tmp,Ncel,tecBuffer,1);
 	for(int i=0; i<Ncel; i++ ){  // mu
 		tmp[i]= VisLam[i] + VisTur[i];
 	}
-	OutArray2File( tmp,Ncel,tecBuffer);
+	OutArray2File( tmp,Ncel,tecBuffer,1);
 	delete []tmp;
 	tmp=NULL;
 
 	if( TurModel==1 ){
-		OutArray2File( TE,Ncel,tecBuffer );
-		OutArray2File( ED,Ncel,tecBuffer );
+		OutArray2File( TE,Ncel,tecBuffer,1 );
+		OutArray2File( ED,Ncel,tecBuffer,1 );
 	}
 
 	for(int i=0; i<Ncel; i++ ){ //connectivity

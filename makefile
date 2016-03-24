@@ -36,7 +36,7 @@ include ${PETSC_DIR}/lib/petsc/conf/variables
 include ${PETSC_DIR}/lib/petsc/conf/rules
 
 play: 
-	mpirun -np 4 ./cycas2 
+	mpirun -np 2 ./cycas2 
 
 cl:
 	${RM} $(BIN)*.o

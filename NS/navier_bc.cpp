@@ -54,53 +54,60 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 
 	// correct outlet boundary condition
 	if( DensityModel==0 ){
-	double massflowin=0., massflowout=0., rate, areaout=0.;
-	for( i=0; i<Nbnd; i++ )
-	{
-		rid   = Bnd[i].rid;
-		iface = Bnd[i].face;
-		if( rid==2 )
-			massflowin  += br[i]*( bu[i]*Face[iface].n[0] +
-							       bv[i]*Face[iface].n[1] +
-								   bw[i]*Face[iface].n[2] );
-		else if( rid==3 ){
-			massflowout += br[i]*( bu[i]*Face[iface].n[0] +
-							       bv[i]*Face[iface].n[1] +
-								   bw[i]*Face[iface].n[2] );
-			areaout += br[i]*Face[i].area;
-		}
-	}
-	if( massflowout>SMALL ){
-		rate = - massflowin / massflowout;
+		double localSum[3] = {0.0, 0.0, 0.0};
+		double globalSum[3] = {0.0, 0.0, 0.0};
+		double &massflowin=localSum[0], &massflowout=localSum[1], &areaout=localSum[2];
+		double &massflowinGlobal = globalSum[0], &massflowoutGlobal=globalSum[1],&areaoutGlobal=globalSum[2];
+		double rate;
 		for( i=0; i<Nbnd; i++ )
 		{
 			rid   = Bnd[i].rid;
 			iface = Bnd[i].face;
-			ic    = Face[iface].cell1;
-			if( rid==3 )
-			{
-				BU[iface] *= rate ;
-				BV[iface] *= rate ;
-				BW[iface] *= rate ;
+			if( rid==2 )
+				massflowin  += br[i]*( 	bu[i]*Face[iface].n[0] +
+						       	bv[i]*Face[iface].n[1] +
+							bw[i]*Face[iface].n[2] );
+			else if( rid==3 ){
+				massflowout += br[i]*( bu[i]*Face[iface].n[0] +
+						       bv[i]*Face[iface].n[1] +
+			                               bw[i]*Face[iface].n[2] );
+				areaout += br[i]*Face[i].area;
 			}
 		}
-	}
-	else
-	{
-		rate = (-massflowin - massflowout)/areaout;
-		for( i=0; i<Nbnd; i++ )
+		//MPI communication
+		MPI_Allreduce(localSum,globalSum,3,MPI_DOUBLE,MPI_SUM,dataPartition->comm);	
+		//
+		if( massflowoutGlobal>SMALL ){
+			rate = - massflowinGlobal / massflowoutGlobal;
+			for( i=0; i<Nbnd; i++ )
+			{
+				rid   = Bnd[i].rid;
+				iface = Bnd[i].face;
+				ic    = Face[iface].cell1;
+				if( rid==3 )
+				{
+					BU[iface] *= rate ;
+					BV[iface] *= rate ;
+					BW[iface] *= rate ;
+				}
+			}
+		}
+		else
 		{
-			rid   = Bnd[i].rid;
-			iface = Bnd[i].face;
-			ic    = Face[iface].cell1;
-			if( rid==3 )
+			rate = (-massflowinGlobal - massflowoutGlobal)/areaoutGlobal;
+			for( i=0; i<Nbnd; i++ )
 			{
-				BU[iface] += rate * Face[iface].n[0]/Face[iface].area;
-				BV[iface] += rate * Face[iface].n[1]/Face[iface].area;
-				BW[iface] += rate * Face[iface].n[2]/Face[iface].area;
+				rid   = Bnd[i].rid;
+				iface = Bnd[i].face;
+				ic    = Face[iface].cell1;
+				if( rid==3 )
+				{
+					BU[iface] += rate * Face[iface].n[0]/Face[iface].area;
+					BV[iface] += rate * Face[iface].n[1]/Face[iface].area;
+					BW[iface] += rate * Face[iface].n[2]/Face[iface].area;
+				}
 			}
 		}
-	}
 	}
 }
 

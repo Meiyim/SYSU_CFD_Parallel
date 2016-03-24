@@ -29,14 +29,15 @@ void NavierStokesSolver::NSSolve( )
 	}
     	for( step=1; step<=MaxStep; step++ ) //step : total time step
     	{
-		if( (step-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
 		if( !IfSteady ){
 			SaveTransientOldData( );
 		}
 
 		// outer iteration, drive residual to zero for every physical time step
 		for( iter=1; iter<MaxOuterStep; iter++ ){
+			if( (iter-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
 			MPI_Barrier(dataPartition->comm);
+			
 			CalculateVelocity ( );
 			
 			CalculatePressure ( ); //calculate deltaP and correct P,[R], U,V,W
@@ -69,11 +70,6 @@ void NavierStokesSolver::NSSolve( )
 			dataPartition->interfaceCommunication(VisLam);
 			dataPartition->interfaceCommunication(VisTur);
 
-			/*-----------record,tot file, restart file, etc.----------*/
-			writeTotFile();
-			if( shouldBackup(iter,cur_time) )
-				WriteBackupFile();
-
 			/*-----------check if should break----------*/
 			if( IfSteady ){
 				//steady
@@ -87,17 +83,23 @@ void NavierStokesSolver::NSSolve( )
 					break; // more reasonal to break : order drop 2
 				}
 			}
-			if( shouldPostProcess(iter,cur_time) ){
-				PetscPrintf(dataPartition->comm,"ouput...\n");
-				Output2Tecplot();
-				/*
-				tend   = ttime( );
-				tstart = tend;
-				if( outputFormat==0 ) Output2Tecplot ( );  // exit(0);
-				if( outputFormat==1 ) Output2VTK     ( );
-				WriteBackupFile( );
-				*/
-			}
+
+		}
+		
+		/*-----------record,tot file, restart file, etc.----------*/
+		writeTotFile();
+		if( shouldBackup(step,cur_time) )
+			WriteBackupFile();
+		if( shouldPostProcess(step,cur_time) ){
+			PetscPrintf(dataPartition->comm,"ouput...\n");
+			Output2Tecplot();
+			/*
+			tend   = ttime( );
+			tstart = tend;
+			if( outputFormat==0 ) Output2Tecplot ( );  // exit(0);
+			if( outputFormat==1 ) Output2VTK     ( );
+			WriteBackupFile( );
+			*/
 		}
 
 		if(cur_time >= total_time){
@@ -115,7 +117,7 @@ void NavierStokesSolver::NSSolve( )
 //	determint if should output to tecplot, vtk...
 /*******************************************************/
 bool NavierStokesSolver::shouldBackup(int step,double now){
-	return step%noutput == 0;
+	return (step-1)%noutput == 0;
 }
 
 
@@ -124,7 +126,7 @@ bool NavierStokesSolver::shouldBackup(int step,double now){
 //	currently the same frequency as post process
 /*******************************************************/
 bool NavierStokesSolver::shouldPostProcess(int step, double now){
-	return step%noutput == 0;
+	return (step-1)%noutput == 0;
 }
 
 
@@ -632,11 +634,9 @@ NavierStokesSolver::~NavierStokesSolver()
 	// output the result before error
 	// Output2Tecplot ();
 	
-	PetscPrintf(dataPartition->comm,"clean up NavierStokesSolver\n");
 	delete field;
 	delete oldField;
 	delete oldField2;
-	PetscPrintf(dataPartition->comm,"clean up NavierStokesSolver\n");
 	
 
 	delete []iOptions;
@@ -704,7 +704,6 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] RUFace;
 	/*****************THIS PART IS ADDED BY CHENXUYI*******************/
 
-	PetscPrintf(dataPartition->comm,"clean up NavierStokesSolver\n");
 	
 	delete dataPartition;
 

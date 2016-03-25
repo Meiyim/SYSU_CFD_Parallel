@@ -15,14 +15,12 @@ int DataPartition::initPetsc(){ //collcetive
 	ierr = VecDuplicate(bu,&bw);CHKERRQ(ierr);
 	ierr = VecDuplicate(bu,&bp);CHKERRQ(ierr);
 	ierr = VecDuplicate(bu,&bs);CHKERRQ(ierr);
-	ierr = VecDuplicate(bu,&xdp);CHKERRQ(ierr);
 
 	ierr = VecSet(bu,0.0);CHKERRQ(ierr);
 	ierr = VecSet(bv,0.0);CHKERRQ(ierr);
 	ierr = VecSet(bw,0.0);CHKERRQ(ierr);
 	ierr = VecSet(bp,0.0);CHKERRQ(ierr);
 	ierr = VecSet(bs,0.0);CHKERRQ(ierr);
-	ierr = VecSet(xdp,0.0);CHKERRQ(ierr);
 
 
 	//init PETSC mat
@@ -59,7 +57,6 @@ int DataPartition::deinit(){
 	ierr = VecDestroy(&bw);CHKERRQ(ierr);
 	ierr = VecDestroy(&bp);CHKERRQ(ierr);
 	ierr = VecDestroy(&bs);CHKERRQ(ierr);
-	ierr = VecDestroy(&xdp);CHKERRQ(ierr);
 
 	ierr = MatDestroy(&Au);CHKERRQ(ierr);
 	ierr = MatDestroy(&Ap);CHKERRQ(ierr);
@@ -297,8 +294,6 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	VecNorm(xsol,NORM_2,&unorm);
 #endif
 
-	//PetscPrintf(comm,"unorm:  %e\n",unorm);
-	//PetscPrintf(comm,"bnorm:  %e\n",bnorm);
 	
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 	
@@ -362,24 +357,24 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 		PetscPrintf(comm,"KSP GMRES - W converged in %d step! :)\n",iters);
 #endif
 	}
-	
-	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
-
-	ierr = MatZeroEntries(Au);CHKERRQ(ierr);
-	
 #ifdef PETSC_SOLVE_VERBOSE
 	double wnorm;
 	VecNorm(xsol,NORM_2,&wnorm);
 	PetscPrintf(comm,"Unorm %f\n",unorm);
 	PetscPrintf(comm,"Vnorm %f\n",vnorm);
 	PetscPrintf(comm,"Wnorm %f\n",wnorm);
-#endif
+#endif	
+	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
+
+	ierr = MatZeroEntries(Au);CHKERRQ(ierr);
+	
+
 
 	return 0;	
 }
 
 
-int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmetric){
+int DataPartition::solvePressureCorrection(double tol, int maxIter,double const* xp,bool isSymmetric){
 	KSPConvergedReason reason;
 	int iters;
 	double residule;
@@ -417,16 +412,13 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 	/***************************************
 	 * 	SOLVE Pressure Correction!
 	 ***************************************/
-	//ierr = VecAssemblyBegin(xdp);  CHKERRQ(ierr);// no need to assembly xdp
-	//ierr = VecAssemblyEnd(xdp); CHKERRQ(ierr);
+	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xp,&xsol);CHKERRQ(ierr); 
+	ierr = VecAssemblyBegin(xsol);			CHKERRQ(ierr);
 	
 #ifdef PETSC_SOLVE_VERBOSE
 	double bpnorm;
-	double matnorm;
 	VecNorm(bp,NORM_2,&bpnorm);
-	MatNorm(Ap,NORM_FROBENIUS,&matnorm);
 	PetscPrintf(comm,"bpnorm %e\n",bpnorm);
-	PetscPrintf(comm,"matnorm %e\n",matnorm);
 #endif
 
 	//ierr = VecView(bp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
@@ -435,11 +427,9 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 
 	//ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 	
-	ierr = KSPSolve(ksp,bp,xdp);CHKERRQ(ierr);
-
+	ierr = KSPSolve(ksp,bp,xsol);CHKERRQ(ierr);
 
 	KSPGetConvergedReason(ksp,&reason);
-
 
 	if(reason<0){
 		KSPGetIterationNumber(ksp,&iters);
@@ -456,9 +446,13 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,bool isSymmet
 
 #ifdef PETSC_SOLVE_VERBOSE
 	double pnorm;
-	VecNorm(xdp,NORM_2,&pnorm);
+	VecNorm(xsol,NORM_2,&pnorm);
 	PetscPrintf(comm,"pnorm %e\n",pnorm);
 #endif
+	
+	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
+	ierr = MatZeroEntries(Ap);CHKERRQ(ierr);
+	
 	
 	return 0;
 

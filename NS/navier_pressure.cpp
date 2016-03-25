@@ -14,10 +14,11 @@ int NavierStokesSolver::CalculatePressure( )
 	// Build matrix
 	BuildPressureMatrix(dataPartition->Ap,dataPartition->bp );
 
+	
 	//Solve Matrix
 	// Solve pressure Poisson equation. Symmetric sparse linear equations solver
 	try{
-		dataPartition->solvePressureCorrection(1.e-9,1000,DensityModel==0);
+		dataPartition->solvePressureCorrection(1.e-9,1000,deltaP,DensityModel==0);
 	}catch(ConvergeError& err){
 		char temp[256];	
 		sprintf(temp,"%s not converge in iter: %d, res %f\n",err.varname.c_str(),err.iter,err.residual);
@@ -25,19 +26,26 @@ int NavierStokesSolver::CalculatePressure( )
 	}
 
    	// update other variables
-	double* deltaP = NULL;
-	VecGetArray(dataPartition->xdp,&deltaP);
+	
+	dataPartition->interfaceCommunication(deltaP);
+
    	SetBCDeltaP( BPre,deltaP);
         Gradient   ( deltaP, BPre, dPdX );  // note the first parameter
 
-	Residual[3] = 0;
+	double deltaP_reference = 0.0;
+	if(dataPartition->comRank == root.rank){//in root:
+		deltaP_reference = deltaP[cellPressureRef];
+	}
+
+	MPI_Bcast(&deltaP_reference,1,MPI_DOUBLE,root.rank,dataPartition->comm);//communicate to get reference point data;
+
 	for( i=0; i<Ncel; i++ )//optimizeable
 	{
-		Residual[3] += fabs( deltaP[i] - deltaP[cellPressureRef] )*Cell[i].vol;
+		localRes[3] += fabs( deltaP[i] - deltaP_reference )*Cell[i].vol;
 	
 		// pressure (and density) correction
 		if(      DensityModel==0 )
-			Pn[i] +=  URF[3] * (deltaP[i]-deltaP[cellPressureRef]);  //under-relaxation factor: 
+			Pn[i] +=  URF[3] * (deltaP[i]-deltaP_reference);  //under-relaxation factor: 
 		else if( DensityModel==1 ){ // perfect gas
 			Pn[i] +=  URF[3] *  deltaP[i];
 			Rn[i] += deltaP[i]/(Rcpcv*Tn[i]);
@@ -56,13 +64,23 @@ int NavierStokesSolver::CalculatePressure( )
 	dataPartition->interfaceCommunication(Wn);
 	dataPartition->interfaceCommunication(Pn);
 	dataPartition->interfaceCommunication(Rn);
-	
+
+	/*
+	printf("deltaP ref  %e\n",deltaP_reference);
+	checkArray(deltaP,Ncel,"deltaP");
+	checkArray(Rn,Ncel,"R'");
+	checkArray(Pn,Ncel,"P'");
+	checkArray(Un,Ncel,"U'");	
+	checkArray(Vn,Ncel,"V'");	
+	checkArray(Wn,Ncel,"W'");	
+	*/
+
+
 	// correct face normal velocity to satify the mass balance equ
 	CorrectRUFace2( deltaP );
 	// SetBCVelocity( BRo,BU,BV,BW );
 	// CalRUFace2( );
 	
-	VecRestoreArray(dataPartition->xdp, &deltaP);
 	return 0;
 }
 
@@ -197,8 +215,8 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 
 	//begin assembly
 	MatAssemblyBegin(Ap,MAT_FINAL_ASSEMBLY);
-	MatAssemblyEnd(Ap,MAT_FINAL_ASSEMBLY);
 	VecAssemblyBegin(bp);
+	MatAssemblyEnd(Ap,MAT_FINAL_ASSEMBLY);
 	VecAssemblyEnd(bp);
 
 }
@@ -253,7 +271,7 @@ void NavierStokesSolver::CorrectRUFace2( double *dp )
 	for(int i=0;i!=Ncel;++i){
 		dataPartition->PRINT_LOG(sum[i]);
 	}
+	checkArray(sum,Ncel,"sumRUFace");
 	delete []sum;
 	*/
-	return;
 }

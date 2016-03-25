@@ -17,6 +17,7 @@
 #ifndef _DATA_PROCESS_H_
 #define _DATA_PROCESS_H_
 
+
 #define MAX_ROW 5
 #define MAX_LOCAL_PREALLOCATION 7
 #define ELEMENT_TAG_LEN 2
@@ -134,7 +135,6 @@ public:
 	Vec bp;
 	Vec bs;   //universal scarlar solver
 
-	Vec xdp;  //for pressure correction
 
 	Vec xsol; //determined when solve
 
@@ -196,7 +196,7 @@ public:
 
 	int solveVelocity_GMRES(double tol,int maxIter,double const* xu,double const* xv,double const* xw); //return 0 if good solve, retrun 1 if not converge
 
-	int solvePressureCorrection(double tol, int maxIter,bool isSymmetric);
+	int solvePressureCorrection(double tol, int maxIter,double const* xp,bool isSymmetric);
 
 	
 	/*************MPI INTERFACE COMMUNICATION***********************

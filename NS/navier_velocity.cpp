@@ -14,7 +14,6 @@ int NavierStokesSolver::CalculateVelocity( )
 //	ofstream of;
 	
 
-    	for( i=0; i<10; i++ ) Residual[i]= 0.;
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
 	BuildVelocityMatrix(dataPartition->Au,dataPartition->bu,dataPartition->bv,dataPartition->bw );
 	
@@ -42,14 +41,11 @@ int NavierStokesSolver::CalculateVelocity( )
 	dataPartition->interfaceCommunication(Wn);
 	dataPartition->interfaceCommunication(Apr);
 	
-	Residual[0] = 0.0;
-	Residual[1] = 0.0;
-	Residual[2] = 0.0;
 
 	for(int i=0;i!=Ncel;++i){//optimizeable
-		Residual[0] += fabs(_array1[i]-Un[i])*Cell[i].vol;
-		Residual[1] += fabs(_array2[i]-Vn[i])*Cell[i].vol;
-		Residual[2] += fabs(_array3[i]-Wn[i])*Cell[i].vol;
+		localRes[0] += fabs(_array1[i]-Un[i])*Cell[i].vol;
+		localRes[1] += fabs(_array2[i]-Vn[i])*Cell[i].vol;
+		localRes[2] += fabs(_array3[i]-Wn[i])*Cell[i].vol;
 	}
 
 	delete [] _array1;

@@ -111,7 +111,7 @@ void checkArray(T* arr, size_t len,char* name){
 	MPI_Reduce(&ret,&reduceResult,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);	
 	
 	char temp[256];
-	sprintf(temp,"%s: norm %e\n",name,reduceResult);
+	sprintf(temp,"%s: norm %30.9e\n",name,sqrt(reduceResult));
 	PetscPrintf(MPI_COMM_WORLD,"%s",temp);
 }
 
@@ -127,7 +127,7 @@ void checkMemberArray(T* arr, size_t len, double T::* m_ptr,char* name){
 	MPI_Reduce(&ret,&reduceResult,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);	
 	
 	char temp[256];
-	sprintf(temp,"%s: norm %e\n",name,reduceResult);
+	sprintf(temp,"%s: norm %30.9e\n",name,sqrt(reduceResult));
 	PetscPrintf(MPI_COMM_WORLD,"%s",temp);
 }
 

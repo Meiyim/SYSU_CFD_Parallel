@@ -762,6 +762,7 @@ int NavierStokesSolver::CheckAndAllocate()
 		}
 	}
 
+	deltaP = new double[Ncel+nVirtualCell];
 	VisLam = new double[Ncel+nVirtualCell];
 	VisTur = new double[Ncel+nVirtualCell];
 	dPdX   = new_Array2D<double>(Ncel+nVirtualCell,3);

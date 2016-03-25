@@ -12,7 +12,7 @@
 #include "../MPIStructure.h"
 #include "tools.h"
 
-
+#define RESIDUAL_LEN 10
 
 
 using std::cout;
@@ -61,7 +61,7 @@ public:
 	int& noutput;		// output step
 	int& outputFormat;	// 0 for tec; 1 for vtk
 	int& Nspecies;
-	int& cellPressureRef;
+	int& cellPressureRef;   //the reference point should be in root.rank! CXY: the reference point might differ from serial version
 	int& MaxStep;      
 	int     *rtable;//[100];				// preset rtables only used with debugging
 
@@ -91,7 +91,7 @@ public:
 
     	// --- time evolution
 	int    step;
-    	double cur_time, Residual[10],ResidualSteady;
+    	double cur_time, Residual[RESIDUAL_LEN],localRes[RESIDUAL_LEN],ResidualSteady;
 
 
     	// geometry, local, build from mesh files
@@ -105,7 +105,7 @@ public:
 	/**************POINTERS TO this->field*******************/
     	// physical variables at cell center, all local
 	double  *Rn, *Un, *Vn, *Wn, *Tn, *TE, *ED,**RSn;     // primitive vars CXY: this vars is to be replaced by DataPartition
-	double  *Pn;//not a part of the flow field
+	double  *Pn;
 
 	/**************POINTERS TO this->oldfield*******************/
 	// dual time unsteady simulation backup data, p = previous
@@ -116,6 +116,7 @@ public:
 	double  *Rnp2,*Unp2, *Vnp2, *Wnp2, *Tnp2, *TEp2, *EDp2,**RSnp2;   // BDF 2nd
 
 
+	double *deltaP;
 	double  *VisLam, *VisTur;
 	double  **dPdX, **dUdX,**dVdX,**dWdX, *Apr, **dPhidX	;
 	// variables at face center
@@ -211,8 +212,8 @@ private:
 	//initiation
 	void ReadParamFile   ( );
 	//post process
-	bool shouldPostProcess(int step,double now);		//should output
-	bool shouldBackup(int step,double now);
+	bool shouldPostProcess(int step,int iter,double now);		//should output
+	bool shouldBackup(int step,int iter,double now);
 };
 
 namespace TurKEpsilonVar

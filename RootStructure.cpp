@@ -569,11 +569,11 @@ void RootProcess::printStepStatus(DataPartition*dg, int step,int piter ,double t
 	if(dg->comRank!=rank) return;
 	printf("%15f\t%10d\t%10d\t%13.5f\t%13.5f\n",time,step,piter,dt,res);
 }
-void RootProcess::printSteadyStatus(DataPartition*dg,int step,double res){
+void RootProcess::printSteadyStatus(DataPartition*dg,int outiter,double res){
 	if(dg->comRank!=rank) return;
-	printf("%15s\t%10d\t%10s\t%13s\t%15f\n","---",step,"---","---",res);
+	printf("%15s\t%10s\t%10d\t%13s\t%15f\n","---","---",outiter,"---",res);
 }
 void RootProcess::printSectionHead(DataPartition* dg,double timeElapse){;
 	if(dg->comRank!=rank) return;
-	printf("%15s\t%10s\t%10s\t%13s\t%15s\n","TIME","CAL STEPE","ITER","DELT","MAX RES");
+	printf("%15s\t%10s\t%10s\t%13s\t%15s\n","TIME","CAL STEP","ITER","DELT","MAX RES");
 }

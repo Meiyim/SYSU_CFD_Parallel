@@ -39,6 +39,9 @@ void NavierStokesSolver::NSSolve( )
 			if( (iter-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
 			MPI_Barrier(dataPartition->comm);
 			
+			std::fill(localRes,localRes+RESIDUAL_LEN,0.0);
+			std::fill(Residual,Residual+RESIDUAL_LEN,0.0);
+			
 			CalculateVelocity ( ); //interface communication U, V, W, Apr
 			
 			CalculatePressure ( ); //calculate deltaP and correct P,[R], U,V,W
@@ -56,8 +59,8 @@ void NavierStokesSolver::NSSolve( )
 			//    e.g., condensation, combustion, wall heat conduction
 			*/
 
-			ResMax = vec_max( Residual,10 );
 			//-----MPI interface communication-------//
+			
 
 			dataPartition->interfaceCommunication(Tn);
 			if(TurModel==1){
@@ -67,8 +70,25 @@ void NavierStokesSolver::NSSolve( )
 			
 			dataPartition->interfaceCommunication(VisLam);
 			dataPartition->interfaceCommunication(VisTur);
-
+			//------------   Record   ------------//
+			if( shouldBackup(step,iter,cur_time) )
+				WriteBackupFile();
+			if( shouldPostProcess(step,iter,cur_time) ){
+				PetscPrintf(dataPartition->comm,"ouput...\n");
+				Output2Tecplot();
+				/*
+				tend   = ttime( );
+				tstart = tend;
+				if( outputFormat==0 ) Output2Tecplot ( );  // exit(0);
+				if( outputFormat==1 ) Output2VTK     ( );
+				WriteBackupFile( );
+				*/
+			}
 			/*-----------check if should break----------*/
+			MPI_Allreduce(localRes,Residual,RESIDUAL_LEN,MPI_DOUBLE,MPI_SUM,dataPartition->comm);
+
+			ResMax = vec_max( Residual,RESIDUAL_LEN );
+			
 			if( IfSteady ){
 				//steady
 				root.printSteadyStatus(dataPartition,iter,ResMax);
@@ -86,19 +106,7 @@ void NavierStokesSolver::NSSolve( )
 		
 		/*-----------record,tot file, restart file, etc.----------*/
 		writeTotFile();
-		if( shouldBackup(step,cur_time) )
-			WriteBackupFile();
-		if( shouldPostProcess(step,cur_time) ){
-			PetscPrintf(dataPartition->comm,"ouput...\n");
-			Output2Tecplot();
-			/*
-			tend   = ttime( );
-			tstart = tend;
-			if( outputFormat==0 ) Output2Tecplot ( );  // exit(0);
-			if( outputFormat==1 ) Output2VTK     ( );
-			WriteBackupFile( );
-			*/
-		}
+
 
 		if(cur_time >= total_time){
 			root.printEnding(dataPartition);
@@ -114,8 +122,13 @@ void NavierStokesSolver::NSSolve( )
 /*******************************************************/
 //	determint if should output to tecplot, vtk...
 /*******************************************************/
-bool NavierStokesSolver::shouldBackup(int step,double now){
-	return (step-1)%noutput == 0;
+bool NavierStokesSolver::shouldBackup(int timestep,int outiter,double now){
+	if(IfSteady){
+		return (outiter-1)%noutput == 0;
+	}else{
+		return false;
+	}
+
 }
 
 
@@ -123,8 +136,12 @@ bool NavierStokesSolver::shouldBackup(int step,double now){
 //	determint if should backUp
 //	currently the same frequency as post process
 /*******************************************************/
-bool NavierStokesSolver::shouldPostProcess(int step, double now){
-	return (step-1)%noutput == 0;
+bool NavierStokesSolver::shouldPostProcess(int timestep,int outiter, double now){
+	if(IfSteady){
+		return (outiter-1)%noutput == 0;
+	}else{
+		return false;
+	}
 }
 
 
@@ -470,6 +487,8 @@ void NavierStokesSolver::InitFlowField( ){
 			}
 		}
 	}
+	std::fill(deltaP,deltaP+Ncel,0.0);
+
 	// change grid boundary to actual boundary
 	int rid;  // rtable[10]={0,1,2,3,4,0},
 	for( i=0; i<Nbnd; i++ )
@@ -493,6 +512,7 @@ void NavierStokesSolver::InitFlowField( ){
 		dataPartition->interfaceCommunication(ED);
 	}
 	
+	dataPartition->interfaceCommunication(deltaP);
 	dataPartition->interfaceCommunication(VisLam);
 	dataPartition->interfaceCommunication(VisTur);
 }
@@ -614,6 +634,7 @@ NavierStokesSolver::NavierStokesSolver():
 	Rnp(NULL),Unp(NULL),Vnp(NULL),Wnp(NULL),Tnp(NULL),TEp(NULL),EDp(NULL),RSnp(NULL),
 	Rnp2(NULL),Unp2(NULL),Vnp2(NULL),Wnp2(NULL),Tnp2(NULL),TEp2(NULL),EDp2(NULL),RSnp2(NULL),
 
+	deltaP(NULL),
 	VisLam(NULL),VisTur(NULL),
 	dPdX(NULL),dUdX(NULL),dVdX(NULL),dWdX(NULL),Apr(NULL),dPhidX(NULL),
 
@@ -678,6 +699,7 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete_Array2D(RSnp2,Nspecies,Ncel);
 	*/
 
+	delete [] deltaP;
 	delete [] VisLam;
 	delete [] VisTur;
 	delete_Array2D( dPdX,Ncel,3 );

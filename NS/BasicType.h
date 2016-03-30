@@ -1,5 +1,6 @@
 #include<iostream>
 #include<petscksp.h>
+#include<limits>
 #include<numeric>
 /********************************************************
  * define the basic type in NavierStorkesSolver
@@ -107,7 +108,7 @@ public:
 			speciesSize = size2;
 			speciesField = new double[speciesSize*size1];
 			RS = new double* [size2];
-			for(int i=0;i!=size2;++i){
+			for(size_t i=0;i!=size2;++i){
 				RS[i] = speciesField + i*size1;
 			}
 		}

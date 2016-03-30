@@ -22,11 +22,7 @@
 #define MAX_LOCAL_PREALLOCATION 7
 #define ELEMENT_TAG_LEN 2
 
-#ifdef CYCAS_DEBUG_MODE
-#define CHECK(err) if(err!=MPI_SUCCESS) throwError("MPI_ERROR");
-#else
-#define CHECK(err)
-#endif
+#define CHECK(err) 
 
 #define PRINT_LOG(VAR) printlog(VAR,#VAR)
 
@@ -92,12 +88,12 @@ public:
 	}
 
 	// MPI non blocking communication method !
-	int send(MPI_Request* ,CellData* phi); 		 // non-blocking method!! return immediatly
-	int recv(MPI_Request* ,CellData* phi); 		 // non-blocking method!! return immediatly
-	int send(MPI_Request* ,double* phi); 		 // non-blocking method!! return immediatly
-	int recv(MPI_Request* ,double* phi); 		 // non-blocking method!! return immediatly
-	int send(MPI_Request* ,double* phi[3]); 		 // non-blocking method!! return immediatly
-	int recv(MPI_Request* ,double* phi[3]); 		 // non-blocking method!! return immediatly
+	int send(MPI_Request* ,CellData* phi,int tag); 		 // non-blocking method!! return immediatly
+	int recv(MPI_Request* ,CellData* phi,int tag); 		 // non-blocking method!! return immediatly
+	int send(MPI_Request* ,double* phi, int tag); 		 // non-blocking method!! return immediatly
+	int recv(MPI_Request* ,double* phi, int tag); 		 // non-blocking method!! return immediatly
+	int send(MPI_Request* ,double* phi[3], int tag); 		 // non-blocking method!! return immediatly
+	int recv(MPI_Request* ,double* phi[3], int tag); 		 // non-blocking method!! return immediatly
 
 	void getData(CellData* phi);
 	void getData(double* phi);
@@ -159,6 +155,8 @@ public:
 	int nProcess;   // number of partitions
 	int* gridList;  //size of nProcess , gridList[comRank] == nLocal;
 
+	vector<MPI_Request> requests;
+	int tagCounter; //used in interface communication
 	/**********INTERFACE INFO**************/
 	map<int,Interface> interfaces; //<partID,Interface>
 
@@ -169,7 +167,8 @@ public:
 		nGlobal(0),
 		nProcess(0),
 		gridList(NULL),
-		errorCounter(0)
+		tagCounter(0)
+		
 	{
 		mpiErr = MPI_Comm_rank(comm,&comRank);CHECK(mpiErr)
 		mpiErr = MPI_Comm_size(comm,&comSize);CHECK(mpiErr)
@@ -203,7 +202,7 @@ public:
 	 *	collective
 	 ***************************************************************/
 	template<typename T>
-	int interfaceCommunication(T var){
+	int interfaceCommunicationBegin(T var){
 		MPI_Barrier(comm);
 		size_t nInter = interfaces.size();
 		MPI_Request* sendReq = new MPI_Request[nInter];	
@@ -211,31 +210,34 @@ public:
 		size_t reqCounter = 0;
 		for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
 			Interface& _inter = iter->second;
-			_inter.send(sendReq+reqCounter,var);//non-blocking...
-			_inter.recv(recvReq+reqCounter,var);//non-blocking
+			_inter.send(sendReq+reqCounter,var,tagCounter);//non-blocking...
+			_inter.recv(recvReq+reqCounter,var,tagCounter);//non-blocking
 			reqCounter++;
 		}	
+		tagCounter++; //same tag in each interface communication
 
-		int ierr = 0;
-		ierr = MPI_Waitall(nInter,recvReq,MPI_STATUS_IGNORE);//blocking wait
+		for(int i=0;i!=nInter;++i){
+			requests.push_back(sendReq[i]);
+			requests.push_back(recvReq[i]);
+		}
+		delete []sendReq;
+		delete []recvReq;
+		
+		return 0;
+	}
+	int interfaceCommunicationEnd(){
+		size_t _requestsSize = requests.size();
+		MPI_Request* _requests = &(requests[0]);
+
+		int ierr = MPI_Waitall(_requestsSize,_requests,MPI_STATUSES_IGNORE);
 		if(ierr!=MPI_SUCCESS){
 			errorHandler.fatalRuntimeError("error occured when recving interface value\n");
 		}
-		delete []recvReq;recvReq = NULL;
+		requests.clear();
+		tagCounter=0;//clear all communication
 
-		/*
-		for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
-			iter->second.getData(var); //copy to local
-		}
-		*/
-
-		ierr = MPI_Waitall(nInter,sendReq,MPI_STATUS_IGNORE);//blocking wait //perhaps redundant
-		if(ierr!=MPI_SUCCESS){
-			errorHandler.fatalRuntimeError("error occured when sending interface value\n");
-		}
-		delete []sendReq;sendReq=NULL;
-		
 		return 0;
+
 	}
 
 	template<typename T>
@@ -248,11 +250,7 @@ public:
 	}
 
 private:
-	int errorCounter;
 	std::ofstream logfile; //for test purpose
-	void throwError(const std::string& msg){ // only check error when SHOULD_CHECK_MPI_ERROR is defined
-		errorHandler.fatalRuntimeError(msg);
-	}
 	int pushVectorToRoot(const Vec& petscVec, double* rootbuffer,int rootRank);
 
 };

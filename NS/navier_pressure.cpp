@@ -8,9 +8,11 @@ using namespace std;
 
 int NavierStokesSolver::CalculatePressure( )
 {
-	int i,pIter=0;
-	double pIterRes=0,coef=0; //, roinv,Tem;
 
+	SetBCVelocity( BRo,BU,BV,BW );
+	CalRUFace2   ( );    	 // it doesn't need re-calculation ???
+                        	 //calculated with u*   this is the m*
+			
 	// Build matrix
 	BuildPressureMatrix(dataPartition->Ap,dataPartition->bp );
 
@@ -27,7 +29,8 @@ int NavierStokesSolver::CalculatePressure( )
 
    	// update other variables
 	
-	dataPartition->interfaceCommunication(deltaP);
+	dataPartition->interfaceCommunicationBegin(deltaP);
+	dataPartition->interfaceCommunicationEnd();
 
    	SetBCDeltaP( BPre,deltaP);
         Gradient   ( deltaP, BPre, dPdX );  // note the first parameter
@@ -39,7 +42,7 @@ int NavierStokesSolver::CalculatePressure( )
 
 	MPI_Bcast(&deltaP_reference,1,MPI_DOUBLE,root.rank,dataPartition->comm);//communicate to get reference point data;
 
-	for( i=0; i<Ncel; i++ )//optimizeable
+	for( int i=0; i<Ncel; i++ )//optimizeable
 	{
 		localRes[3] += fabs( deltaP[i] - deltaP_reference )*Cell[i].vol;
 	
@@ -53,17 +56,19 @@ int NavierStokesSolver::CalculatePressure( )
 		}
 
 		// velocity correction
-		coef  = Cell[i].vol*Apr[i];
+		double coef  = Cell[i].vol*Apr[i];
 	        Un[i] -= coef*dPdX[i][0];
        	 	Vn[i] -= coef*dPdX[i][1];
         	Wn[i] -= coef*dPdX[i][2];
 	}
 
-	dataPartition->interfaceCommunication(Un);
-	dataPartition->interfaceCommunication(Vn);
-	dataPartition->interfaceCommunication(Wn);
-	dataPartition->interfaceCommunication(Pn);
-	dataPartition->interfaceCommunication(Rn);
+	dataPartition->interfaceCommunicationBegin(Un);
+	dataPartition->interfaceCommunicationBegin(Vn);
+	dataPartition->interfaceCommunicationBegin(Wn);
+	dataPartition->interfaceCommunicationBegin(Pn);
+	dataPartition->interfaceCommunicationBegin(Rn);
+
+	dataPartition->interfaceCommunicationEnd();
 
 	/*
 	printf("deltaP ref  %e\n",deltaP_reference);
@@ -89,9 +94,7 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 	int i,j, nj,in, cn[7], iface,bnd,rid;
 	double Acn[7], roapf,lambda,lambda2,valcen,bpv,tmp,tmp2,vol, rof,Tf,RUnormal;
 
-	SetBCVelocity( BRo,BU,BV,BW );
-	CalRUFace2   ( ); // it doesn't need re-calculation ???
-                        //calculated with u*   this is the m*
+
 
 	for( i=0; i<Ncel; i++ )
 	{

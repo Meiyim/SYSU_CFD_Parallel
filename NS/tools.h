@@ -88,7 +88,7 @@ public:
 		double reduceResult = 0.0;
 		int count = pool.size();
 		int countRes = 0;
-		for(auto it=pool.begin();it!=pool.end();++it)
+		for(vector<double>::iterator it=pool.begin();it!=pool.end();++it)
 			ret += (*it);
 		MPI_Reduce(&ret,&reduceResult,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);	
 		MPI_Reduce(&count,&countRes,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);	

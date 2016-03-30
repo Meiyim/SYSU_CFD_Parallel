@@ -9,8 +9,6 @@ using namespace std;
 
 int NavierStokesSolver::CalculateVelocity( )
 {
-    int    i,Iter=0;
-    double IterRes=0;
 //	ofstream of;
 	
 
@@ -36,10 +34,12 @@ int NavierStokesSolver::CalculateVelocity( )
 
 	//check	
 	
-	dataPartition->interfaceCommunication(Un);//update boundary
-	dataPartition->interfaceCommunication(Vn);
-	dataPartition->interfaceCommunication(Wn);
-	dataPartition->interfaceCommunication(Apr);
+	dataPartition->interfaceCommunicationBegin(Un);//update boundary
+	dataPartition->interfaceCommunicationBegin(Vn);
+	dataPartition->interfaceCommunicationBegin(Wn);
+	dataPartition->interfaceCommunicationBegin(Apr);
+
+	dataPartition->interfaceCommunicationEnd();
 	
 
 	for(int i=0;i!=Ncel;++i){//optimizeable

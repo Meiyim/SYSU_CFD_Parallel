@@ -74,7 +74,7 @@ int DataPartition::buildInterfaceFromBuffer(int* buffer){
 	size_t ninterfaces = buffer[counter++];
 	for(size_t i=0;i!=ninterfaces;++i){
 		int interfaceID  = buffer[counter++];
-		int interfaceWidth = buffer[counter++];
+		size_t interfaceWidth = buffer[counter++];
 		
 		if(interfaces.find(interfaceID) == interfaces.end()){
 			interfaces.insert(make_pair(interfaceID,Interface(comRank,interfaceID,comm)));
@@ -142,8 +142,8 @@ int DataPartition::fetchDataFrom(RootProcess& root){ //collective
  	//*************************fetching Matrix A***************************	
 
 
-	delete offsets;
-	delete sourceCount;
+	delete []offsets;
+	delete []sourceCount;
 	printf("complete fetching data from root\n");
 	return 0;
 }
@@ -463,16 +463,16 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,double const*
 /*****************************************
  *	implement of Interface
 ****************************************/
-int Interface::send(MPI_Request* req, double* phi){
+int Interface::send(MPI_Request* req, double* phi,int tag){
 	size_t width = getWidth();
 	if(sendBuffer==NULL)
 		sendBuffer = new double[width];
 
-	for(int i=0;i!=width;++i) //openMP optimizeable
+	for(size_t i=0;i!=width;++i) //openMP optimizeable
 		sendBuffer[i] = phi[sendposis[i]];
 	MPI_Issend(sendBuffer,	width, MPI_DOUBLE, 
 			otherRank,
-			selfRank, //TAG==self Rank
+			tag, //TAG
 			comm,
 			req);
 	return 0;
@@ -480,30 +480,30 @@ int Interface::send(MPI_Request* req, double* phi){
 }
 
 
-int Interface::recv(MPI_Request* req, double* phi){
+int Interface::recv(MPI_Request* req, double* phi,int tag){
 	size_t width = getWidth();
 	double* recvBuffer = phi+recvposi;
 
 	MPI_Irecv(recvBuffer,width,MPI_DOUBLE,
 			otherRank,
-			otherRank,//TAG = source
+			tag,//TAG
 			comm,
 			req);
 
 	return 0;
 }
 
-int Interface::send(MPI_Request* req, CellData* phi){
+int Interface::send(MPI_Request* req, CellData* phi,int tag){
 	size_t width = getWidth();
 	if(sendBufferCell==NULL)
 		sendBufferCell = new CellData[width];
 
-	for(int i=0;i!=width;++i) //openMP optimizeable
+	for(size_t i=0;i!=width;++i) //openMP optimizeable
 		sendBufferCell[i] = phi[sendposis[i]];
 
 	MPI_Issend(sendBufferCell,width, MPI_CellData,
 			otherRank,
-			selfRank, //TAG==self Rank
+			tag, //TAG
 			comm,
 			req);
 	return 0;
@@ -511,33 +511,33 @@ int Interface::send(MPI_Request* req, CellData* phi){
 }
 
 
-int Interface::recv(MPI_Request* req, CellData* phi){
+int Interface::recv(MPI_Request* req, CellData* phi,int tag){
 	size_t width = getWidth();
 
 	CellData* recvBufferCell = phi+recvposi;
 
 	MPI_Irecv(recvBufferCell,width,MPI_CellData,
 			otherRank,
-			otherRank,//TAG = source
+			tag,//TAG
 			comm,
 			req);
 
 	return 0;
 }
 
-int Interface::send(MPI_Request* req, double* phi[3]){
+int Interface::send(MPI_Request* req, double* phi[3],int tag){
 	size_t width = getWidth();
 	if(sendBufferGradient==NULL)
 		sendBufferGradient = new double[3*width];
 
-	for(int i=0;i!=width;++i) //openMP optimizeable
+	for(size_t i=0;i!=width;++i) //openMP optimizeable
 		for(int j=0;j!=3;++j)
 			sendBufferGradient[i*3+j] = phi[sendposis[i]][j];
 
 
 	MPI_Issend(sendBufferGradient,	3*width, MPI_DOUBLE, 
 			otherRank,
-			selfRank, //TAG==self Rank
+			tag, //TAG
 			comm,
 			req);
 	return 0;
@@ -545,14 +545,14 @@ int Interface::send(MPI_Request* req, double* phi[3]){
 }
 
 
-int Interface::recv(MPI_Request* req, double* phi[3]){
+int Interface::recv(MPI_Request* req, double* phi[3],int tag){
 	size_t width = getWidth();
 
 	double* recvBufferGradient = &phi[recvposi][0];
 
 	MPI_Irecv(recvBufferGradient,3*width,MPI_DOUBLE,
 			otherRank,
-			otherRank,//TAG = source
+			tag,//TAG 
 			comm,
 			req);
 

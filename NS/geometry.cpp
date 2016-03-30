@@ -457,11 +457,11 @@ int NavierStokesSolver::CellFaceInfo()
 
 
     //-- config interface cell neighbouring
-    size_t voidCellCounter = Ncel; //out of Ncel range
+    int  voidCellCounter = Ncel; //out of Ncel range
     for(map<int,Interface>::iterator iter = dataPartition->interfaces.begin();iter!=dataPartition->interfaces.end();++iter){
 	    Interface* interface = &iter->second;
 	    interface->recvposi = voidCellCounter;
-	    for(int i = 0;i!=interface->sendposis.size();++i){ //for each send posis
+	    for(size_t i = 0;i!=interface->sendposis.size();++i){ //for each send posis
 		CellData* thisCell = &Cell[ interface->sendposis[i] ];
 		//debug
 		/*
@@ -519,7 +519,10 @@ int NavierStokesSolver::CellFaceInfo()
 	assert(iEnd == i + iStart);
 
 	//--------------interface communication to get gloabl index for virtual cell
-	dataPartition->interfaceCommunication(Cell);
+	printf("should print\n");
+	dataPartition->interfaceCommunicationBegin(Cell);
+	dataPartition->interfaceCommunicationEnd();
+	printf("no print\n");
 
 
     //-- face

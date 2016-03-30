@@ -62,14 +62,18 @@ void NavierStokesSolver::NSSolve( )
 			//-----MPI interface communication-------//
 			
 
-			dataPartition->interfaceCommunication(Tn);
+			dataPartition->interfaceCommunicationBegin(Tn);
+			dataPartition->interfaceCommunicationEnd();
 			if(TurModel==1){
-				dataPartition->interfaceCommunication(TE);
-				dataPartition->interfaceCommunication(ED);
+				dataPartition->interfaceCommunicationBegin(TE);
+				dataPartition->interfaceCommunicationBegin(ED);
 			}
 			
-			dataPartition->interfaceCommunication(VisLam);
-			dataPartition->interfaceCommunication(VisTur);
+			dataPartition->interfaceCommunicationBegin(VisLam);
+			dataPartition->interfaceCommunicationBegin(VisTur);
+
+			dataPartition->interfaceCommunicationEnd();
+			
 			//------------   Record   ------------//
 			if( shouldBackup(step,iter,cur_time) )
 				WriteBackupFile();
@@ -501,20 +505,23 @@ void NavierStokesSolver::InitFlowField( ){
 		RUFace[i] = 0.;
 
 	//---------init interface-------
-	dataPartition->interfaceCommunication(Un);
-	dataPartition->interfaceCommunication(Vn);
-	dataPartition->interfaceCommunication(Wn);
-	dataPartition->interfaceCommunication(Pn);
-	dataPartition->interfaceCommunication(Rn);
-	dataPartition->interfaceCommunication(Tn);
+	dataPartition->interfaceCommunicationBegin(Un);
+	dataPartition->interfaceCommunicationBegin(Vn);
+	dataPartition->interfaceCommunicationBegin(Wn);
+	dataPartition->interfaceCommunicationBegin(Pn);
+	dataPartition->interfaceCommunicationBegin(Rn);
+	dataPartition->interfaceCommunicationBegin(Tn);
 	if(TurModel==1){
-		dataPartition->interfaceCommunication(TE);
-		dataPartition->interfaceCommunication(ED);
+		dataPartition->interfaceCommunicationBegin(TE);
+		dataPartition->interfaceCommunicationBegin(ED);
 	}
 	
-	dataPartition->interfaceCommunication(deltaP);
-	dataPartition->interfaceCommunication(VisLam);
-	dataPartition->interfaceCommunication(VisTur);
+	dataPartition->interfaceCommunicationBegin(deltaP);
+	dataPartition->interfaceCommunicationBegin(VisLam);
+	dataPartition->interfaceCommunicationBegin(VisTur);
+
+	dataPartition->interfaceCommunicationEnd();
+	
 }
 
 

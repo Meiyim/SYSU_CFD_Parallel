@@ -13,7 +13,10 @@ int NavierStokesSolver::CalculateVelocity( )
 	
 
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
+	PetscLogStagePush(1);
 	BuildVelocityMatrix(dataPartition->Au,dataPartition->bu,dataPartition->bv,dataPartition->bw );
+	PetscLogStagePop();
+	PetscLogStagePush(2);
 	
 	double *const _array1 = new double[Ncel];
 	double *const _array2 = new double[Ncel];
@@ -31,6 +34,8 @@ int NavierStokesSolver::CalculateVelocity( )
 		errorHandler.fatalRuntimeError(temp);//perhaps calculation might continue?
 	}
 	
+	PetscLogStagePop();
+	PetscLogStagePush(1);
 
 	//check	
 	
@@ -51,6 +56,7 @@ int NavierStokesSolver::CalculateVelocity( )
 	delete [] _array1;
 	delete [] _array2;
 	delete [] _array3;
+	PetscLogStagePop();
 
 	return 0;
 }

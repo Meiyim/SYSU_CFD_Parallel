@@ -9,12 +9,17 @@ using namespace std;
 int NavierStokesSolver::CalculatePressure( )
 {
 
+	PetscLogStagePush(3);
+
 	SetBCVelocity( BRo,BU,BV,BW );
 	CalRUFace2   ( );    	 // it doesn't need re-calculation ???
                         	 //calculated with u*   this is the m*
 			
 	// Build matrix
 	BuildPressureMatrix(dataPartition->Ap,dataPartition->bp );
+
+	PetscLogStagePop();
+	PetscLogStagePush(4);
 
 	
 	//Solve Matrix
@@ -27,6 +32,8 @@ int NavierStokesSolver::CalculatePressure( )
 		errorHandler.fatalRuntimeError(temp);//perhaps calculation might continue?
 	}
 
+	PetscLogStagePop();
+	PetscLogStagePush(3);
    	// update other variables
 	
 	dataPartition->interfaceCommunicationBegin(deltaP);
@@ -86,6 +93,7 @@ int NavierStokesSolver::CalculatePressure( )
 	// SetBCVelocity( BRo,BU,BV,BW );
 	// CalRUFace2( );
 	
+	PetscLogStagePop();
 	return 0;
 }
 

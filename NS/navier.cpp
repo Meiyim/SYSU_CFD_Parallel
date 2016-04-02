@@ -16,9 +16,28 @@ using namespace std;
 void NavierStokesSolver::NSSolve( )
 {
 	int iter;
-	double ResMax,ResMax0, tstart,tend;
+	double ResMax,ResMax0;
+	timespec tstart ={0,0};
+	timespec tend ={0,0};
+	
+	//profiling
+	PetscLogStage buildVelocityStage = 1;
+	PetscLogStageRegister("BuildVelocityStage",&buildVelocityStage);
+	PetscLogStage solveVelocityStage = 2;
+	PetscLogStageRegister("SolveVelocityStage",&solveVelocityStage);
+	PetscLogStage buildPressureStage = 3;
+	PetscLogStageRegister("BuildPressureStage",&buildPressureStage);
+	PetscLogStage solvePressureStage = 4;
+	PetscLogStageRegister("SolvePressureStage",&solvePressureStage);
+	PetscLogStage otherStage = 5;
+	PetscLogStageRegister("otherStage",&otherStage);
+
+	PetscLogStagePush(otherStage);//Profilling
+
+
 	MPI_Barrier(dataPartition->comm);
-	tstart = ttime( );
+	CYCAS_GET_TIME(tstart);
+
 	cur_time = 0.0;
 	if(IfSteady)
 		dt = CYCASHUGE_D;
@@ -38,15 +57,18 @@ void NavierStokesSolver::NSSolve( )
 		for( iter=1; iter<MaxOuterStep; iter++ ){
 			if( (iter-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
 			MPI_Barrier(dataPartition->comm);
-			
+				
+				
 			std::fill(localRes,localRes+RESIDUAL_LEN,0.0);
 			std::fill(Residual,Residual+RESIDUAL_LEN,0.0);
 			
+			PetscLogStagePop();//profilling
 			CalculateVelocity ( ); //interface communication U, V, W, Apr
 			
 			CalculatePressure ( ); //calculate deltaP and correct P,[R], U,V,W
 					       //interface communication U,V,W,P,R
 
+			PetscLogStagePush(otherStage);//Profilling
 			/*
 			// scalar transportation
 			//1. turbulence model
@@ -96,6 +118,7 @@ void NavierStokesSolver::NSSolve( )
 			if( IfSteady ){
 				//steady
 				root.printSteadyStatus(dataPartition,iter,ResMax);
+				dataPartition->PRINT_LOG(ResidualSteady);
 				if( ResMax<ResidualSteady )break;
 			}else{
 				//unsteady
@@ -113,7 +136,11 @@ void NavierStokesSolver::NSSolve( )
 
 
 		if(cur_time >= total_time){
-			root.printEnding(dataPartition);
+			PetscLogStagePop();//profilling
+			CYCAS_GET_TIME(tend);
+			root.printEnding(dataPartition,
+				tend.tv_sec-tstart.tv_sec,
+				tend.tv_nsec-tstart.tv_nsec);
 			break;
 		}else{//time advance
 			cur_time+=dt;
@@ -630,6 +657,7 @@ NavierStokesSolver::NavierStokesSolver():
 	gravity			(dbOptions+21), //gravity components: 22,23,24
 	URF			(dbOptions+24),  //URF 	24~31 //length 8
 	initvalues		(dbOptions+32),
+	ResidualSteady		(dbOptions[132]),
 
 	//all put NULL to avoid wild pointer
 	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL),

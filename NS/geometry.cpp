@@ -519,10 +519,8 @@ int NavierStokesSolver::CellFaceInfo()
 	assert(iEnd == i + iStart);
 
 	//--------------interface communication to get gloabl index for virtual cell
-	printf("should print\n");
 	dataPartition->interfaceCommunicationBegin(Cell);
 	dataPartition->interfaceCommunicationEnd();
-	printf("no print\n");
 
 
     //-- face

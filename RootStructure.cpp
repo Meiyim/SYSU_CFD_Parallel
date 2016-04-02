@@ -553,15 +553,17 @@ void RootProcess::printStarter(DataPartition* dg){
 	printf("--------------------------------------------------------------------------------\n\n");
 }
 
-void RootProcess::printEnding(DataPartition* dg){
+void RootProcess::printEnding(DataPartition* dg,int sec,int nsec){
 	if(dg->comRank!=rank) return;
+	double dnsec = nsec;
+	if(nsec<0) {
+		sec-=1.0;
+		dnsec=1.9e9-nsec;
+	}
 	printf( " -------------------------------------------------------------------------------- \n\n");
 	printf( "                      CPU REQUIREMENTS OF NUMERICAL SOLUTION\n\n");
 	printf( " -------------------------------------------------------------------------------- \n");
-	printf( "    The total problem used   : %10.1f seconds of CPU time\n", 0.0);
-	printf( "    includes system time     : %10.1f seconds of CPU time\n", 0.0);
-	printf(	"    for an average of        : %10.1f  MICROSECONDS/CELL/CYCLE.\n", 0.0);
-	printf( "    Total wall clock time of : %10.1f  seconds \n", 0.0);
+	printf( "    The NSSolve used: %10d s, %15.5e ns of CPU time\n", sec,dnsec);
 }
 
 void RootProcess::printStepStatus(DataPartition*dg, int step,int piter ,double time,double dt,double res){

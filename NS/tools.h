@@ -1,6 +1,7 @@
 #ifndef  TOOLS_H
 #define  TOOLS_H
 
+#include <time.h>
 #include <string>
 #include <stdlib.h>
 #include "../MPIStructure.h"
@@ -9,6 +10,7 @@ using namespace std;
 #define CYCASMAX(x,y)  ((x)>(y)?(x):(y))
 #define CYCASMIN(x,y)  ((x)<(y)?(x):(y))
 #define CYCASSIGN(x)   ((x)>0?1:(-1))
+#define CYCAS_GET_TIME(ts) clock_gettime(CLOCK_MONOTONIC,&ts) 
 // maybe SIGN still has problem, not for 0
 
 // vector manipulation. should be defined as inline function for higher efficiency
@@ -28,6 +30,7 @@ void SolveLinearEqu( Vector* Func(QMatrix*, Vector*, Vector*, int,PrecondProcTyp
 void ErrorStop( string str );
 char *trimwhitespace(char *str);
 double ttime (void);
+
 
 template <typename T>
 T** new_Array2D(int row, int col)

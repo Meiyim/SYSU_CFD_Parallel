@@ -69,7 +69,7 @@ void NavierStokesSolver::NSSolve( )
 					       //interface communication U,V,W,P,R
 
 			PetscLogStagePush(otherStage);//Profilling
-			/*
+
 			// scalar transportation
 			//1. turbulence model
 			if( TurModel==1  ) UpdateTurKEpsilon( );
@@ -79,7 +79,7 @@ void NavierStokesSolver::NSSolve( )
 			if( SolveSpecies ) UpdateSpecies( );
 			//4. other physical models
 			//    e.g., condensation, combustion, wall heat conduction
-			*/
+
 
 			//-----MPI interface communication-------//
 			
@@ -145,6 +145,11 @@ void NavierStokesSolver::NSSolve( )
 			cur_time+=dt;
 		}	
 	}
+
+	/*extra work before solve is complete 
+	Output2Tecplot();
+	*/
+
 	return;
 }
 

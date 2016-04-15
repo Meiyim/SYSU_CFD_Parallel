@@ -11,6 +11,8 @@ NSSRC		 = ./NS/
 #libmylib.a --> -lmylib
 METIS_LIB	 = -lmetis
 
+INCLUDE = -I./NS -I./
+
 OBJSFILE		 :=$(BIN)main.o 
 OBJSFILE		 +=$(BIN)MPIStruct.o
 OBJSFILE		 +=$(BIN)RootStruct.o
@@ -36,51 +38,51 @@ include ${PETSC_DIR}/lib/petsc/conf/variables
 include ${PETSC_DIR}/lib/petsc/conf/rules
 
 play: 
-	mpirun -np 2 ./cycas2 
+	mpirun -np 2 ./cycas2  -log_summary
 
 cl:
 	${RM} $(BIN)*.o
 
 cycas2:  $(OBJSFILE) chkopts
-	-${MYLINKER} -o $@ $(OBJSFILE)  ${PETSC_LIB} $(METIS_LIB)
+	-${MYLINKER} -o $@ $(OBJSFILE)  ${PETSC_LIB} $(METIS_LIB) $(CPPFLAGS)
 
 $(BIN)main.o: main.cpp 
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)MPIStruct.o: MPIStructure.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)RootStruct.o: RootStructure.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)navier.o: $(NSSRC)navier.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)readparam.o: $(NSSRC)readparamfile.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)tools.o: $(NSSRC)tools.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)scalar.o: $(NSSRC)navier_scalar.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)bc.o: $(NSSRC)navier_bc.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)pressure.o: $(NSSRC)navier_pressure.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)gradient.o: $(NSSRC)navier_gradient.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)velocity.o: $(NSSRC)navier_velocity.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)geo.o: $(NSSRC)geometry.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)io.o: $(NSSRC)navierIO.cpp
-	$(PETSC_CXXCOMPILE) -o $@ $^ 
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 include ${PETSC_DIR}/lib/petsc/conf/test

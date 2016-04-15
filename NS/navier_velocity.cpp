@@ -9,13 +9,14 @@ using namespace std;
 
 int NavierStokesSolver::CalculateVelocity( )
 {
-    int    i,Iter=0;
-    double IterRes=0;
 //	ofstream of;
 	
 
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
+	PetscLogStagePush(1);
 	BuildVelocityMatrix(dataPartition->Au,dataPartition->bu,dataPartition->bv,dataPartition->bw );
+	PetscLogStagePop();
+	PetscLogStagePush(2);
 	
 	double *const _array1 = new double[Ncel];
 	double *const _array2 = new double[Ncel];
@@ -33,13 +34,17 @@ int NavierStokesSolver::CalculateVelocity( )
 		errorHandler.fatalRuntimeError(temp);//perhaps calculation might continue?
 	}
 	
+	PetscLogStagePop();
+	PetscLogStagePush(1);
 
 	//check	
 	
-	dataPartition->interfaceCommunication(Un);//update boundary
-	dataPartition->interfaceCommunication(Vn);
-	dataPartition->interfaceCommunication(Wn);
-	dataPartition->interfaceCommunication(Apr);
+	dataPartition->interfaceCommunicationBegin(Un);//update boundary
+	dataPartition->interfaceCommunicationBegin(Vn);
+	dataPartition->interfaceCommunicationBegin(Wn);
+	dataPartition->interfaceCommunicationBegin(Apr);
+
+	dataPartition->interfaceCommunicationEnd();
 	
 
 	for(int i=0;i!=Ncel;++i){//optimizeable
@@ -51,6 +56,7 @@ int NavierStokesSolver::CalculateVelocity( )
 	delete [] _array1;
 	delete [] _array2;
 	delete [] _array3;
+	PetscLogStagePop();
 
 	return 0;
 }

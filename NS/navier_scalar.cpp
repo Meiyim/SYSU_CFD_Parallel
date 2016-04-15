@@ -534,6 +534,8 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 				lambda2= 1.- lambda;
 				Visc   = lambda*DiffCoef[i]  + lambda2*DiffCoef[in];
 				dphidx = lambda*dPhidX[i][0] + lambda2*dPhidX[in][0];
+				dphidy = lambda*dPhidX[i][1] + lambda2*dPhidX[in][1];
+				dphidz = lambda*dPhidX[i][2] + lambda2*dPhidX[in][2];
 
 				// convection to implicit
 				if( RUnormal<0. ){

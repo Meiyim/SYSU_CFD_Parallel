@@ -22,7 +22,7 @@ void RootProcess::allocate(DataPartition* dg){ //prepare for gather;
 void RootProcess::clean(){
 	
 	if(rootElems!=NULL)
-		for(int i=0;i!=rootNElement;++i){
+		for(size_t i=0;i!=rootNElement;++i){
 			delete rootElems[i];
 	}
 	
@@ -62,7 +62,7 @@ void RootProcess::read(DataPartition* dg,const string& title){
 	 **************************************************/
 	//read verts
 	rootVerts = new InputVert[rootNVert];
-	for(int i=0;i!=rootNVert;++i){
+	for(size_t i=0;i!=rootNVert;++i){
 		infile>>itemp
 		      >>rootVerts[i].x
 		      >>rootVerts[i].y
@@ -82,7 +82,7 @@ void RootProcess::read(DataPartition* dg,const string& title){
 	int _ntag;
 	int _v=0;
 	rootNGlobal = 0;
-	for(int i=0;i!=rootNElement;++i){
+	for(size_t i=0;i!=rootNElement;++i){
 		infile>>itemp>>_type>>_ntag;
 		rootElems[i] = new InputElement(_type,_ntag,numberOfNodesInElementTypeOf[_type]);
 
@@ -120,7 +120,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	};
 
 	int nv=0;
-	for(int i=0;i!=rootNElement;++i)
+	for(size_t i=0;i!=rootNElement;++i)
 		nv += numberOfNodesInElementTypeOf[rootElems[i]->type];	
 
 	rootgridList.resize(N);
@@ -132,7 +132,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	idx_t edgecut;
 
 	eptr[0]=0;
-	for(int i=0;i!=rootNElement;++i){
+	for(size_t i=0;i!=rootNElement;++i){
 		nv = numberOfNodesInElementTypeOf[rootElems[i]->type];
 		for(int j=0;j!=nv;++j)
 			eind[eptr[i]+j] =  rootElems[i]->vertex[j];
@@ -176,10 +176,10 @@ void RootProcess::partition(DataPartition* dg, int N){
 
 
 	if(ret!=METIS_OK) errorHandler.fatalRuntimeError("METIS Partition error!\n");
-	printf("METIS partition successfuly, partitioned into %d part, totally edgecut%lld \n",N,edgecut);
+	printf("METIS partition successfuly, partitioned into %d part, totally edgecut%ld \n",N,edgecut);
 	
 		
-	for(int i=0;i!=rootNElement;++i){
+	for(size_t i=0;i!=rootNElement;++i){
 		rootElems[i]->pid = epart[i];
 	}
 	for(int i=0;i!=N;++i)
@@ -192,7 +192,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	***************************************************/
 
 	InputElement** elementsInOriginalOrdering = new InputElement* [rootNElement];
-	for(int i=0;i!=rootNElement;++i){
+	for(size_t i=0;i!=rootNElement;++i){
 		elementsInOriginalOrdering[i] = rootElems[i];
 	}
 
@@ -223,7 +223,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	***************************************************/
 	map<int,int>* _boundCells = new map<int,int> [N]; // one for each partition,<partID,interfaceWidth>
 
-	for(int i=0;i!=rootNElement;++i){//original order
+	for(size_t i=0;i!=rootNElement;++i){//original order
 		InputElement* _thisEle = elementsInOriginalOrdering[i];
 		int head = xadj[i];
 		int end = xadj[i+1];
@@ -269,7 +269,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	printf("report partition result:\n");
 	for(int i=0;i!=N;++i){
 		printf("part: %d, elements: %d, interfaces:%lu\n",i,rootgridList.at(i),_boundCells[i].size());
-		for(auto it = _boundCells[i].begin();it!=_boundCells[i].end();++it){
+		for(map<int,int>::iterator it = _boundCells[i].begin();it!=_boundCells[i].end();++it){
 			printf("\t pid: %d: %d\n",it->first,it->second);	
 		}
 	}
@@ -286,7 +286,7 @@ void RootProcess::write(DataPartition* dg){
 	printf("writing....");
 	std::ofstream outfile("result.dat");
 	//char temp[256];
-	for(int i=0;i!=rootNGlobal;++i){
+	for(size_t i=0;i!=rootNGlobal;++i){
 		//sprintf(temp,"%15d\tx:%15e\tb:%15e\n",i+1,rootuBuffer[i],rootbuBuffer[i]);
 		//outfile<<temp;
 	}
@@ -422,7 +422,6 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 
 	ComplicatedType _connectionMap;//<interfaceID <thisID+thatID,<thisID,thatID> > > 
 							 //must ensure that the order in  connection map of both side of interface are the SAME!
-	size_t debugcounter = 0;
 	
 	size_t iEhead = 0;
 	for(int i=0;i!=pid;++i)
@@ -437,7 +436,7 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 			double key = (double)(thisID+thatID)+(double)fabs(thisID-thatID)/(rootNGlobal);
 
 			vector<int> vec(1,thisID - iEhead);// thisID - iE is the real local Index
-			for(int i=2;i!=iter->size();++i){
+			for(size_t i=2;i!=iter->size();++i){
 				vec.push_back (iter->at(i) );
 			}
 			_connectionMap[interfaceID].insert(make_pair(key,vec));
@@ -497,7 +496,7 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 			 //iterIn->first is meaningless 
 			(*buffer)[counter++] = iterIn->second.size();//
 			(*buffer)[counter++] = iterIn->second[0];//in_Process ID
-			for(int i=1;i!=iterIn->second.size();++i){
+			for(size_t i=1;i!=iterIn->second.size();++i){
 				int globalID = iterIn->second[i];
 				int localID = (*nodesPool)[globalID];
 				assert(nodesPool->find(globalID)!=nodesPool->end());
@@ -554,15 +553,17 @@ void RootProcess::printStarter(DataPartition* dg){
 	printf("--------------------------------------------------------------------------------\n\n");
 }
 
-void RootProcess::printEnding(DataPartition* dg){
+void RootProcess::printEnding(DataPartition* dg,int sec,int nsec){
 	if(dg->comRank!=rank) return;
+	double dnsec = nsec;
+	if(nsec<0) {
+		sec-=1.0;
+		dnsec=1.9e9-nsec;
+	}
 	printf( " -------------------------------------------------------------------------------- \n\n");
 	printf( "                      CPU REQUIREMENTS OF NUMERICAL SOLUTION\n\n");
 	printf( " -------------------------------------------------------------------------------- \n");
-	printf( "    The total problem used   : %10.1f seconds of CPU time\n", 0.0);
-	printf( "    includes system time     : %10.1f seconds of CPU time\n", 0.0);
-	printf(	"    for an average of        : %10.1f  MICROSECONDS/CELL/CYCLE.\n", 0.0);
-	printf( "    Total wall clock time of : %10.1f  seconds \n", 0.0);
+	printf( "    The NSSolve used: %10d s, %15.5e ns of CPU time\n", sec,dnsec);
 }
 
 void RootProcess::printStepStatus(DataPartition*dg, int step,int piter ,double time,double dt,double res){

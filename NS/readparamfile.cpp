@@ -38,7 +38,7 @@ void NavierStokesSolver::ReadParamFile( )
 		
 		// skip comment line
 		if( str[0]=='/' && str[1]=='/' ) continue;
-		if( str.empty() )continue;
+		if( str.size()==1 )continue;
 		// clear keyw[] before putting value
 		for( i=0; i<20; i++ )
 			keyw[i][0] = '\0';

@@ -77,7 +77,7 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 		//MPI communication
 		MPI_Allreduce(localSum,globalSum,3,MPI_DOUBLE,MPI_SUM,dataPartition->comm);	
 		//
-		if( massflowoutGlobal>SMALL ){
+		if( fabs(massflowoutGlobal)>SMALL ){
 			rate = - massflowinGlobal / massflowoutGlobal;
 			for( i=0; i<Nbnd; i++ )
 			{
@@ -124,10 +124,15 @@ void NavierStokesSolver::SetBCPressure(double*bp)
 			bp[i] = Pn[ic];
 			break;
 		case(2):  // inlet
+			/*
 			bp[i] = pin;
 			break;
+			*/
 		case(3):  // outlet, back step
+			/*
 			bp[i] = pout;
+			break;
+			*/
 		case(4):
 			bp[i] = Pn[ic];
 			break;

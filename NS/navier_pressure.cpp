@@ -8,26 +8,36 @@ using namespace std;
 
 int NavierStokesSolver::CalculatePressure( )
 {
-	int i,pIter=0;
-	double pIterRes=0,coef=0; //, roinv,Tem;
 
+	PetscLogStagePush(3);
+
+	SetBCVelocity( BRo,BU,BV,BW );
+	CalRUFace2   ( );    	 // it doesn't need re-calculation ???
+                        	 //calculated with u*   this is the m*
+			
 	// Build matrix
 	BuildPressureMatrix(dataPartition->Ap,dataPartition->bp );
+
+	PetscLogStagePop();
+	PetscLogStagePush(4);
 
 	
 	//Solve Matrix
 	// Solve pressure Poisson equation. Symmetric sparse linear equations solver
 	try{
-		dataPartition->solvePressureCorrection(1.e-9,1000,deltaP,DensityModel==0);
+		dataPartition->solvePressureCorrection(1.e-6,1000,deltaP,DensityModel==0);
 	}catch(ConvergeError& err){
 		char temp[256];	
 		sprintf(temp,"%s not converge in iter: %d, res %f\n",err.varname.c_str(),err.iter,err.residual);
 		errorHandler.fatalRuntimeError(temp);//perhaps calculation might continue?
 	}
 
+	PetscLogStagePop();
+	PetscLogStagePush(3);
    	// update other variables
 	
-	dataPartition->interfaceCommunication(deltaP);
+	dataPartition->interfaceCommunicationBegin(deltaP);
+	dataPartition->interfaceCommunicationEnd();
 
    	SetBCDeltaP( BPre,deltaP);
         Gradient   ( deltaP, BPre, dPdX );  // note the first parameter
@@ -39,7 +49,7 @@ int NavierStokesSolver::CalculatePressure( )
 
 	MPI_Bcast(&deltaP_reference,1,MPI_DOUBLE,root.rank,dataPartition->comm);//communicate to get reference point data;
 
-	for( i=0; i<Ncel; i++ )//optimizeable
+	for( int i=0; i<Ncel; i++ )//optimizeable
 	{
 		localRes[3] += fabs( deltaP[i] - deltaP_reference )*Cell[i].vol;
 	
@@ -53,17 +63,19 @@ int NavierStokesSolver::CalculatePressure( )
 		}
 
 		// velocity correction
-		coef  = Cell[i].vol*Apr[i];
+		double coef  = Cell[i].vol*Apr[i];
 	        Un[i] -= coef*dPdX[i][0];
        	 	Vn[i] -= coef*dPdX[i][1];
         	Wn[i] -= coef*dPdX[i][2];
 	}
 
-	dataPartition->interfaceCommunication(Un);
-	dataPartition->interfaceCommunication(Vn);
-	dataPartition->interfaceCommunication(Wn);
-	dataPartition->interfaceCommunication(Pn);
-	dataPartition->interfaceCommunication(Rn);
+	dataPartition->interfaceCommunicationBegin(Un);
+	dataPartition->interfaceCommunicationBegin(Vn);
+	dataPartition->interfaceCommunicationBegin(Wn);
+	dataPartition->interfaceCommunicationBegin(Pn);
+	dataPartition->interfaceCommunicationBegin(Rn);
+
+	dataPartition->interfaceCommunicationEnd();
 
 	/*
 	printf("deltaP ref  %e\n",deltaP_reference);
@@ -75,12 +87,12 @@ int NavierStokesSolver::CalculatePressure( )
 	checkArray(Wn,Ncel,"W'");	
 	*/
 
+	SetBCVelocity(BRo, BU,BV,BW);
 
 	// correct face normal velocity to satify the mass balance equ
 	CorrectRUFace2( deltaP );
-	// SetBCVelocity( BRo,BU,BV,BW );
-	// CalRUFace2( );
 	
+	PetscLogStagePop();
 	return 0;
 }
 
@@ -89,9 +101,7 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 	int i,j, nj,in, cn[7], iface,bnd,rid;
 	double Acn[7], roapf,lambda,lambda2,valcen,bpv,tmp,tmp2,vol, rof,Tf,RUnormal;
 
-	SetBCVelocity( BRo,BU,BV,BW );
-	CalRUFace2   ( ); // it doesn't need re-calculation ???
-                        //calculated with u*   this is the m*
+
 
 	for( i=0; i<Ncel; i++ )
 	{
@@ -125,7 +135,7 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 					{
 						rof = BRo[bnd];
 						Tf  = Tn[i];
-						// valcen  +=  CYCASMIN(RUnormal,0.) / (rof*Rcpcv*Tf);
+						valcen  +=  CYCASMIN(RUnormal,0.) / (rof*Rcpcv*Tf);
 					}
 					else if( rid==3 ) // outlet
 					{
@@ -225,14 +235,26 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 void NavierStokesSolver::CorrectRUFace2( double *dp )
 {
 	int i, c1,c2;
+	int bnd;
 	double dx1[3],dx2[3],lambda,lambda2,vol,roapf,coef,dp1,dp2,rop,rof;
+	double ruf,rvf,rwf;
 
 	// only for inner faces
 	for( i=0; i<Nfac; i++ )
 	{
 		c1= Face[i].cell1;
 		c2= Face[i].cell2;
-		if( c2<0 )continue;
+		if( c2<0 ){
+			bnd = Face[i].bnd;
+			ruf = BU[bnd]*BRo[bnd];
+			rvf = BV[bnd]*BRo[bnd];
+			rwf = BW[bnd]*BRo[bnd];
+			RUFace[i]=	 ruf * Face[i].n[0]
+					+rvf * Face[i].n[1]
+					+rwf * Face[i].n[2];
+			continue;
+		}
+
 
 		lambda = Face[i].lambda;
 		lambda2= 1.-lambda;

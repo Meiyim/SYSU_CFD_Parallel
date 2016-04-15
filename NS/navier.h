@@ -81,6 +81,7 @@ public:
 	double *gravity;    // length of 3
 	double *URF; 	    //numerical scheme relaxation factor , currently length 8
 	double *initvalues; // len:100
+	double &ResidualSteady;// dbOptions[132]
 	
 
 
@@ -91,7 +92,7 @@ public:
 
     	// --- time evolution
 	int    step;
-    	double cur_time, Residual[RESIDUAL_LEN],localRes[RESIDUAL_LEN],ResidualSteady;
+    	double cur_time, Residual[RESIDUAL_LEN],localRes[RESIDUAL_LEN];
 
 
     	// geometry, local, build from mesh files

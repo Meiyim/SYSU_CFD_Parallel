@@ -7,6 +7,7 @@ using namespace std;
  * Gradient calculation using Gaussian law
  * MPI Collective Subroutine
  * Communicate to get gradient at interface Cell
+ * MUST ensure INTERFACE_COMMUNICATION is called on phi before calculate Gradient
  *********************************************/
 int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 {
@@ -53,7 +54,8 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 	else
 		ErrorStop("no such limiter choice");
 
-	dataPartition->interfaceCommunication(phigd);			
+	dataPartition->interfaceCommunicationBegin(phigd);			
+	dataPartition->interfaceCommunicationEnd();
 	
 
 	return 0;

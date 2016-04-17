@@ -72,9 +72,23 @@ void NavierStokesSolver::NSSolve( )
 
 			// scalar transportation
 			//1. turbulence model
-			if( TurModel==1  ) UpdateTurKEpsilon( );
+			if(TurModel==1) {
+				UpdateTurKEpsilon( );
+
+				dataPartition->interfaceCommunicationBegin(TE);
+				dataPartition->interfaceCommunicationBegin(ED);
+				dataPartition->interfaceCommunicationBegin(VisLam);
+				dataPartition->interfaceCommunicationBegin(VisTur);
+				dataPartition->interfaceCommunicationEnd();
+			}
+
 			//2. energy couple
-			if( SolveEnergy  ) UpdateEnergy ( );
+			if( SolveEnergy  ) {
+				UpdateEnergy ( );
+				dataPartition->interfaceCommunicationBegin(Tn);
+				dataPartition->interfaceCommunicationEnd();
+			}
+
 			//3. species transport
 			if( SolveSpecies ) UpdateSpecies( );
 			//4. other physical models
@@ -84,16 +98,6 @@ void NavierStokesSolver::NSSolve( )
 			//-----MPI interface communication-------//
 			
 
-			dataPartition->interfaceCommunicationBegin(Tn);
-			if(TurModel==1){
-				dataPartition->interfaceCommunicationBegin(TE);
-				dataPartition->interfaceCommunicationBegin(ED);
-			}
-			
-			dataPartition->interfaceCommunicationBegin(VisLam);
-			dataPartition->interfaceCommunicationBegin(VisTur);
-
-			dataPartition->interfaceCommunicationEnd();
 			
 			//------------   Record   ------------//
 			if( shouldBackup(step,iter,cur_time) )

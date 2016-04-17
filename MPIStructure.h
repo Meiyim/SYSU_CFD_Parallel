@@ -197,6 +197,8 @@ public:
 
 	int solvePressureCorrection(double tol, int maxIter,double const* xp,bool isSymmetric);
 
+	int solveScarlar_GMRES(double tol, int maxIter,double const* xs);
+
 	
 	/*************MPI INTERFACE COMMUNICATION***********************
 	 *	collective

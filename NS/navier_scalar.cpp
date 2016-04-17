@@ -91,7 +91,7 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 	//Solve turbulence kinetic energy
 	//Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
 	// build matrix
-	BuildScalarMatrix( 2,TE,BTE,VisTE,TESource, ApTE );
+	//BuildScalarMatrix( 2,TE,BTE,VisTE,TESource, ApTE );
 	// Solve equations
 	for( i=0; i<Ncel; i++ )
 //		xsol.Cmp[i+1]= TE[i];
@@ -222,11 +222,11 @@ of.close( );
 //-------------------------------------------------------
 void NavierStokesSolver::UpdateEnergy( )
 {
-	int i,Iter=0;
-	double *kcond,*ESource,*ApE,IterRes=0,coef;
+	int i;
+	double *kcond=NULL,*ESource=NULL,*ApE=NULL,coef;
 
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
-	kcond  = new double[Ncel];
+	kcond  = new double[Ncel + dataPartition->nVirtualCell]; //note the size;
 	ESource= new double[Ncel];
 	ApE    = new double[Ncel];
 	vec_init( ESource, Ncel, 0. );
@@ -325,26 +325,21 @@ void NavierStokesSolver::UpdateEnergy( )
 	}
 
 	// build matrix
-	BuildScalarMatrix( 1, Tn,BTem,kcond,ESource,ApE );
+	BuildScalarMatrix( 1, Tn,BTem,kcond,ESource,ApE,dataPartition->As,dataPartition->bs );
 	// Solve equations
-	for( i=0; i<Ncel; i++ )
-//		xsol.Cmp[i+1]= Tn[i];
-
-//	SolveLinearEqu( GMRESIter, &As, &xsol, &bs, 500, SSORPrecond, 1.3, 1.e-8, &Iter, &IterRes );
-
-	if( Iter>=500 && IterRes>1.e-8 ){
-		cout<<"Energy cannot converge."<<Iter<<" "<<IterRes<<endl;
-		exit(0);
+	try{
+		dataPartition->solveScarlar_GMRES(1.e-6,1000,Tn);
+	}catch(ConvergeError& err){
+		char temp[256];	
+		sprintf(temp,"%s not converge in iter: %d, res %f\n",err.varname.c_str(),err.iter,err.residual);
+		errorHandler.fatalRuntimeError(temp);
 	}
-	for( i=0; i<Ncel; i++ )
-//		Tn[i] = xsol.Cmp[i+1];
+
 
 	// clipping work
 	delete [] kcond;
 	delete [] ESource;
 	delete [] ApE;
-
-//	Q_Destr ( &As );
 }
 
 //------------------------------------------------------------
@@ -400,7 +395,7 @@ void NavierStokesSolver::UpdateSpecies( )
 
 		// build matrix
 		
-		BuildScalarMatrix( 4+is, RSn[is],BRS[is],DiffC[is],ScSource[is],ApS );
+		//BuildScalarMatrix( 4+is, RSn[is],BRS[is],DiffC[is],ScSource[is],ApS );
 
 		// Solve equations
 		for( i=0; i<Ncel; i++ ) ;
@@ -418,7 +413,13 @@ void NavierStokesSolver::UpdateSpecies( )
 	}
 }
 
-void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,double *DiffCoef, double *source, double *App )
+
+/***************************************************
+ *	A universal scarlar equation solve routine
+ *	note that Diffcoef is cross-process and the size needs to be Ncel+NVirtual
+ *	source and App is local. the size is Ncel;
+ ***************************************************/
+void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,double *DiffCoef, double *source, double *App,Mat& As,Vec& bs )
 {
 	int i,j,iface, ip,in,ani[6],nj,rid,bnd;
 	double app,apn[6],lambda,lambda2, Visc,dxc[3],
@@ -427,6 +428,9 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 		fcs=0., fde,fdi, dx[3],  sphi, pfi,pfh;
 
 	Gradient ( Phi, BPhi,  dPhidX );
+	dataPartition->interfaceCommunicationBegin(DiffCoef);
+	dataPartition->interfaceCommunicationEnd();
+
 
 	for( i=0; i<Ncel; i++ )
 	{
@@ -547,7 +551,7 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 				ViscAreaLen =  Visc*Face[iface].rlencos;
 				app        +=  ViscAreaLen;
 				apn[nj]    += -ViscAreaLen;
-				ani[nj]     =  in;
+				ani[nj]     =  Cell[in].globalIdx;
 				nj ++ ;
 
 				// convection to source term. (high order schemes)
@@ -576,22 +580,31 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 			}
 			sphi += fde - fdi - fcs;
 		}
-
-		// central cell coef is stored for later use
-		// app   += Rn[i]/dt*Cell[i].vol;
-		app   /= URF[5];  // relaxation
-
-//	Q_SetLen  (&As, i+1, nj + 1);
-		// center cell
-//      Q_SetEntry(&As, i+1, 0,  i+1, app);
-		// off-diagonal
-        for( j=0; j<nj; j++ );
-//		Q_SetEntry(&As, i+1, j+1, ani[j]+1, apn[j]);
-
+		
 		// right hand side, including
 		//   pressure, gravity and part of diffusion terms (explicit - implicit), 
 		//   relaxation terms
-// 	bs.Cmp[i+1] = sphi + (1.-URF[5])*app*Phi[i];
+		
+		double bsv = sphi + (1.-URF[5])*app*Phi[i];
+		// central cell coef is stored for later use
+		
+		app   /= URF[5];  // relaxation
+
+		PetscInt row = Cell[i].globalIdx;
+		assert(row>=0&&row<dataPartition->nGlobal);//check
+		for(int ii=0; ii!=nj; ii++ )
+			assert(ani[ii]>=0&&ani[ii]<dataPartition->nGlobal);//check
+
+		MatSetValue(As,row,row,app,INSERT_VALUES);// diagonal
+		MatSetValues(As,1,&row,nj,ani,apn,INSERT_VALUES);// off-diagonal
+
+		// right hand side
+		VecSetValue(bs,row,bsv,INSERT_VALUES);
+
 	}
 
+	MatAssemblyBegin(As,MAT_FINAL_ASSEMBLY);
+	VecAssemblyBegin(bs);
+	MatAssemblyEnd(As,MAT_FINAL_ASSEMBLY);
+	VecAssemblyEnd(bs);	
 }

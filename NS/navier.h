@@ -176,7 +176,7 @@ public:
 	void CorrectRUFace2(double*);
 	// scalar. temperature, other passive variables
 	// void ScalarTranport   ( double *Phi, double *BPhi, double *DiffCoef, double *source );
-	void BuildScalarMatrix(int iSca,double *Phi, double *BPhi, double *DiffCoef, double *source, double *App);
+	void BuildScalarMatrix(int iSca,double *Phi, double *BPhi, double *DiffCoef, double *source, double *App,Mat& A,Vec& b);
 	     // iSca= 1:temperature; =2: ke; =3: ed;  = 4-larger: species concentration , CXY: the difference is at bound?
 	void UpdateEnergy     ( );
 	void UpdateSpecies    ( );

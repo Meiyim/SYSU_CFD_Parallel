@@ -374,6 +374,72 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 }
 
 
+int DataPartition::solveScarlar_GMRES(double tol,int maxIter,double const* xs){
+	KSPConvergedReason reason;
+	int iters;
+	double residule;
+
+	MPI_Barrier(comm);
+#ifdef PETSC_SOLVE_VERBOSE
+	PetscPrintf(comm,"begin Scarlar Correction solve\n");
+#endif
+
+
+	KSPSetOperators(ksp,As,As);
+
+	ierr = KSPSetType(ksp,KSPGMRES);CHKERRQ(ierr);
+
+	KSPSetInitialGuessNonzero(ksp,PETSC_TRUE);
+
+	/***************************************
+	 *      SET  TOLERENCE
+	 ***************************************/
+	KSPSetTolerances(ksp,tol,PETSC_DEFAULT,PETSC_DEFAULT,maxIter);	//absolute residule
+
+	/***************************************
+	 * 	ILU preconditioner:
+	 ***************************************/
+	//KSPGetPC(ksp,&pc);
+	KSPSetFromOptions(ksp);//can override settings from command line
+	KSPSetUp(ksp); //the precondition is done at this step
+
+
+	/***************************************
+	 * 	SOLVE Scarlar
+	 ***************************************/
+	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xs,&xsol);CHKERRQ(ierr); 
+	ierr = VecAssemblyBegin(xsol);			CHKERRQ(ierr);
+	
+#ifdef PETSC_SOLVE_VERBOSE
+	//double snorm;
+	//VecNorm(bs,NORM_2,&snorm);
+	//PetscPrintf(comm,"snorm %e\n",spnorm);
+#endif
+	ierr = KSPSolve(ksp,bs,xsol);CHKERRQ(ierr);
+
+	KSPGetConvergedReason(ksp,&reason);
+
+	if(reason<0){
+		KSPGetIterationNumber(ksp,&iters);
+		KSPGetResidualNorm(ksp,&residule);
+		throw ConvergeError(iters,residule,"Tn");
+	}else if(reason ==0){
+		PetscPrintf(comm,"why is this program still running?\n");
+	}else{
+#ifdef PETSC_SOLVE_VERBOSE
+		KSPGetIterationNumber(ksp,&iters);
+		PetscPrintf(comm,"KSP GMRES - Pressure Correction converged in %d step! :)\n",iters);
+#endif
+	}
+
+	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
+	ierr = MatZeroEntries(As);CHKERRQ(ierr);
+	
+	
+	return 0;
+}
+
+
 int DataPartition::solvePressureCorrection(double tol, int maxIter,double const* xp,bool isSymmetric){
 	KSPConvergedReason reason;
 	int iters;

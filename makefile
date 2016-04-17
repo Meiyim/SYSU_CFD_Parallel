@@ -41,7 +41,11 @@ test:
 	mpirun -np 2 ./cycas2  
 	
 play: 
+<<<<<<< HEAD
 	mpirun -np 2 ./cycas2  -log_summary
+=======
+	mpirun -np 4 ./cycas2 -log_summary
+>>>>>>> faeb9cf9d353a2a65d9b8b4acd57d824fd1a677c
 
 cl:
 	${RM} $(BIN)*.o

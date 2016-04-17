@@ -379,6 +379,11 @@ int DataPartition::solveScarlar_GMRES(double tol,int maxIter,double const* xs){
 	int iters;
 	double residule;
 
+	MatAssemblyBegin(As,MAT_FINAL_ASSEMBLY);
+	VecAssemblyBegin(bs);
+	MatAssemblyEnd(As,MAT_FINAL_ASSEMBLY);
+	VecAssemblyEnd(bs);	
+
 	MPI_Barrier(comm);
 #ifdef PETSC_SOLVE_VERBOSE
 	PetscPrintf(comm,"begin Scarlar Correction solve\n");

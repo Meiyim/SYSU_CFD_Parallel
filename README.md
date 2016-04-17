@@ -1,7 +1,8 @@
 # Cycas2Parallel
 Parallel implement of a CFD code
 
-extern "C
-#include "laspack/laspack.h"
-}
+Parallelization by CHENXUYI, Sun Yat-Sen University
+Algorithm support: LIWANAI
+
 now the total lines of CY2 is 4336
+

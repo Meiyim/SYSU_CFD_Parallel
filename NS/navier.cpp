@@ -69,45 +69,24 @@ void NavierStokesSolver::NSSolve( )
 					       //interface communication U,V,W,P,R
 
 			PetscLogStagePush(otherStage);//Profilling
+			
+			//------------   Physics Models   ------------//
 			// scalar transportation
 			//1. turbulence model
 			if(TurModel==1) {
 				UpdateTurKEpsilon( );
-
-				dataPartition->interfaceCommunicationBegin(TE);
-				dataPartition->interfaceCommunicationBegin(ED);
-				dataPartition->interfaceCommunicationBegin(VisLam);
-				dataPartition->interfaceCommunicationBegin(VisTur);
-				dataPartition->interfaceCommunicationEnd();
 			}
 
 			//2. energy couple
 			if( SolveEnergy  ) {
 				UpdateEnergy ( );
-				dataPartition->interfaceCommunicationBegin(Tn);
-				dataPartition->interfaceCommunicationEnd();
 			}
 
 			//3. species transport
-			if( SolveSpecies ) UpdateSpecies( );
+			if( SolveSpecies ) UpdateSpecies( );//to be implemented
 			//4. other physical models
 			//    e.g., condensation, combustion, wall heat conduction
 
-
-			//-----MPI interface communication-------//
-			
-
-			dataPartition->interfaceCommunicationBegin(Tn);
-			dataPartition->interfaceCommunicationEnd();
-			if(TurModel==1){
-				dataPartition->interfaceCommunicationBegin(TE);
-				dataPartition->interfaceCommunicationBegin(ED);
-			}
-			
-			dataPartition->interfaceCommunicationBegin(VisLam);
-			dataPartition->interfaceCommunicationBegin(VisTur);
-
-			dataPartition->interfaceCommunicationEnd();
 			
 			//------------   Record   ------------//
 			if( shouldBackup(step,iter,cur_time) )

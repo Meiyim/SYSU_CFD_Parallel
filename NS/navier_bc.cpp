@@ -226,12 +226,8 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		case(1):  // wall
 			BTE[i]= TE[ic];
 			BED[i]= ED[ic];
-
-//break;
-//if( ic==102 )
-//	cout<<"debug..."<<endl;
-
 			vol = Cell[ic].vol;
+			
 			// calculate the skin friction velocity
 			sav1n = Face[iface].n[0]/(Face[iface].area+1.e-16);
 			sav2n = Face[iface].n[1]/(Face[iface].area+1.e-16);

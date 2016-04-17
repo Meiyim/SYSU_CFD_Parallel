@@ -13,6 +13,8 @@
 #include "tools.h"
 
 #define RESIDUAL_LEN 10
+#define VOID_CELL_ON_BOUNDARY -10
+#define VOID_CELL_ON_INTERFACE -20
 
 
 using std::cout;

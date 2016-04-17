@@ -201,8 +201,6 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 }
 
 
-#define VOID_CELL_ON_BOUNDARY -10
-#define VOID_CELL_ON_INTERFACE -20
 
 int NavierStokesSolver::CreateFaces( )
 {

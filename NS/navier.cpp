@@ -69,11 +69,6 @@ void NavierStokesSolver::NSSolve( )
 					       //interface communication U,V,W,P,R
 
 			PetscLogStagePush(otherStage);//Profilling
-<<<<<<< HEAD
-
-=======
-			/*
->>>>>>> faeb9cf9d353a2a65d9b8b4acd57d824fd1a677c
 			// scalar transportation
 			//1. turbulence model
 			if(TurModel==1) {
@@ -102,9 +97,6 @@ void NavierStokesSolver::NSSolve( )
 			//-----MPI interface communication-------//
 			
 
-<<<<<<< HEAD
-			
-=======
 			dataPartition->interfaceCommunicationBegin(Tn);
 			dataPartition->interfaceCommunicationEnd();
 			if(TurModel==1){
@@ -117,7 +109,6 @@ void NavierStokesSolver::NSSolve( )
 
 			dataPartition->interfaceCommunicationEnd();
 			
->>>>>>> faeb9cf9d353a2a65d9b8b4acd57d824fd1a677c
 			//------------   Record   ------------//
 			if( shouldBackup(step,iter,cur_time) )
 				WriteBackupFile();

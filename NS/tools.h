@@ -10,13 +10,10 @@ using namespace std;
 #define CYCASMAX(x,y)  ((x)>(y)?(x):(y))
 #define CYCASMIN(x,y)  ((x)<(y)?(x):(y))
 #define CYCASSIGN(x)   ((x)>0?1:(-1))
-<<<<<<< HEAD
+#define CYCAS_GET_TIME(ts)
 #define CYCAS_GET_TIME(ts) 
-=======
-#define CYCAS_GET_TIME(ts) clock_gettime(CLOCK_MONOTONIC,&ts) 
->>>>>>> faeb9cf9d353a2a65d9b8b4acd57d824fd1a677c
-// maybe SIGN still has problem, not for 0
 
+// maybe SIGN still has problem, not for 0
 // vector manipulation. should be defined as inline function for higher efficiency
 void   vec_init  (double[], int, double );
 void   vec_minus (double *x1, double *x2, double *x3, int n); // x1= x2 - x3

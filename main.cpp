@@ -71,11 +71,8 @@ int main(int argc, char* argv[]){
 	MPI_Barrier(MPI_COMM_WORLD);
 	nsSolver->dataPartition->deinit();
 	delete nsSolver;
-<<<<<<< HEAD
 	//PetscPrintf(MPI_COMM_WORLD,"done\n");
-=======
 	PetscPrintf(MPI_COMM_WORLD,"done\n");
->>>>>>> faeb9cf9d353a2a65d9b8b4acd57d824fd1a677c
 	MPI_Barrier(MPI_COMM_WORLD);
 	ierr = PetscFinalize(); CHKERRQ(ierr);
 	return 0;

@@ -102,6 +102,8 @@ void NavierStokesSolver::OutputGrid()
 
 void NavierStokesSolver::Output2Tecplot()
 {
+	PetscPrintf(dataPartition->comm,"*****************************    OUTPUT TECPLOT   *********************************\n");
+
 	ofstream of;
 	char tecTitle[256];
 	sprintf(tecTitle,"tec/res%04d.dat",int(this->outputCounter++));

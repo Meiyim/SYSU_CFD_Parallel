@@ -141,6 +141,11 @@ inline double smoothfun( double us,double umin,double umax, double epsilon2)
       ff= 1.;
     return ff;
 }
+
+
+/******************************************************
+ *	this limiter is refactored with MPL
+ ******************************************************/
 int NavierStokesSolver::Limiter_MLP(double UC[],double **GradU)
 {
     int    i,j,iv;
@@ -179,10 +184,11 @@ int NavierStokesSolver::Limiter_MLP(double UC[],double **GradU)
             dy = Vert[iv][1] - Cell[i].x[1];
             dz = Vert[iv][2] - Cell[i].x[2];
             us = GradU[i][0]*dx + GradU[i][1]*dy + GradU[i][2]*dz ;
-			// Barth
-			fi = CYCASMIN( fi, Barth_fun(us,umin,umax) );
-			// Venkatanishnan
-			// fi = CYCASMIN( fi, smoothfun( us,umin,umax, ? ) );
+
+	    // Barth
+	    fi = CYCASMIN( fi, Barth_fun(us,umin,umax) );
+	    // Venkatanishnan
+	    // fi = CYCASMIN( fi, smoothfun( us,umin,umax, ? ) );
         }
         ficell[i]= fi;
     }
@@ -196,7 +202,7 @@ int NavierStokesSolver::Limiter_MLP(double UC[],double **GradU)
     delete [] ficell;
     delete [] UMax;
     delete [] UMin;
-    return 1;
+    return 0;
 }
 
 int NavierStokesSolver::Limiter_Barth(double UC[],double **GradU)

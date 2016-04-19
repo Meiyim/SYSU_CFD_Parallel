@@ -93,7 +93,7 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 	BuildScalarMatrix( 2,TE,BTE,VisTE,TESource, ApTE,dataPartition->As,dataPartition->bs);
 	// Solve equations
 	try{
-		dataPartition->solveScarlar_GMRES(1.e-6,500,TE);
+		dataPartition->solveScarlar_GMRES(1.e-8,500,TE);
 	}catch(ConvergeError& err){
 		char temp[256];	
 		sprintf(temp,"TE not converge in iter: %d, res %f\n",err.iter,err.residual);
@@ -153,7 +153,7 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 
 	//---solve matrix
 	try{
-		dataPartition->solveScarlar_GMRES(1.e-6,500,ED);
+		dataPartition->solveScarlar_GMRES(1.e-8,500,ED);
 	}catch(ConvergeError& err){
 		char temp[256];	
 		sprintf(temp,"ED not converge in iter: %d, res %f\n",err.iter,err.residual);
@@ -318,7 +318,7 @@ void NavierStokesSolver::UpdateEnergy( )
 		ESource[c2] -= fvis; //CXY: dissipation source term due to compressibility
                              //CX: why is this integral done on face? i supposed it should be done in volumn
 	}
-	}
+	}//end if : densityModel == 1
 
 	// boundary
 	SetBCTemperature( BTem );
@@ -345,7 +345,7 @@ void NavierStokesSolver::UpdateEnergy( )
 	BuildScalarMatrix( 1, Tn,BTem,kcond,ESource,ApE,dataPartition->As,dataPartition->bs );
 	// Solve equations
 	try{
-		dataPartition->solveScarlar_GMRES(1.e-6,1000,Tn);
+		dataPartition->solveScarlar_GMRES(1.e-8,500,Tn);
 	}catch(ConvergeError& err){
 		char temp[256];	
 		sprintf(temp,"Energy not converge in iter: %d, res %f\n",err.iter,err.residual);
@@ -457,8 +457,6 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 
 	for( i=0; i<Ncel; i++ )
 	{
-//if( i==4736 )
-//	cout<<"debug..."<<endl;
 
 		app = App[i];
 		nj  = 0 ;
@@ -608,10 +606,10 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 		//   pressure, gravity and part of diffusion terms (explicit - implicit), 
 		//   relaxation terms
 		
-		double bsv = sphi + (1.-URF[5])*app*Phi[i];
 		// central cell coef is stored for later use
 		
 		app   /= URF[5];  // relaxation
+
 
 		PetscInt row = Cell[i].globalIdx;
 		assert(row>=0&&row<dataPartition->nGlobal);//check
@@ -622,6 +620,7 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 		MatSetValues(As,1,&row,nj,ani,apn,INSERT_VALUES);// off-diagonal
 
 		// right hand side
+		double bsv = sphi + (1.-URF[5])*app*Phi[i];
 		VecSetValue(bs,row,bsv,INSERT_VALUES);
 
 	}

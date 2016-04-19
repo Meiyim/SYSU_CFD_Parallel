@@ -92,7 +92,6 @@ void NavierStokesSolver::NSSolve( )
 			if( shouldBackup(step,iter,cur_time) )
 				WriteBackupFile();
 			if( shouldPostProcess(step,iter,cur_time) ){
-				PetscPrintf(dataPartition->comm,"ouput...\n");
 				Output2Tecplot();
 				/*
 				tend   = ttime( );
@@ -110,7 +109,6 @@ void NavierStokesSolver::NSSolve( )
 			if( IfSteady ){
 				//steady
 				root.printSteadyStatus(dataPartition,iter,ResMax);
-				dataPartition->PRINT_LOG(ResidualSteady);
 				if( ResMax<ResidualSteady )break;
 			}else{
 				//unsteady
@@ -130,18 +128,18 @@ void NavierStokesSolver::NSSolve( )
 		if(cur_time >= total_time){
 			PetscLogStagePop();//profilling
 			CYCAS_GET_TIME(tend);
-			root.printEnding(dataPartition,
-				tend.tv_sec-tstart.tv_sec,
-				tend.tv_nsec-tstart.tv_nsec);
 			break;
 		}else{//time advance
 			cur_time+=dt;
 		}	
 	}
 
-	/*extra work before solve is complete 
+	//extra work before solve is complete 
 	Output2Tecplot();
-	*/
+
+	root.printEnding(dataPartition,
+			tend.tv_sec-tstart.tv_sec,
+			tend.tv_nsec-tstart.tv_nsec);
 
 	return;
 }

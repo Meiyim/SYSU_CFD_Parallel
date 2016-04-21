@@ -63,7 +63,9 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 		// ApED    [i] = Dised/ED[i] * vol;
 	}
 	// boundary for k, epsilon
-	SetBCKEpsilon( TESource,EDSource,ApTE,ApED,Prod );
+	//
+	SetBCKEpsilon( TESource,EDSource,ApTE,ApED,Prod );//CXY: setting BC would change the ED variables, interfaceCommunication needed!
+
 	// other source term. do not put the before the boundary, for boundary change Pk,epsilon mandatorily
 
 	if( !IfSteady ){
@@ -451,6 +453,7 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 		fcs=0., fde,fdi, dx[3],  sphi, pfi,pfh;
 
 	Gradient ( Phi, BPhi,  dPhidX );
+
 	dataPartition->interfaceCommunicationBegin(DiffCoef);
 	dataPartition->interfaceCommunicationEnd();
 

@@ -18,6 +18,7 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
         	for(g=0;g<3;g++)
             		phigd[i][g]= 0.;
 
+
     	for( i=0; i<Nfac; i++ )
     	{
         	lambda = Face[i].lambda;
@@ -37,22 +38,33 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 		}
     	}
 
+	CHECK_ARRAY(phi,Ncel);
+	//CHECK_ARRAY(ED,Ncel);
+
     	for( i=0; i<Ncel; i++ ){
-       	 for( g=0; g<3; g++ )
-       	     phigd[i][g] /= Cell[i].vol;
+       		for( g=0; g<3; g++ ){
+       	     		phigd[i][g] /= Cell[i].vol;
+		}
     	}
 
 
     	if(      limiter==0 )
 	{}
-	else if( limiter==1 )
+	else if( limiter==1 ){
 		Limiter_Barth( phi, phigd );
-	else if( limiter==2 )
+	}
+	else if( limiter==2 ){
 		Limiter_MLP  ( phi, phigd );
-	else if( limiter==3 )
+	}
+	else if( limiter==3 ){
+		dataPartition->interfaceCommunicationBegin(phigd);			
+		dataPartition->interfaceCommunicationEnd();
 		Limiter_WENO ( phi, phigd );
+	}
 	else
 		ErrorStop("no such limiter choice");
+
+	CHECK_ARRAY(phigd[0],3*Ncel);
 
 	dataPartition->interfaceCommunicationBegin(phigd);			
 	dataPartition->interfaceCommunicationEnd();
@@ -168,7 +180,19 @@ int NavierStokesSolver::Limiter_MLP(double UC[],double **GradU)
             UMax[iv]= CYCASMAX( UMax[iv], UC[i] );
             UMin[iv]= CYCASMIN( UMin[iv], UC[i] );
         }
+	
+	for(j=0;j!=Cell[i].nface;++j){// this for is added for virtual interface Cell, to be optimized
+		int neighbourCell = Cell[i].cell[j];
+		if ( neighbourCell >= Ncel ){//for each virtual cell
+			for(int k=0;k!=4;++k){
+				iv = Face[ Cell[i].face[j] ].vertices[k];
+				UMax[iv] = CYCASMAX( UMax[iv],UC[neighbourCell] );
+				UMin[iv] = CYCASMIN( UMin[iv],UC[neighbourCell] );
+			}	
+		}
+	}
     }
+
 
     // MLP : find slope limit coef; limit gradients
     for( i=0; i<Ncel; i++ )
@@ -192,12 +216,17 @@ int NavierStokesSolver::Limiter_MLP(double UC[],double **GradU)
         }
         ficell[i]= fi;
     }
+    //CHECK_ARRAY(UC,Ncel);
+    //CHECK_ARRAY(ficell,Ncel);
+    //CHECK_ARRAY(GradU[0],3*Ncel);
     for( i=0; i<Ncel; i++ )
     {
         GradU[i][0] = ficell[i] * GradU[i][0];
         GradU[i][1] = ficell[i] * GradU[i][1];
         GradU[i][2] = ficell[i] * GradU[i][2];
     }
+
+    //CHECK_ARRAY(GradU[0],3*Ncel);
 
     delete [] ficell;
     delete [] UMax;
@@ -215,26 +244,26 @@ int NavierStokesSolver::Limiter_Barth(double UC[],double **GradU)
     for( i=0; i<Ncel; i++ )
     {
         fi = 10.;
-		umax= UC[i];
+	umax= UC[i];
         umin= UC[i];
-		for(j=0; j<Cell[i].nface; j++ ) // this may be a little wasteful, optimize later
+	for(j=0; j<Cell[i].nface; j++ ) // this may be a little wasteful, optimize later
         {
-			in = Cell[i].cell[j];
-			if( in<0 )continue;
-            umax= CYCASMAX( umax, UC[in] );
-            umin= CYCASMIN( umin, UC[in] );
+		in = Cell[i].cell[j];
+		if( in<0 )continue;
+            	umax= CYCASMAX( umax, UC[in] );
+            	umin= CYCASMIN( umin, UC[in] );
         }
-		umax -= UC[i];
+	umax -= UC[i];
         umin -= UC[i];
-		for(j=0; j<8; j++ ) // this may be a little wasteful, 8 changed to more 
-		{
-            iv = Cell[i].vertices[j];
-            dx = Vert[iv][0] - Cell[i].x[0];
-            dy = Vert[iv][1] - Cell[i].x[1];
-            dz = Vert[iv][2] - Cell[i].x[2];
-            us = GradU[i][0]*dx + GradU[i][1]*dy + GradU[i][2]*dz ;
-			// Barth
-			fi = CYCASMIN( fi, Barth_fun(us,umin,umax) );
+	for(j=0; j<8; j++ ) // this may be a little wasteful, 8 changed to more 
+	{
+        	iv = Cell[i].vertices[j];
+		dx = Vert[iv][0] - Cell[i].x[0];
+		dy = Vert[iv][1] - Cell[i].x[1];
+            	dz = Vert[iv][2] - Cell[i].x[2];
+            	us = GradU[i][0]*dx + GradU[i][1]*dy + GradU[i][2]*dz ;
+		// Barth
+		fi = CYCASMIN( fi, Barth_fun(us,umin,umax) );
         }
         ficell[i]= fi;
     }
@@ -276,9 +305,9 @@ int NavierStokesSolver::Limiter_WENO(double *UC,double **GradU)
                        GradU[ic][1]*GradU[ic][1] +
                        GradU[ic][2]*GradU[ic][2] +1.e-16 );
             ss += wei;
-			gdTmp[i][0] += wei*GradU[ic][0];
-			gdTmp[i][1] += wei*GradU[ic][1];
-			gdTmp[i][2] += wei*GradU[ic][2];
+	    gdTmp[i][0] += wei*GradU[ic][0];
+	    gdTmp[i][1] += wei*GradU[ic][1];
+	    gdTmp[i][2] += wei*GradU[ic][2];
         }
 
 		//// boundary cells, just quit
@@ -294,12 +323,14 @@ int NavierStokesSolver::Limiter_WENO(double *UC,double **GradU)
                        GradU[i ][1]*GradU[i ][1] +
                        GradU[i ][2]*GradU[i ][2] +1.e-16 );
         ss += wei;
-		gdTmp[i][0] += wei*GradU[i][0];
-		gdTmp[i][1] += wei*GradU[i][1];
-		gdTmp[i][2] += wei*GradU[i][2];
-		gdTmp[i][0] /= ss;
-		gdTmp[i][1] /= ss;
-		gdTmp[i][2] /= ss;
+
+	gdTmp[i][0] += wei*GradU[i][0];
+	gdTmp[i][1] += wei*GradU[i][1];
+	gdTmp[i][2] += wei*GradU[i][2];
+	gdTmp[i][0] /= ss;
+	gdTmp[i][1] /= ss;
+	gdTmp[i][2] /= ss;
+	
     }
     // substitution
     for( i=0; i<Ncel; i++ )

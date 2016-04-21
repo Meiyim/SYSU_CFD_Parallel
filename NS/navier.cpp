@@ -76,6 +76,8 @@ void NavierStokesSolver::NSSolve( )
 			if(TurModel==1) {
 				UpdateTurKEpsilon( );
 			}
+			//CHECK_ARRAY(TE,Ncel);
+			//CHECK_ARRAY(ED,Ncel);
 
 			//2. energy couple
 			if( SolveEnergy  ) {

@@ -217,17 +217,29 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 	}
 	of.close();*/
 
+	/*
+	double* debugArray = new double[Nbnd];
+
+	CHECK_ARRAY(ED,Ncel);
+	for(i=0;i<Nbnd;++i){
+		debugArray[i] = 0.0;
+	}
+	*/
+
+	
+
 	for( i=0; i<Nbnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
-		switch( rid ){
-		case(1):  // wall
+
+		if(rid==1){
+		 	 // wall
 			BTE[i]= TE[ic];
 			BED[i]= ED[ic];
+
 			vol = Cell[ic].vol;
-			
 			// calculate the skin friction velocity
 			sav1n = Face[iface].n[0]/(Face[iface].area+1.e-16);
 			sav2n = Face[iface].n[1]/(Face[iface].area+1.e-16);
@@ -254,23 +266,60 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 
 			ED      [ic] = eps;
 			BED     [i ] = eps;
-			break;
-		case(2):  // inlet
-			BTE[i]= tein ;  // turbulence intensity
-			BED[i]= edin ;
-			break;
-		case(3):  // outlet
-			BTE[i]= TE[ic];
-			BED[i]= ED[ic];
-			break;
-		case(4):  // symmetric
-			BTE[i]= TE[ic];
-			BED[i]= ED[ic];
-			break;
-		default:
-			char temp[256];
-			sprintf(temp,"no such boundary type %d \n ",rid);
-			errorHandler.fatalLogicError(temp);
 		}
 	}
+
+	for( i=0; i<Nbnd; i++ )
+	{
+		rid   = Bnd[i].rid;
+		iface = Bnd[i].face;
+		ic    = Face[iface].cell1;
+
+		if(rid==2){
+			BTE[i]= tein ;  // turbulence intensity
+			BED[i]= edin ;
+		}
+	}
+	
+	for( i=0; i<Nbnd; i++ )
+	{
+		rid   = Bnd[i].rid;
+		iface = Bnd[i].face;
+		ic    = Face[iface].cell1;
+
+		if(rid==3){
+			BTE[i]= TE[ic];
+			BED[i]= ED[ic];
+		}
+	}
+
+	for( i=0; i<Nbnd; i++ )
+	{
+		rid   = Bnd[i].rid;
+		iface = Bnd[i].face;
+		ic    = Face[iface].cell1;
+
+		if(rid==4){
+			BTE[i]= TE[ic];
+			BED[i]= ED[ic];
+		}
+	}
+
+	/*
+	for(int i=0;i!=Nbnd;++i){
+		debugArray[i] = B[i];
+	}
+	*/
+
+	/*
+	CHECK_ARRAY(debugArray,Nbnd);
+	CHECK_ARRAY(ED,Ncel);
+	CHECK_ARRAY(BED,Nbnd);
+	delete [] debugArray;
+	*/
+
+	/******************  INTERFACE COMMUNICATION  ********************/
+	dataPartition->interfaceCommunicationBegin(ED);
+	dataPartition->interfaceCommunicationEnd();
+
 }

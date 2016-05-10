@@ -15,7 +15,7 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
-		switch( rid ){
+		switch( regionMap[rid].type1 ){
 		case(1):  // wall
 			br[i]= Rn[ic];
 			bu[i]= 0.;
@@ -23,10 +23,15 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 			bw[i]= 0.;
 			break;
 		case(2):  // inlet
-			br[i]= roin;
-			bu[i]= uin;
-			bv[i]= vin;
-			bw[i]= win;
+			//remain initialvalue;
+			/*
+			double* initvalues = regionMap[rid].initvalues;
+			br[i]= initvalues[4];
+			bu[i]= initvalues[0];
+			bv[i]= initvalues[1];
+			bw[i]= initvalues[2];
+			*/
+
 			// if( DensityModel==1 ) br[i]= PressureReference/(Rcpcv*298.);
 			break;
 		case(3):  // outlet
@@ -45,10 +50,9 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 			bw[i]= Wn[ic] - unormal * sav3n;
 			br[i]= Rn[ic];
 			break;
+
 		default:
-			char temp[256];
-			sprintf(temp,"no such boundary type: %d at bnd: %d\n ",rid,i);
-			errorHandler.fatalLogicError(temp);
+			errorHandler.fatalLogicError("no such boundary type in velocity bc:",regionMap[rid].type1);
 		}
 	}
 
@@ -63,14 +67,14 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 		{
 			rid   = Bnd[i].rid;
 			iface = Bnd[i].face;
-			if( rid==2 )
+			if( regionMap[rid].type1==2 )
 				massflowin  += br[i]*( 	bu[i]*Face[iface].n[0] +
-						       	bv[i]*Face[iface].n[1] +
-							bw[i]*Face[iface].n[2] );
-			else if( rid==3 ){
+						       bv[i]*Face[iface].n[1] +
+							   bw[i]*Face[iface].n[2] );
+			else if( regionMap[rid].type1==3 ){
 				massflowout += br[i]*( bu[i]*Face[iface].n[0] +
 						       bv[i]*Face[iface].n[1] +
-			                               bw[i]*Face[iface].n[2] );
+			                   bw[i]*Face[iface].n[2] );
 				areaout += br[i]*Face[i].area;
 			}
 		}
@@ -84,7 +88,7 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 				rid   = Bnd[i].rid;
 				iface = Bnd[i].face;
 				ic    = Face[iface].cell1;
-				if( rid==3 )
+				if( regionMap[rid].type1==3 )
 				{
 					BU[iface] *= rate ;
 					BV[iface] *= rate ;
@@ -100,7 +104,7 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 				rid   = Bnd[i].rid;
 				iface = Bnd[i].face;
 				ic    = Face[iface].cell1;
-				if( rid==3 )
+				if( regionMap[rid].type1==3 )
 				{
 					BU[iface] += rate * Face[iface].n[0]/Face[iface].area;
 					BV[iface] += rate * Face[iface].n[1]/Face[iface].area;
@@ -119,7 +123,7 @@ void NavierStokesSolver::SetBCPressure(double*bp)
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
-		switch( rid ){
+		switch( regionMap[rid].type1 ){
 		case(1):  // wall
 			bp[i] = Pn[ic];
 			break;
@@ -152,7 +156,7 @@ void NavierStokesSolver::SetBCDeltaP(double*bp, double *dp)
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
-		switch( rid ){
+		switch( regionMap[rid].type1 ){
 		case(1):  // wall
 		case(2):  // inlet
 		case(3):
@@ -175,12 +179,13 @@ void NavierStokesSolver::SetBCTemperature( double *bt )
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
-		switch( rid ){
+		switch( regionMap[rid].type1 ){
 		case(1):  // wall
-			bt[i]= Twall;
+			//remain initial
 			break;
 		case(2):  // inlet
-			bt[i]= Tin;
+			//remain initial
+			//printf("inlet bt is %e\n",bt[i]);
 			break;
 		case(3):
 			bt[i]= Tn[ic];
@@ -213,7 +218,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
-		if( rid==1 ) of<<ic<<endl;
+		if( regionMap[rid].type1==1 ) of<<ic<<endl;
 	}
 	of.close();*/
 
@@ -234,7 +239,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
 
-		if(rid==1){
+		if(regionMap[rid].type1==1){
 		 	 // wall
 			BTE[i]= TE[ic];
 			BED[i]= ED[ic];
@@ -275,9 +280,12 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
 
-		if(rid==2){
+		//remain initial value
+		if(regionMap[rid].type1==2){
+			/*
 			BTE[i]= tein ;  // turbulence intensity
 			BED[i]= edin ;
+			*/
 		}
 	}
 	
@@ -287,7 +295,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
 
-		if(rid==3){
+		if(regionMap[rid].type1==3){
 			BTE[i]= TE[ic];
 			BED[i]= ED[ic];
 		}
@@ -299,7 +307,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
 
-		if(rid==4){
+		if(regionMap[rid].type1==4){
 			BTE[i]= TE[ic];
 			BED[i]= ED[ic];
 		}

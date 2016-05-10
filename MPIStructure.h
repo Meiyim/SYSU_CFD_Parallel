@@ -66,7 +66,7 @@ public:
 
 		MPI_Get_address(&cellSample,&baseAddress);
 
-		lena[0] = 22; //22 Ints
+		lena[0] = 23; //23 Ints
 		MPI_Get_address(&cellSample.nface,&loca[0]);
 		loca[0] -= baseAddress;
 		typa[0] = MPI_INT;

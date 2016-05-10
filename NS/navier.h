@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <map>
 #include <algorithm>
 #include "BasicType.h"
 #ifndef CYCAS_DEBUG_MODE
@@ -44,6 +45,7 @@ public:
 
 
 	//option Sets
+	std::map<int,BdRegion> regionMap;
 	int* iOptions; 	  //len 13       //handles for integer & bool option pool, for bool, 0 = false, 1 = true
 	double* dbOptions;//len 33	//handles for double option pool
 
@@ -65,9 +67,8 @@ public:
 	int& Nspecies;
 	int& cellPressureRef;   //the reference point should be in root.rank! CXY: the reference point might differ from serial version
 	int& MaxStep;      
-	int     *rtable;//[100];				// preset rtables only used with debugging
 
-	/******Length - 32***********/
+	/******Length - 23***********/
 	double& PressureReference; 
 	double& gama;
 	double& ga1;
@@ -79,11 +80,10 @@ public:
 	double& TempRef;
 	double& total_time;
 	double& dt;
-	double& uin,&vin,&win,&roin,&Tin,&tein,&edin, &Twall, &pin,&pout; //input parameters ,simple implementation
+	//double& uin,&vin,&win,&roin,&Tin,&tein,&edin, &Twall, &pin,&pout; //input parameters ,simple implementation
 	double *gravity;    // length of 3
 	double *URF; 	    //numerical scheme relaxation factor , currently length 8
-	double *initvalues; // len:100
-	double &ResidualSteady;// dbOptions[132]
+	double &ResidualSteady;// dbOptions[22]
 	
 
 
@@ -155,7 +155,7 @@ public:
 
 // Init flow field
     // read solver param, material, post, everything except 
-	void initSolverParam(); 	//CXY: root ONLY	
+	void initSolverParam(); 		//CXY: root ONLY	
 	void broadcastSolverParam();	//CXY: now a MPI BROADCAST routine
 	void broadcastPartitionInfo();  //CXY: a MPI BROADCAST routine
 	void scatterGridFile(int** elemBuffer,double** vertexBuffer,int** interfaceBuffer);		//CXY: a MPI ScatterV routine

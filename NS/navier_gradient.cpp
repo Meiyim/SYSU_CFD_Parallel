@@ -38,7 +38,7 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 		}
     	}
 
-	CHECK_ARRAY(phi,Ncel);
+	//CHECK_ARRAY(phi,Ncel);
 	//CHECK_ARRAY(ED,Ncel);
 
     	for( i=0; i<Ncel; i++ ){
@@ -64,7 +64,7 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 	else
 		ErrorStop("no such limiter choice");
 
-	CHECK_ARRAY(phigd[0],3*Ncel);
+	//CHECK_ARRAY(phigd[0],3*Ncel);
 
 	dataPartition->interfaceCommunicationBegin(phigd);			
 	dataPartition->interfaceCommunicationEnd();

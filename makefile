@@ -1,7 +1,7 @@
 
 CFLAGS	         =
 FFLAGS	         =
-CPPFLAGS         =
+CPPFLAGS         = -g
 FPPFLAGS         =
 BIN		 = ./bin/
 NSSRC		 = ./NS/

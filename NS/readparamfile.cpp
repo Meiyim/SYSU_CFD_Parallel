@@ -175,45 +175,130 @@ void NavierStokesSolver::ReadParamFile( )
 		}
 		else if( strcmp(keyw[0],"initflow")==0 )
 		{
+
+			BdRegion& reg = regionMap[0];//inseret;
+			reg.name= "default fluid";
+			reg.type1 = 5;
+			reg.type2 = 0;//fluid
 			for( i=1; i<=ikey; i++ )
-				initvalues[i-1]= atof( keyw[i] );
+				reg.initvalues[i-1]= atof( keyw[i] );
 		}
 
 		//--- boundary condition
 		else if( strcmp(keyw[0],"bound")==0 )
 		{
 			int bid= atoi( keyw[1] );
-			if(      strcmp(keyw[2],"wall")==0 )
+			if(bid == 0){
+				errorHandler.fatalLogicError("default rid 0 is occupied");
+			}
+			if(regionMap.find(bid) != regionMap.end()){
+					errorHandler.fatalLogicError("repeating rid definition",bid);
+			}
+			if( strcmp(keyw[2],"Twall")==0 )
 			{
-				rtable[bid] = 1;
-				if( SolveEnergy ) Twall = atof( keyw[3] );
+				if(ikey!=3){
+					errorHandler.fatalLogicError("temperature wall field requied 1 parameters");
+				}
+				regionMap[bid].name="Twall";
+				regionMap[bid].type1 = 1;
+				regionMap[bid].type2 = 0;//given T
+				regionMap[bid].fixedValue = atof(keyw[3]);
+		
+			}
+			else if( strcmp(keyw[2],"Hwall")==0 ){
+				if(ikey!=3){
+					errorHandler.fatalLogicError("heat flux wall field requied 1 parameters");
+				}
+				regionMap[bid].name="Hwall";
+				regionMap[bid].type1 = 1;
+				regionMap[bid].type2 = 1;//given flux
+				regionMap[bid].fixedValue = atof(keyw[3]);
+			}
+			else if( strcmp(keyw[2],"sym")==0 ){
+				if(ikey!=2){
+					errorHandler.fatalLogicError("symmetric field requied no parameters");
+				}
+				regionMap[bid].name="sym";
+				regionMap[bid].type1 = 4;
+				regionMap[bid].type2 = 0;
+				regionMap[bid].fixedValue = 0.0;
 			}
 			else if( strcmp(keyw[2],"inlet")==0 ){
-				rtable[bid] = 2;
-				uin = atof(keyw[3]);
-				vin = atof(keyw[4]);
-				win = atof(keyw[5]);
-				pin = atof(keyw[6]);
-				roin= atof(keyw[7]);
-				Tin = atof(keyw[8]);
-				if( TurModel==1 ){
-					tein = atof(keyw[9]);
-					edin = atof(keyw[10]);
+				if(ikey!=10){
+					errorHandler.fatalLogicError("inlet field requied 8 parameters");
 				}
-			}
+				regionMap[bid].name="inlet";
+				regionMap[bid].type1 = 2;
+				regionMap[bid].type2 = 0;
+				double* initvalues = regionMap[bid].initvalues;
+				initvalues[0] = atof(keyw[3]);//u
+				initvalues[1] = atof(keyw[4]);//v
+				initvalues[2] = atof(keyw[5]);//w
+				initvalues[3] = atof(keyw[6]);//p
+				initvalues[4] = atof(keyw[7]);//r
+				initvalues[5] = atof(keyw[8]);//t
+				if( TurModel==1 ){
+					initvalues[6] = atof(keyw[9]);//te
+					initvalues[7] = atof(keyw[10]);//ed
+				}
+			}	
 			else if( strcmp(keyw[2],"outlet")==0 ){
-				rtable[bid] = 3;
-				pout = atof(keyw[3]);
+				if(ikey!=3){
+					errorHandler.fatalLogicError("outlet field requied 1 parameters");
+				}
+				regionMap[bid].name="outlet";
+				regionMap[bid].type1 = 3;
+				regionMap[bid].type2 = 0;
+				regionMap[bid].fixedValue = atof(keyw[3]); //pout
 			}
-			else if( strcmp(keyw[2],"sym")==0 )
-				rtable[bid] = 4;
 			else
 			{
-				char temp[256];
-				sprintf(temp,"Error in reading param.in\t line: %d \nunknown boundary type:%s\n",_linecounter,keyw[2]);
-				errorHandler.fatalLogicError(temp);
+				errorHandler.fatalLogicError("unknown boundry type in bound",keyw[2]);
 			}
 		}
+
+		//volumn definition
+		else if( strcmp(keyw[0],"volumn")==0 )
+		{
+			int bid= atoi( keyw[1] );
+			if(bid == 0){
+				errorHandler.fatalLogicError("default rid 0 is occupied");
+			}
+			if(regionMap.find(bid) != regionMap.end()){
+					errorHandler.fatalLogicError("repeating rid definition",bid);
+			}
+
+			if(      strcmp(keyw[2],"fluid")==0 )//fluid
+			{
+				regionMap[bid].name= keyw[3];
+				regionMap[bid].type1 = 5;
+				regionMap[bid].type2 = 0;//fluid
+				if(ikey!=10){
+					errorHandler.fatalLogicError("fluid field required 8 parameters");
+				}
+				for(int i=4;i<=ikey;++i){
+					regionMap[bid].initvalues[i-4]= atof( keyw[i] );
+				}
+			}
+			else if( strcmp(keyw[2],"solid")==0 ){// solid
+				regionMap[bid].name=keyw[3];
+				regionMap[bid].type1 = 5;
+				regionMap[bid].type2 = 1;//solid
+				if(ikey!=5){
+					errorHandler.fatalLogicError("solid field required 3 parameters");
+				}
+				for(int i=4;i<=ikey;++i){
+					regionMap[bid].initvalues[i-4]= atof( keyw[i] );
+				}
+			}
+
+			else
+			{
+				errorHandler.fatalLogicError("unknown boundry type in bound",keyw[2]);
+			}
+		}
+
+
 
 		//--- post process 
 		else if( strcmp(keyw[0],"output")==0 )

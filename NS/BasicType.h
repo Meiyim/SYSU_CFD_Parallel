@@ -2,6 +2,7 @@
 #include<petscksp.h>
 #include<limits>
 #include<numeric>
+#include<string>
 /********************************************************
  * define the basic type in NavierStorkesSolver
  ********************************************************/
@@ -11,8 +12,8 @@
 #define SMALL 1.e-16
 #define CYCASHUGE_D std::numeric_limits<double>::max()
 #define CYCASHUGE_I std::numeric_limits<int>::max()
-#define INT_OPTION_NO 114 
-#define DB_OPTION_NO  133
+#define INT_OPTION_NO 14 
+#define DB_OPTION_NO  23
 #define TECPLOT_NVAR  13
 
 
@@ -31,11 +32,21 @@ public:
 		MPI_Abort(MPI_COMM_WORLD,0);
 		PetscFinalize();
 	}
+	void fatalLogicError(std::string msg, int id){
+		char temp[1024];
+		sprintf(temp,"%s: %d\n",msg.c_str(),id);
+		fatalLogicError(temp);
+	}
+	void fatalLogicError(std::string msg, const char* detal){
+		char temp[1024];
+		sprintf(temp,"%s: %s\n",msg.c_str(),detal);
+		fatalLogicError(temp);
+	}
 	void fatalLogicError(std::string msg){
 		int r;
 		MPI_Comm_rank(MPI_COMM_WORLD,&r);
 		printf("!!!!!!!!!!!!!!!!run time error occured in rank: %d!!!!!!!!!!!!!!!!!\n",r);
-		std::cout<<msg;
+		std::cout<<msg<<std::endl;
 		printf("!!!!!!!!!!!!!!!!System will Abort!!!!!!!!!!!!!!!!!\n");
 		getchar();
 		MPI_Abort(MPI_COMM_WORLD,0);
@@ -166,6 +177,7 @@ public:
 class CellData{
 public:
     int nface;
+    int rid;					//point to BoundaryData
     int face[6], cell[6], vertices[8]; // maybe wasterful a bit. Make it dynamics to save memory
     				       //  face[nface]: for the faces index
     				       //  all elements are treated as 8 nodes hexahdron,
@@ -175,6 +187,7 @@ public:
     double x[3];
     CellData():
 	    nface(CYCASHUGE_I),
+	    rid(CYCASHUGE_I),
 	    globalIdx(CYCASHUGE_I),
 	    vol(CYCASHUGE_D)
 	    {
@@ -188,6 +201,7 @@ public:
 
     CellData& operator=(CellData& rhs){
 	    this->nface = rhs.nface;
+	    this->rid = rhs.rid;
 	    this->globalIdx = rhs.globalIdx;
 	    for(int i=0;i!=6;++i){
 		   this->face[i] = rhs.face[i];
@@ -224,23 +238,57 @@ struct BoundaryData
     double  T;               // local wall temperature
 };
 
+
 // store the data set in one type of boundary
-struct BdRegion
-{
-	char name[50];
-	int  itype;
-	// momentum and pressure
-	double vel[3],massflow[3],veldirection[3], pressure;
-	// temperature
-	int    temType; // =0 : given temperature; 
-	                // =1 : heat flux (0 for default adiabatic, others )
-	double tem,qflux;
-	// turbulence
-	double te,ed, turbIntensity;
-	// species
-	int    speType; // = 0 : specific mass fraction (e.g., saturated concentration);
-	                // = 1 : specific mass flux (0 for default,means no diffusion flux in Fluent)
-	double *speCon; // mass fraction
+class BdRegion{
+public:
+    std::string name;
+    int  type1;  //=1: wall
+                 //=2: inlet
+                 //=3: outlet
+                 //=4: symmetric
+                 //=5: body
+    // temperature
+    int  type2; // for wall:(type1==1)
+                // =0 : given temperature; 
+                // =1 : heat flux (0 for default adiabatic, others )
+                // =2 : coupled
+
+                // for body:(type1==5)
+                // =0 : fluid field: u, v, w, ro, p, t ...
+                // =1 : solid: ro, diffCoef
+
+    double fixedValue;
+    double initvalues[10];//u,v,w,p,ro,t,te,ed
+    BdRegion():
+        type1(-1),
+        type2(-1),
+        fixedValue(CYCASHUGE_I)
+    {}
+
+    BdRegion(double* buffer,int len){		 //construct from buffer
+    	int icounter = 0;
+   		type1 = (int)buffer[icounter++];
+   		type2 = (int)buffer[icounter++];
+   		fixedValue = buffer[icounter++];
+    	for(int i=0;i!=len-3;++i){
+    		initvalues[i] = buffer[icounter++];
+    	}
+    }
+
+    int getSendBuffer(double* buffer){		//user's responsibility to alloc&free memory
+    	//name field is ignored ... who cares;
+    	int len = 13;
+    	buffer[0] = (double) type1;
+    	buffer[1] = (double) type2;
+    	buffer[2] = fixedValue;
+    	for(int i=0;i!=10;++i){
+    		buffer[3+i] = initvalues[i];
+
+    	}
+    	return len;
+    }
+
 };
 
 

@@ -151,7 +151,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 				dwdy   = dWdX[i][1];
 				dwdz   = dWdX[i][2];
 				vec_minus( dxc, Face[iface].x, Cell[i].x, 3 );
-				switch( rid ){
+				switch( regionMap[rid].type1 ){
 				case(1):
 					ViscAreaLen = Visc*Face[iface].rlencos;
 					app   += ViscAreaLen;
@@ -187,7 +187,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 				
 
 				// convection boundary
-				switch( rid ){
+				switch( regionMap[rid].type1 ){
 				case(1):     //---- Wall ----
 					// convection to implicit, nothing
 					fcs[0] = 0.;

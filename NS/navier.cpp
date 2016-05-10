@@ -186,12 +186,42 @@ void NavierStokesSolver::broadcastSolverParam(){
 	MPI_Barrier(dataPartition->comm);
 
 	//------bool option pool
-	MPI_Bcast(iOptions,INT_OPTION_NO,MPI_INT,sourceRank,dataPartition->comm);
+	MPI_Bcast(iOptions,INT_OPTION_NO,MPI_INT,sourceRank,MPI_COMM_WORLD);
 
 	//------double option pool
-	MPI_Bcast(dbOptions,DB_OPTION_NO,MPI_DOUBLE,sourceRank,dataPartition->comm);
+	MPI_Bcast(dbOptions,DB_OPTION_NO,MPI_DOUBLE,sourceRank,MPI_COMM_WORLD);
 
-	PetscPrintf(dataPartition->comm,"done\n");
+	//------region map;
+	int nRegion = regionMap.size();
+	int bufferSize = 0;
+	int mapIndex = 0;
+	double* regionBuffer = new double[1024];//preassume buffer lenth
+
+	MPI_Bcast(&nRegion,1,MPI_INT,sourceRank,MPI_COMM_WORLD);
+
+	std::map<int,BdRegion>::iterator iter = regionMap.begin();
+	for(int i=0;i!=nRegion;++i){
+		if(dataPartition->comRank == root.rank){
+			bufferSize = iter->second.getSendBuffer(regionBuffer);
+			mapIndex = iter->first;
+			iter++;
+		}
+		MPI_Barrier(MPI_COMM_WORLD);
+		MPI_Bcast(&mapIndex,1,MPI_INT,sourceRank,MPI_COMM_WORLD);
+		MPI_Bcast(&bufferSize,1,MPI_INT,sourceRank,MPI_COMM_WORLD);
+		MPI_Bcast(regionBuffer,bufferSize,MPI_DOUBLE,sourceRank,MPI_COMM_WORLD);
+
+		//printf("initing region(%d) of size %d \n",mapIndex,bufferSize );
+		if(dataPartition->comRank != root.rank){
+			regionMap[mapIndex] = BdRegion(regionBuffer,bufferSize);
+		}
+
+
+	}
+
+	delete []regionBuffer;
+	MPI_Barrier(MPI_COMM_WORLD);
+	PetscPrintf(MPI_COMM_WORLD,"done\n");
 
 }
 
@@ -445,12 +475,6 @@ void NavierStokesSolver::initSolverParam()
 	URF[6]= 0.8;  // e
 	URF[7]= 0.8;  // scalar
 
-	for(int i=0;i!=100;++i){
-		rtable[i] = 0;	//currently len 100
-	}
-	for(int i=0;i!=100;++i){//currently len 100
-		initvalues[i] = 0.0;
-	}
 	limiter = 0;
 
 	total_time   = 0.    ;
@@ -461,8 +485,6 @@ void NavierStokesSolver::initSolverParam()
 	outputFormat = 0;  // 0 for tecplot; 1 for vtk
 
 	// boundary
-	pin = 0.; 
-	pout= 0.;
 
 	/*
 	// specific problem parameters
@@ -496,8 +518,33 @@ void NavierStokesSolver::InitFlowField( ){
 	if( IfReadBackup ) 
 		ReadBackupFile( );
 	else{
+		if(regionMap.find(0)!=regionMap.end()){
+			for( i=0; i<Ncel; i++ )
+			{
+				double* initvalues = regionMap[0].initvalues;
+				Un[i] = initvalues[0];
+				Vn[i] = initvalues[1];
+				Wn[i] = initvalues[2];
+				Rn[i] = initvalues[3];
+				Tn[i] = initvalues[4];
+				Pn[i] = 0.;
+				if( DensityModel== 1 ) Rn[i]= (Pn[i]+PressureReference)/(Rcpcv*Tn[i]);
+				VisLam[i]= initvalues[5]; // 0.6666667e-2;  // 1.458e-6 * pow(Tn[i],1.5) /(Tn[i]+110.5) ;
+				VisTur[i]= 0.;
+				if( TurModel==1 )
+				{
+					TE[i]    = initvalues[6];  // 1.e-4*(Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]);
+					ED[i]    = initvalues[7];    // TurKEpsilonVar::Cmu * pow(TE[i],1.5) / 1.;
+					VisTur[i]= Rn[i]*TurKEpsilonVar::Cmu * TE[i]*TE[i]/(ED[i]+SMALL);
+				}
+			}
+		}
+
 		for( i=0; i<Ncel; i++ )
 		{
+			int rid = Cell[i].rid;
+			assert(regionMap.find(rid)!=regionMap.end());
+			double* initvalues = regionMap[rid].initvalues;
 			Un[i] = initvalues[0];
 			Vn[i] = initvalues[1];
 			Wn[i] = initvalues[2];
@@ -514,17 +561,36 @@ void NavierStokesSolver::InitFlowField( ){
 				VisTur[i]= Rn[i]*TurKEpsilonVar::Cmu * TE[i]*TE[i]/(ED[i]+SMALL);
 			}
 		}
+
 	}
 	std::fill(deltaP,deltaP+Ncel,0.0);
 
-	// change grid boundary to actual boundary
-	int rid;  // rtable[10]={0,1,2,3,4,0},
-	for( i=0; i<Nbnd; i++ )
-	{
-		rid = Bnd[i].rid;
-		Bnd[i].rid = rtable[ rid ];
+	for(i=0;i!=Nbnd;++i){
+		BdRegion& reg = regionMap[Bnd[i].rid];
+		if(reg.type1==1){
+			if(reg.type2==0){
+				BTem[i] = reg.fixedValue;
+			}else if(reg.type2 == 1){
+				Bnd[i].q = reg.fixedValue;
+			}else if(reg.type2 == 2){ //coupled bounday
+				Bnd[i].q = 0.0;
+			}
+		}else if(reg.type1==2){//inlet, u,v,w,p,ro,t,te,ed
+			BU[i] = reg.initvalues[0];
+			BV[i] = reg.initvalues[1];
+			BW[i] = reg.initvalues[2];
+			//pressure is ignored  [3]
+			BRo[i] = reg.initvalues[4];
+			BTem[i]= reg.initvalues[5];
+			BTE[i] = reg.initvalues[6];
+			BED[i] = reg.initvalues[7];
+		}else if(reg.type1==4){//sym
+	 		Bnd[i].q =0.0;//not implement yet
+	 	}
 	}
 
+
+	// change grid boundary to actual boundary
 	for( i=0;i<Nfac;i++ )
 		RUFace[i] = 0.;
 
@@ -614,47 +680,35 @@ NavierStokesSolver::NavierStokesSolver():
 	//option sets
 	//bool
 	IfReadBackup		(iOptions[0]),
-	IfSteady		(iOptions[1]),
-	SolveEnergy		(iOptions[2]),
+	IfSteady			(iOptions[1]),
+	SolveEnergy			(iOptions[2]),
 	SolveSpecies		(iOptions[3]),
 	//int
 	MaxOuterStep		(iOptions[4]),
-	TurModel		(iOptions[5]),
+	TurModel			(iOptions[5]),
 	DensityModel		(iOptions[6]),
-	limiter			(iOptions[7]),
-	TimeScheme		(iOptions[8]),
-	noutput			(iOptions[9]),
+	limiter				(iOptions[7]),
+	TimeScheme			(iOptions[8]),
+	noutput				(iOptions[9]),
 	outputFormat		(iOptions[10]),
-	Nspecies		(iOptions[11]),
+	Nspecies			(iOptions[11]),
 	cellPressureRef		(iOptions[12]),
-	MaxStep			(iOptions[13]),
-	rtable			(iOptions+14),
+	MaxStep				(iOptions[13]),
 	//double
 	PressureReference	(dbOptions[0]),
-	gama			(dbOptions[1]),
-	ga1			(dbOptions[2]),
-	cp			(dbOptions[3]),
-	cv			(dbOptions[4]),
-	prl			(dbOptions[5]),
-	prte			(dbOptions[6]),
-	Rcpcv			(dbOptions[7]),
-	TempRef			(dbOptions[8]),
-	total_time		(dbOptions[9]),
-	dt			(dbOptions[10]),
-	uin			(dbOptions[11]),
-	vin			(dbOptions[12]),
-	win			(dbOptions[13]),
-	roin			(dbOptions[14]),
-	Tin			(dbOptions[15]),
-	tein			(dbOptions[16]),
-	edin			(dbOptions[17]),
-	Twall			(dbOptions[18]),
-	pin			(dbOptions[19]),
-	pout			(dbOptions[20]),
-	gravity			(dbOptions+21), //gravity components: 22,23,24
-	URF			(dbOptions+24),  //URF 	24~31 //length 8
-	initvalues		(dbOptions+32),
-	ResidualSteady		(dbOptions[132]),
+	gama				(dbOptions[1]),
+	ga1					(dbOptions[2]),
+	cp					(dbOptions[3]),
+	cv					(dbOptions[4]),
+	prl					(dbOptions[5]),
+	prte				(dbOptions[6]),
+	Rcpcv				(dbOptions[7]),
+	TempRef				(dbOptions[8]),
+	total_time			(dbOptions[9]),
+	dt					(dbOptions[10]),
+	gravity				(dbOptions+11), //gravity components: 11,12,13
+	URF					(dbOptions+14),  //URF 	14~21 //length 8
+	ResidualSteady		(dbOptions[22]),
 
 	//all put NULL to avoid wild pointer
 	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL),

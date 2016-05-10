@@ -113,69 +113,74 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	//-----------//
 
         // Some gmsh files have 2 and some have 3 tags
-        	assert( ntags==2 || ntags==3 );
+        assert( ntags==2 || ntags==3 );
   
-	        if( elem_type==2 || elem_type==3 ){ // Boundary, Tri/Quad face
-			//Bnd = (BoundaryData*) realloc(Bnd,(Nbnd+1)*sizeof(BoundaryData)); //deprecated : pool performace!
-			Bnd[ibnd].rid = tag[0];  // bndType[tag[0]];      // First tag is face type
+	    if( elem_type==2 || elem_type==3 ){ // Boundary, Tri/Quad face
+		      //Bnd = (BoundaryData*) realloc(Bnd,(Nbnd+1)*sizeof(BoundaryData)); //deprecated : pool performace!
+	       	Bnd[ibnd].rid = tag[0];  // bndType[tag[0]];      // First tag is face type
 
-			if(elem_type==2 ){
-       		         	Bnd[ibnd].vertices[0]= vertices[0];
-		                Bnd[ibnd].vertices[1]= vertices[1];
-       			        Bnd[ibnd].vertices[2]= vertices[2];
-		                Bnd[ibnd].vertices[3]= vertices[2];
-			}else if(elem_type==3 ){
-       	        		Bnd[ibnd].vertices[0]= vertices[0];
-		                Bnd[ibnd].vertices[1]= vertices[1];
-       		        	Bnd[ibnd].vertices[2]= vertices[2];
-       		         	Bnd[ibnd].vertices[3]= vertices[3];
-	       		 }else{
+		    if(elem_type==2 ){
+       	        Bnd[ibnd].vertices[0]= vertices[0];
+                Bnd[ibnd].vertices[1]= vertices[1];
+                Bnd[ibnd].vertices[2]= vertices[2];
+                Bnd[ibnd].vertices[3]= vertices[2];
+            }else if(elem_type==3 ){
+       			Bnd[ibnd].vertices[0]= vertices[0];
+		        Bnd[ibnd].vertices[1]= vertices[1];
+       		    Bnd[ibnd].vertices[2]= vertices[2];
+       		    Bnd[ibnd].vertices[3]= vertices[3];
+	       	}else{
 				errorHandler.fatalLogicError("unknown boundary type in local grid file\n");
 			}
 			ibnd ++ ;
-       		 }else if( elem_type==4 || elem_type==5 ||  // Tetrahedral/Hexa/Prism/Pyramid cell
-       		          elem_type==6 || elem_type==7 )
-       		 {
-            		//Cell = (CellData*) realloc(Cell,(Ncel+1)*sizeof(CellData));//deprecated: pool performance!
-            		// set all the cell types to 8-vertex hexa
-            		if(     elem_type==4 )   // tetra
-            		{
+       	}else if( elem_type==4 || elem_type==5 ||  // Tetrahedral/Hexa/Prism/Pyramid cell
+       	          elem_type==6 || elem_type==7 )
+       	{
+        	//Cell = (CellData*) realloc(Cell,(Ncel+1)*sizeof(CellData));//deprecated: pool performance!
+            // set all the cell types to 8-vertex hexa
+            Cell[icel].rid = tag[0];
+           	if( elem_type==4 )   // tetra
+           	{
 				// 0-3
 				for( p=0; p<3; p++ )
 					Cell[icel].vertices[p]= vertices[p];
 				Cell[icel].vertices[3]= vertices[2];
 				// 4-7
-                		for( p=4; p<8; p++ )
+            	for( p=4; p<8; p++ )
 					Cell[icel].vertices[p]= vertices[3];
 
-	            	}else if( elem_type==5 )  // hexa
+	        }
+            else if( elem_type==5 )  // hexa
 			{
 				for( p=0; p<8; p++ )
-				Cell[icel].vertices[p]= vertices[p];
-			}else if( elem_type==6 )  // prism
-       		     	{
+			     	Cell[icel].vertices[p]= vertices[p];
+			}
+            else if( elem_type==6 )  // prism
+       		{
 				// 0-3
 				for( p=0; p<3; p++ )
        	        			 Cell[icel].vertices[p]= vertices[p];
 				Cell[icel].vertices[3]= vertices[2];
 				// 4-7
-       		         	for( p=4; p<7; p++ )
-       		         		Cell[icel].vertices[p]= vertices[p-1];
-	       		         Cell[icel].vertices[7]= vertices[5];
-            		}
-            		else if( elem_type==7 )  // pyramid
-            		{
+       		  	for( p=4; p<7; p++ )
+       		  		Cell[icel].vertices[p]= vertices[p-1];
+	       	    Cell[icel].vertices[7]= vertices[5];
+            }
+            else if( elem_type==7 )  // pyramid
+            {
 				// 0-3
 				for( p=0; p<4; p++ )
 					Cell[icel].vertices[p]= vertices[p];
 				// 4-7
-               			for( p=4; p<8; p++ )
-               		 		Cell[icel].vertices[p]= vertices[4];
-	       		 }
-		   	icel++ ;
-       		}else{
-			errorHandler.fatalLogicError("unknown element type in local grid file\n");
-        	}
+            	for( p=4; p<8; p++ )
+            		Cell[icel].vertices[p]= vertices[4];
+	       	}
+
+            icel++ ;
+
+       	}else{
+		      errorHandler.fatalLogicError("unknown element type in local grid file\n");
+        }
 
 	}
 	assert(icel==Ncel);

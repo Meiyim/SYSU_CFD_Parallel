@@ -10,7 +10,7 @@ using namespace std;
 //------------------------------
 void NavierStokesSolver::UpdateTurKEpsilon( )
 {
-	int i,rid,ic,iface;
+	int i,boundaryType,ic,iface;
 	double *dudx=NULL,*dvdx=NULL,*dwdx=NULL,
 		   s1,s2,s3,Dis=0, vol=0,coef=0,
 		   fact=0, 
@@ -127,8 +127,8 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 
 	// ?? specieal treatment, force ED[i] on boundary cells to be BED[ib]  ??
 	for( i=0; i<Nbnd; i++ ){
-		rid   = Bnd[i].rid ;
-		if( rid==1 ){
+		boundaryType   = regionMap[ Bnd[i].rid ].type1 ;
+		if( boundaryType==1 ){
 			iface = Bnd[i].face;
 			ic    = Face[iface].cell1;
 			int ani[7];
@@ -193,44 +193,6 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 	delete []VisED;
 	delete []ApTE;
 	delete []ApED;
-
-	
-/*
-of.open("Ak.dat");
-for( i=0;i<Ncel;i++ ){
-	of<<As.Len[i+1]<<" : ";
-	for(int j=0;j<As.Len[i+1];j++)
-		of<<As.El[i+1][j].Pos<<" "<<As.El[i+1][j].Val<<" ";
-	of<<" ; "<<bs.Cmp[i+1];
-	of<<endl;
-}
-*/
-/*
-of.open("Aeps.dat");
-for( i=0;i<Ncel;i++ ){
-	of<<As.Len[i+1]<<" : ";
-	for(int j=0;j<As.Len[i+1];j++)
-		of<<As.El[i+1][j].Pos<<" "<<As.El[i+1][j].Val<<" ";
-	of<<" ; "<<bs.Cmp[i+1];
-	of<<endl;
-}
-of.close();
-*/
-
-/*
-of.open("ed.dat");
-for( i=0; i<Ncel; i++ ){
-	of<<ED[i]<<endl;
-}
-of.close( );
-*/
-
-//of.close();
-//of.open("te.dat");
-//for( i=0; i<Ncel; i++ ){
-//	of<<TE[i]<<endl;
-//}
-//of.close( );
 
 }
 
@@ -325,7 +287,6 @@ void NavierStokesSolver::UpdateEnergy( )
 	// boundary
 	SetBCTemperature( BTem );
 	// source terms, e.g., energy release, condensation/vaporization
-
 	if( !IfSteady ){
 	if(      TimeScheme==1 ){  // Euler forwards
 		for( i=0; i<Ncel; i++ ){
@@ -342,8 +303,7 @@ void NavierStokesSolver::UpdateEnergy( )
 		}
 	}
 	}
-
-	// build matrix
+// build matrix
 	BuildScalarMatrix( 1, Tn,BTem,kcond,ESource,ApE,dataPartition->As,dataPartition->bs );
 	// Solve equations
 	try{
@@ -446,7 +406,7 @@ void NavierStokesSolver::UpdateSpecies( )
  ***************************************************/
 void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,double *DiffCoef, double *source, double *App,Mat& As,Vec& bs )
 {
-	int i,j,iface, ip,in,ani[6],nj,rid,bnd;
+	int i,j,iface, ip,in,ani[6],nj,boundaryType,bnd;
 	double app,apn[6],lambda,lambda2, Visc,dxc[3],
 		dphidx,dphidy,dphidz, f,
 		sav1,sav2,sav3,RUnormal,ViscAreaLen, 
@@ -475,7 +435,7 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 			if( in<0 ) // boundary, i=ip naturally
 			{
 				bnd = Face[iface].bnd;
-				rid = Bnd[bnd].rid;
+				boundaryType = regionMap[Bnd[bnd].rid].type1;
 				sav1    = Face[iface].n[0];
 				sav2    = Face[iface].n[1];
 				sav3    = Face[iface].n[2];
@@ -487,7 +447,7 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 				dphidy = dPhidX[i][1];
 				dphidz = dPhidX[i][2];
 				vec_minus( dxc, Face[iface].x, Cell[i].x, 3 );
-				switch( rid ){
+				switch( boundaryType ){
 				case(1):
 				case(2):
 				case(3):
@@ -502,11 +462,11 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 					fdi  = ViscAreaLen*( dphidx*dxc[0] + dphidy*dxc[1] + dphidz*dxc[2] - BPhi[bnd] );
 					break;
 				default:
-					ErrorStop("no such rid");
+					ErrorStop("no such bid");
 				}
 				
 				// convection boundary
-				switch( rid ){
+				switch( boundaryType ){
 				case(1):     //---- Wall ----
 					// convection to implicit, nothing
 					fcs = 0.;
@@ -535,7 +495,7 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 					fcs = 0.;
 					break;
 				default:
-					cout<<"no this type of boundary! rid="<<rid<<endl;
+					cout<<"no this type of boundary! bid="<<boundaryType<<endl;
 					exit(0);
 				}
 				

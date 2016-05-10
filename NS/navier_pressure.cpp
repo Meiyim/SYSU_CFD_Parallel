@@ -131,13 +131,13 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 					bnd= Face[iface].bnd;
 					rid= Bnd[bnd].rid;
 					RUnormal = RUFace[iface];
-					if(      rid==2 ) // inlet
+					if(      regionMap[rid].type1==2 ) // inlet
 					{
 						rof = BRo[bnd];
 						Tf  = Tn[i];
 						valcen  +=  CYCASMIN(RUnormal,0.) / (rof*Rcpcv*Tf);
 					}
-					else if( rid==3 ) // outlet
+					else if( regionMap[rid].type1==3 ) // outlet
 					{
 						rof = Rn[i];
 						Tf  = Tn[i];

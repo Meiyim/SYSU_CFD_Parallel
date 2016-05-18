@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <petscksp.h>
 #include "BasicType.h"
+#include <metis.h>
 
 #ifndef CYCAS_DEBUG_MODE
 #define NDEBUG
@@ -58,6 +59,11 @@ public:
 		sendBufferCell(NULL),
 		comm(c)
 	{
+		assert(o==-1||o==-2||o>=0);
+		if(o<0){//periodic bc interface point to self
+			otherRank = selfRank;
+		}
+
 		CellData cellSample;
 		int lena[2];
 		MPI_Aint loca[2];
@@ -269,7 +275,7 @@ public:
 	int type;
 	int pid; 	//use to sort, no need to send
 	int idx;
-	vector< vector<int> > interfaceInfo; //<partID,<globalIdx, intersectionNode1,2,3... > >
+	vector< vector<int> > interfaceInfo; //<partID,globalIdx, intersectionNode1,2,3... > 
 	int ntag; 
 	int* tag;	//the length is fixed in order to send through MPI
 	int* vertex;	
@@ -302,8 +308,9 @@ public:
 	InputElement** rootElems;   	 //a pointer array //for faster sorting
 	InputVert* rootVerts; 		
 
-	std::vector<int> rootgridList;	// the element number of each parition
-	std::vector<int> rootNCells;	// the cell number of each partition
+	std::vector<int> rootgridList;	  // the element number of each parition
+	std::vector<int> rootNCells;	  // the cell number of each partition
+	std::map<int,BdRegion> regionMap; // same as the one in NavierStokerSolver
 	/*********************************************************/
 	RootProcess(int r):
 		rank(r),
@@ -332,6 +339,7 @@ public:
 	 * 	 root Only
 	 **************************************************/
 	void partition(DataPartition* dg, int N);
+    void buildPeriodicInterface(InputElement** elements,idx_t* xadj, idx_t* adjncy,int thisbid, int thatbid);
 
 
 

@@ -244,12 +244,21 @@ void NavierStokesSolver::ReadParamFile( )
 			}	
 			else if( strcmp(keyw[2],"outlet")==0 ){
 				if(ikey!=3){
-					errorHandler.fatalLogicError("outlet field requied 1 parameters");
+					errorHandler.fatalLogicError("outlet field requied 1 parameter");
 				}
 				regionMap[bid].name="outlet";
 				regionMap[bid].type1 = 3;
 				regionMap[bid].type2 = 0;
 				regionMap[bid].fixedValue = atof(keyw[3]); //pout
+			}
+			else if( strcmp(keyw[2],"period")==0) {
+				if(ikey != 3){
+					errorHandler.fatalLogicError("periodic bc requied 2 parameters");
+				}
+				regionMap[bid].name="period";
+				regionMap[bid].type1 = 6;
+				regionMap[bid].type2 = atoi(keyw[3]); //corresponding boundary bid;
+				regionMap[bid].fixedValue = 0.0;
 			}
 			else
 			{
@@ -325,4 +334,7 @@ void NavierStokesSolver::ReadParamFile( )
 
 	fin.close( );
 	delete title;
+	if(dataPartition->comRank == root.rank){
+		root.regionMap = this->regionMap;
+	}
 }

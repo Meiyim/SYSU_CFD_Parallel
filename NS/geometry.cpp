@@ -113,8 +113,16 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	//-----------//
 
         // Some gmsh files have 2 and some have 3 tags
+        /*
+        dataPartition->PRINT_LOG(i);
+        dataPartition->PRINT_LOG(ibnd);
+        dataPartition->PRINT_LOG(icell);
+        */
         assert( ntags==2 || ntags==3 );
-  
+        assert(regionMap.find(tag[0])!=regionMap.end());
+        if(regionMap[tag[0]].type1==6){
+            continue;
+        }
 	    if( elem_type==2 || elem_type==3 ){ // Boundary, Tri/Quad face
 		      //Bnd = (BoundaryData*) realloc(Bnd,(Nbnd+1)*sizeof(BoundaryData)); //deprecated : pool performace!
 	       	Bnd[ibnd].rid = tag[0];  // bndType[tag[0]];      // First tag is face type
@@ -184,7 +192,8 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 
 	}
 	assert(icel==Ncel);
-	assert(ibnd==Nbnd);
+    Nbnd = ibnd;
+	//assert(ibnd==Nbnd);
 	delete[] elementBuffer;
 
 

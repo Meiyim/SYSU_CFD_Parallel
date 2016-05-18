@@ -1,10 +1,18 @@
 #include<stdexcept>
 #include<algorithm>
 #include"metis.h"
+#include"tools.h"
 #include"MPIStructure.h"
 
 #define NCOMMON 3
+#define CRITICAL 1.e-10
+
 using namespace std;
+
+int numberOfNodesInElementTypeOf[8] = {//command
+	0,2,3,4,4,8,6,5
+};
+
 void RootProcess::init(DataPartition* dg){
 	 //only root may init
 	if(dg->comRank!=rank) return;
@@ -38,21 +46,17 @@ void RootProcess::read(DataPartition* dg,const string& title){
 	if(dg->comRank!=rank) return; //only in root
 	int itemp;
 	string line;
-	int numberOfNodesInElementTypeOf[8] = {
-		0,2,3,4,4,8,6,5
-	};
+
 	printf("start reading in root...");
 	fflush(stdout);
 	std::ifstream infile(title.c_str());
 	
 	//skip 6 lines
 	if(!infile) throw logic_error("cant find grid file\n");
-	infile>>line;
-	infile>>line;
-	infile>>line;
-	infile>>line;
-	infile>>line;
-	infile>>line;
+
+	do{
+		infile>>line;
+	}while(line!="$Nodes");
 
 	infile>>rootNVert;
 	if(rootNVert<=0) throw logic_error("vertex less than 0\n");
@@ -99,6 +103,171 @@ void RootProcess::read(DataPartition* dg,const string& title){
 	printf("done\n");
 }
 
+
+//temporary class only used in this file;
+struct PeriodicBcElement
+{
+	int originalIdx;
+	double n[3];
+	double x[3];
+};
+void getNormalVector(double** verts, double* normalVec){
+	double dx1[3],dx2[3];
+	vec_minus( dx1, verts[0],verts[2], 3 ); // dx1= vert[n1] - vert[n3]
+    vec_minus( dx2, verts[1],verts[3], 3 ); // dx2= vert[n2] - vert[n4]
+    vec_cross( normalVec, dx1, dx2 );     // face.n is normal area
+}
+int getAdjacent(idx_t* xadj, idx_t* adjncy,int ib){
+	int head = xadj[ib];
+	int end = xadj[ib+1];
+	assert(end == head+1);
+	return adjncy[head];
+}
+void RootProcess::buildPeriodicInterface(InputElement** elements,idx_t* xadj, idx_t* adjncy,int thisbid, int thatbid){
+	//check period bc pair:
+	size_t nThisBnd = 0;
+	size_t nThatBnd = 0;
+	for(int i=0;i!=rootNElement;++i){
+		int bid = elements[i]->tag[0];
+		if(bid == thisbid) nThisBnd++;
+		if(bid == thatbid) nThatBnd++;
+	}
+	if(nThatBnd==0 || nThisBnd == 0){
+		errorHandler.fatalLogicError("cant find periodic bc, bid",thisbid);
+	}
+	if(nThisBnd != nThatBnd){
+		errorHandler.fatalLogicError("periodic bc has differend boundary cells,bid",thisbid);
+	}
+
+	PeriodicBcElement* thisBnds = new PeriodicBcElement[nThisBnd];
+	PeriodicBcElement* thatBnds = new PeriodicBcElement[nThatBnd];
+
+	size_t iThisbnd = 0;
+	size_t iThatbnd = 0;
+	double thisCenter[3] = {0.,0.,0.};
+	double thatCenter[3] = {0.,0.,0.};
+
+	for(int i=0;i!=rootNElement;++i){
+		int bid = elements[i]->tag[0];
+		if(bid == thisbid || bid == thatbid){
+			int elemType = elements[i]->type;
+			int nv = numberOfNodesInElementTypeOf[elemType];
+
+			double** verts = new_Array2D<double>(4,3);
+
+			for(int j = 0;j!=nv;++j){
+				verts[j][0] = rootVerts[ elements[i]->vertex[j] ].x;
+				verts[j][1] = rootVerts[ elements[i]->vertex[j] ].y;
+				verts[j][2] = rootVerts[ elements[i]->vertex[j] ].z;
+			}
+
+			if(nv==3){
+				verts[3][0] = verts[2][0];
+				verts[3][1] = verts[2][1];
+				verts[3][2] = verts[2][2];
+			}
+
+			PeriodicBcElement toInsert;
+			toInsert.originalIdx = i;
+			toInsert.x[0] = toInsert.x[1] = toInsert.x[2] = 0.0;
+			for(int j=0;j!=nv;++j){
+				toInsert.x[0] += verts[j][0];
+				toInsert.x[1] += verts[j][1];
+				toInsert.x[2] += verts[j][2];
+			}
+
+			getNormalVector(verts,toInsert.n);
+			toInsert.x[0] /= (double)nv;
+			toInsert.x[1] /= (double)nv;
+			toInsert.x[2] /= (double)nv;
+			delete_Array2D(verts,4,3);
+
+			if(bid == thisbid) {
+				thisBnds[iThisbnd++] = toInsert;//default copy function
+				thisCenter[0] += toInsert.x[0];
+				thisCenter[1] += toInsert.x[1];
+				thisCenter[2] += toInsert.x[2];
+			}
+			if(bid == thatbid){
+				thatBnds[iThatbnd++] = toInsert;
+				thatCenter[0] += toInsert.x[0];
+				thatCenter[1] += toInsert.x[1];
+				thatCenter[2] += toInsert.x[2];
+			}
+		}
+	}
+	assert(iThisbnd==nThisBnd);
+	assert(iThatbnd==nThatBnd);
+
+	thisCenter[0] /= nThisBnd;
+	thisCenter[1] /= nThisBnd;
+	thisCenter[2] /= nThisBnd;
+
+	thatCenter[0] /= nThatBnd;
+	thatCenter[1] /= nThatBnd;
+	thatCenter[2] /= nThatBnd;
+
+	for(int i=0;i!=nThisBnd;++i){ //move to origin point
+		for(int j=0;j!=3;++j){
+			thisBnds[i].x[j] -= thisCenter[j];
+			thatBnds[i].x[j] -= thatCenter[j];
+		}
+	}
+
+
+	double* thisNormal = thisBnds[0].n;// bnd should in a plain surface !
+	double* thatNormal = thatBnds[0].n;
+	double cross[3];
+	vec_cross(cross,thisNormal,thatNormal);
+	if(vec_len(cross,3) < CRITICAL){
+		//translation periodic
+		set<int> foundSet;
+		for(int i=0;i!=nThisBnd;++i){
+			for(int j=0;j!=nThatBnd;++j){
+				if(foundSet.find(j)!=foundSet.end()){
+					continue;
+				}
+				double distance[3];
+				vec_minus(distance,thatBnds[j].x,thisBnds[i].x,3);
+				if( vec_len(distance,3) < CRITICAL){
+					int iThisbnd = thisBnds[i].originalIdx;
+					int iThatbnd = thatBnds[j].originalIdx;
+					int thiscell = getAdjacent(xadj,adjncy,iThisbnd);
+					int thatcell = getAdjacent(xadj,adjncy,iThatbnd);
+					int thatPart = elements[ thatcell ]->pid;
+
+					vector<int> _res(1,thatPart);
+					_res.push_back(elements[ thatcell ]->idx);
+
+					set<int> _thisSet;
+					set<int> _thatSet;
+					for(int k=0;k!=numberOfNodesInElementTypeOf[elements[thiscell]->type];++k){
+						_thisSet.insert(elements[thiscell]->vertex[k]);
+					}
+					for(int k=0;k!=numberOfNodesInElementTypeOf[elements[iThisbnd]->type];++k){//that set is this bnd...
+						_thatSet.insert(elements[iThisbnd]->vertex[k]);
+					}
+					set_intersection(_thisSet.begin(),_thisSet.end(),_thatSet.begin(),_thatSet.end(),back_inserter(_res));
+					assert(_res.size()>=5 && _res.size() <= 6);
+
+					elements[ thiscell ]->interfaceInfo.push_back(_res);
+					foundSet.insert(j);
+					break;
+				}
+			}
+		}
+		assert(foundSet.size()==nThatBnd);
+	}else{
+		//rotation periodic
+		errorHandler.fatalLogicError("cannot match periodic boundary",thisbid);
+	}
+
+	delete [] thisBnds;
+	delete [] thatBnds;
+
+}
+
+
 /***************functor object used by partition routine*****************/
 struct _SortAccordingToPart{
 	bool operator()(InputElement* lhs,InputElement* rhs){
@@ -115,9 +284,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	/*****************DATA PARTITION*******************
 	 * 	phase2 :data partition with METIS
 	***************************************************/
-	int numberOfNodesInElementTypeOf[8] = {
-		0,2,3,4,4,8,6,5
-	};
+
 
 	int nv=0;
 	for(size_t i=0;i!=rootNElement;++i)
@@ -253,6 +420,23 @@ void RootProcess::partition(DataPartition* dg, int N){
 			}
 		}
 	}
+
+
+	//build periodic boundary connectivity;
+	for(map<int,BdRegion>::iterator iter = regionMap.begin();iter!=regionMap.end();++iter){
+		if(iter->second.type1 == 6 ){
+			int thatbid = iter->second.type2;
+			if(regionMap.find(thatbid)==regionMap.end()){
+				errorHandler.fatalLogicError("cant find corresponding boundary for period bc ",iter->first);
+			}
+			if(regionMap[thatbid].type1 !=6 || regionMap[thatbid].type2 != iter->first){
+				errorHandler.fatalLogicError("periodic bc not correspond, bid ",iter->first);
+			}
+			
+			buildPeriodicInterface(elementsInOriginalOrdering,xadj,adjncy,iter->first,thatbid);
+		}
+	}
+
 	delete []elementsInOriginalOrdering;elementsInOriginalOrdering=NULL;
 
 	METIS_Free(xadj);	xadj = NULL;
@@ -321,9 +505,7 @@ int RootProcess::getBuffer(DataPartition* dg, int pid,int* sendSizes, double** v
 
 int RootProcess::getVertexSendBuffer(int pid, double** buffer,map<int,int>* nodesPool){
 
-	int numberOfNodesInElementTypeOf[8] = {
-		0,2,3,4,4,8,6,5
-	};
+
 
 	size_t iEhead = 0;
 	for(int i=0;i!=pid;++i){
@@ -360,13 +542,21 @@ int RootProcess::getVertexSendBuffer(int pid, double** buffer,map<int,int>* node
 	//printf("vertex buffer for %d prepared\n",pid);
 	return counter;
 }
-
-
+/*
+bool elementIsOnPeriodicBoundary(InputElement* thisEle,const map<int,BdRegion>& thisRegionMap){
+	if(thisEle->type==2||thisEle->type==3){
+		int bid = thisEle->tag[0];
+		map<int,BdRegion>::const_iterator iter = thisRegionMap.find(bid);
+		assert(iter!=thisRegionMap.end() );
+		if(iter->second.type1==6){
+			return true;
+		}
+	}
+	return false;
+}
+*/
 int RootProcess::getElementSendBuffer(int pid ,int** buffer,map<int,int>* nodesPool){
 
-	int numberOfNodesInElementTypeOf[8] = {
-		0,2,3,4,4,8,6,5
-	};
 
 	
 	/**************************************************
@@ -380,8 +570,13 @@ int RootProcess::getElementSendBuffer(int pid ,int** buffer,map<int,int>* nodesP
 	size_t counter = 0; //calculate the buffer length
 	for(int j=0;j!=rootgridList.at(pid);++j){
 		InputElement* _thisEle = rootElems[iE++];
+		/*
+		if(elementIsOnPeriodicBoundary(_thisEle,regionMap)){
+			continue;	//should not send periodic boundary, which will not appear in the final mesh;
+		}	
+		*/
 		int nv = numberOfNodesInElementTypeOf[_thisEle->type];
-		for(int k=0;k!=nv;++k){
+		for(int k=0;k!=nv;++k){ //debug
 			assert(nodesPool->find(_thisEle->vertex[k])!=nodesPool->end());//debug
 		}
 		counter+= (2 + _thisEle->ntag + nv);
@@ -394,6 +589,11 @@ int RootProcess::getElementSendBuffer(int pid ,int** buffer,map<int,int>* nodesP
 	iE = iEhead;
 	for(int j=0;j!=rootgridList.at(pid);++j){ //each elements
 		InputElement* _thisEle = rootElems[iE++];
+		/*
+		if(elementIsOnPeriodicBoundary(_thisEle,regionMap)){
+			continue;	//should not send periodic boundary, which will not appear in the final mesh;
+		}	
+		*/
 		(*buffer)[counter++] = _thisEle->type;
 		(*buffer)[counter++] = _thisEle->ntag;
 		for(int k=0;k!=_thisEle->ntag;++k){
@@ -421,7 +621,7 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 	typedef map<int,map<double,vector<int> > > ComplicatedType;
 
 	ComplicatedType _connectionMap;//<interfaceID <thisID+thatID,<thisID,thatID> > > 
-							 //must ensure that the order in  connection map of both side of interface are the SAME!
+							       //must ensure that the order in  connection map of both side of interface are the SAME!
 	
 	size_t iEhead = 0;
 	for(int i=0;i!=pid;++i)
@@ -433,17 +633,32 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 			int interfaceID = iter->at(0);
 			int thisID = _thisEle->idx;
 			int thatID = iter->at(1);
-			double key = (double)(thisID+thatID)+(double)fabs(thisID-thatID)/(rootNGlobal);
+			if(interfaceID != pid){
+				double key = (double)(thisID+thatID)+(double)fabs(thisID-thatID)/(rootNGlobal);
+				vector<int> vec(1,thisID - iEhead);// thisID - iE is the real local Index
+				for(size_t i=2;i!=iter->size();++i){
+					vec.push_back (iter->at(i) );
+				}
+				_connectionMap[interfaceID].insert(make_pair(key,vec));
+			}else{ // update to fix periodic bc;
+				//thisID < thatID
+				double key = (double)CYCASMIN(thisID,thatID);
+				vector<int> vec(1,thisID-iEhead);
+				for(size_t i=2;i!=iter->size();++i){
+					vec.push_back(iter->at(i));
+				}
+				assert(thisID!=thatID);
+				if(thisID<thatID){
+					_connectionMap[-1].insert(make_pair(key,vec));
+				}else{
+					_connectionMap[-2].insert(make_pair(key,vec));	
+				}
 
-			vector<int> vec(1,thisID - iEhead);// thisID - iE is the real local Index
-			for(size_t i=2;i!=iter->size();++i){
-				vec.push_back (iter->at(i) );
 			}
-			_connectionMap[interfaceID].insert(make_pair(key,vec));
 
 		}
 	}	
-	if(pid==11) cout<<_connectionMap[10].size()<<endl;
+	//if(pid==11) cout<<_connectionMap[10].size()<<endl;
 
 	size_t nI = 0;
 	nI++;	// number of interfaces

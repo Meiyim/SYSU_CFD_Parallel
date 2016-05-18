@@ -92,13 +92,13 @@ int DataPartition::buildInterfaceFromBuffer(int* buffer){
 	}
 
 
-	/*
+	
 	printf("partition %d: ninterface: %lu\n",comRank,ninterfaces);
 	for( auto& iter : interfaces ){
 		printf("-->%d : width %d\n",iter.first,iter.second.getWidth());
 		//printf("\n");
 	}
-	*/
+	
 	
 	return 0;
 }

@@ -248,6 +248,7 @@ public:
                  //=3: outlet
                  //=4: symmetric
                  //=5: body
+    			 //=6: period
     // temperature
     int  type2; // for wall:(type1==1)
                 // =0 : given temperature; 
@@ -257,6 +258,10 @@ public:
                 // for body:(type1==5)
                 // =0 : fluid field: u, v, w, ro, p, t ...
                 // =1 : solid: ro, diffCoef
+
+    			// for period:(type1 == 6)
+    			// type2 = corresponding bid;
+
 
     double fixedValue;
     double initvalues[10];//u,v,w,p,ro,t,te,ed

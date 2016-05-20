@@ -503,7 +503,7 @@ int NavierStokesSolver::CellFaceInfo()
                 int boundaryBid = Bnd[ Face[iface].bnd ].rid;
                 if(Face[iface].bnd >=0 ){
                     assert(regionMap[boundaryBid].type1==6);
-                    interface->needsTranslate.insert(make_pair(i,boundaryBid));
+                    interface->needsTranslate.insert(make_pair(interface->sendposis[i],boundaryBid));
                 }
 
 				voidCellCounter++;
@@ -674,10 +674,6 @@ int NavierStokesSolver::CellFaceInfo()
 			vec_minus( dx,Cell[ic2].x,Cell[ic1].x,3 );
 			// Face[i].rlencos= Face[i].area/vec_len(dx,3);
 			Face[i].rlencos = Face[i].area / fabs(vec_dot( dx,Face[i].n,3 )/Face[i].area);
-            if(Face[i].rlencos > 100.){
-                dataPartition->PRINT_LOG(Cell[ic1]);
-                dataPartition->PRINT_LOG(Cell[ic2]);
-            }
 		}
 
 
@@ -698,15 +694,16 @@ int NavierStokesSolver::CellFaceInfo()
 		}
 	}
     //debug
-    for(int i=0;i!=Nfac;++i){
-        if(Face[i].bnd>=0) continue;
-        if(Face[i].cell2 < Ncel) continue;
-        int c1 = Face[i].cell1;
-        int c2 = Face[i].cell2;
-        dataPartition->PRINT_LOG(Cell[c1]);
-        dataPartition->PRINT_LOG(Cell[c2]);
-    }
     /*
+    for(int i=0;i!=Nbnd;++i){
+        int iface = Bnd[i].face;
+        if(Face[iface].cell2 < Ncel) continue;
+        int c1 = Face[iface].cell1;
+        int c2 = Face[iface].cell2;
+        //dataPartition->PRINT_LOG(Face[iface].rlencos/Face[iface].area);
+        //dataPartition->PRINT_LOG(Cell[c1]);
+        //dataPartition->PRINT_LOG(Cell[c2]);
+    }
 	MPI_Barrier(dataPartition->comm);
 	PetscPrintf(dataPartition->comm,"done\n");
 

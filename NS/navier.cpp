@@ -592,6 +592,8 @@ void NavierStokesSolver::InitFlowField( ){
 	 		//pass
 		}else if(reg.type1==4){//sym
 	 		Bnd[i].q =0.0;//not implement yet
+	 	}else if(reg.type1 == 6){//periodic
+	 		//pass 
 	 	}else {
 	 		errorHandler.fatalLogicError("bounday didnt match, bid",Bnd[i].rid);
 	 	}

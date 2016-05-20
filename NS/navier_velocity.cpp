@@ -35,7 +35,6 @@ int NavierStokesSolver::CalculateVelocity( )
 	PetscLogStagePop();
 	PetscLogStagePush(1);
 
-	exit(0);
 	//check	
 	
 	dataPartition->interfaceCommunicationBegin(Un);//update boundary

@@ -534,13 +534,17 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,double const*
 /*****************************************
  *	implement of Interface
 ****************************************/
-int Interface::send(MPI_Request* req, double* phi,int tag){
+int Interface::send(MPI_Request* req, double* phi,int tag, const map<int,BdRegion>* rm = NULL){
 	size_t width = getWidth();
 	if(sendBuffer==NULL)
 		sendBuffer = new double[width];
 
-	for(size_t i=0;i!=width;++i) //openMP optimizeable
+	tag+=sendTagOffset;
+
+	for(size_t i=0;i!=width;++i){ //openMP optimizeable
 		sendBuffer[i] = phi[sendposis[i]];
+	}
+
 	MPI_Issend(sendBuffer,	width, MPI_DOUBLE, 
 			otherRank,
 			tag, //TAG
@@ -555,6 +559,8 @@ int Interface::recv(MPI_Request* req, double* phi,int tag){
 	size_t width = getWidth();
 	double* recvBuffer = phi+recvposi;
 
+	tag+=recvTagOffset;
+
 	MPI_Irecv(recvBuffer,width,MPI_DOUBLE,
 			otherRank,
 			tag,//TAG
@@ -564,13 +570,25 @@ int Interface::recv(MPI_Request* req, double* phi,int tag){
 	return 0;
 }
 
-int Interface::send(MPI_Request* req, CellData* phi,int tag){
+int Interface::send(MPI_Request* req, CellData* phi,int tag, const map<int,BdRegion>* rm = NULL){
 	size_t width = getWidth();
 	if(sendBufferCell==NULL)
 		sendBufferCell = new CellData[width];
 
-	for(size_t i=0;i!=width;++i) //openMP optimizeable
+	tag+=sendTagOffset;
+
+	for(size_t i=0;i!=width;++i){ //openMP optimizeable
 		sendBufferCell[i] = phi[sendposis[i]];
+		if(needsTranslate.find(sendposis[i])!=needsTranslate.end()  ){
+			int bid = needsTranslate[sendposis[i]]; //perform translation !
+			map<int,BdRegion>::const_iterator iter = rm->find(bid);
+			assert(iter->second.type1 == 6);
+			const BdRegion& reg = iter->second;
+			sendBufferCell[i].x[0] += reg.initvalues[0];
+			sendBufferCell[i].x[1] += reg.initvalues[1];
+			sendBufferCell[i].x[2] += reg.initvalues[2];
+		}
+	}
 
 	MPI_Issend(sendBufferCell,width, MPI_CellData,
 			otherRank,
@@ -587,6 +605,8 @@ int Interface::recv(MPI_Request* req, CellData* phi,int tag){
 
 	CellData* recvBufferCell = phi+recvposi;
 
+	tag+=recvTagOffset;
+
 	MPI_Irecv(recvBufferCell,width,MPI_CellData,
 			otherRank,
 			tag,//TAG
@@ -596,10 +616,12 @@ int Interface::recv(MPI_Request* req, CellData* phi,int tag){
 	return 0;
 }
 
-int Interface::send(MPI_Request* req, double* phi[3],int tag){
+int Interface::send(MPI_Request* req, double* phi[3],int tag, const map<int,BdRegion>* rm = NULL){
 	size_t width = getWidth();
 	if(sendBufferGradient==NULL)
 		sendBufferGradient = new double[3*width];
+
+	tag+=sendTagOffset;
 
 	for(size_t i=0;i!=width;++i) //openMP optimizeable
 		for(int j=0;j!=3;++j)
@@ -620,6 +642,8 @@ int Interface::recv(MPI_Request* req, double* phi[3],int tag){
 	size_t width = getWidth();
 
 	double* recvBufferGradient = &phi[recvposi][0];
+	
+	tag+=recvTagOffset;
 
 	MPI_Irecv(recvBufferGradient,3*width,MPI_DOUBLE,
 			otherRank,

@@ -47,17 +47,28 @@ void NavierStokesSolver::NSSolve( )
 		MaxOuterStep = MaxStep;
 	}
 	//MaxOuterStep=2;//test
-    	for( step=1; step<=MaxStep; step++ ) //step : total time step
-    	{
+    for( step=1; step<=MaxStep; step++ ) //step : total time step
+    {
 		if( !IfSteady ){
 			SaveTransientOldData( );
 		}
 
 		// outer iteration, drive residual to zero for every physical time step
 		for( iter=1; iter<MaxOuterStep; iter++ ){
-			if( (iter-1)%10==0 )root.printSectionHead(dataPartition,cur_time);
-			MPI_Barrier(dataPartition->comm);
+
+			//------------   Record   ------------//
+			if( shouldBackup(step,iter,cur_time) )
+				WriteBackupFile();
+			if( shouldPostProcess(step,iter,cur_time) ){
+				Output2Tecplot();
+				root.printSectionHead(dataPartition);
+			}
+
+			//----------- record,tot file, restart file, etc.----//
+			writeTotFile();
 				
+			//------------   SIMPLE_C ------------//
+			MPI_Barrier(dataPartition->comm);
 				
 			std::fill(localRes,localRes+RESIDUAL_LEN,0.0);
 			std::fill(Residual,Residual+RESIDUAL_LEN,0.0);
@@ -89,20 +100,6 @@ void NavierStokesSolver::NSSolve( )
 			//4. other physical models
 			//    e.g., condensation, combustion, wall heat conduction
 
-			
-			//------------   Record   ------------//
-			if( shouldBackup(step,iter,cur_time) )
-				WriteBackupFile();
-			if( shouldPostProcess(step,iter,cur_time) ){
-				Output2Tecplot();
-				/*
-				tend   = ttime( );
-				tstart = tend;
-				if( outputFormat==0 ) Output2Tecplot ( );  // exit(0);
-				if( outputFormat==1 ) Output2VTK     ( );
-				WriteBackupFile( );
-				*/
-			}
 			/*-----------check if should break----------*/
 			MPI_Allreduce(localRes,Residual,RESIDUAL_LEN,MPI_DOUBLE,MPI_SUM,dataPartition->comm);
 
@@ -114,17 +111,20 @@ void NavierStokesSolver::NSSolve( )
 				if( ResMax<ResidualSteady )break;
 			}else{
 				//unsteady
+				root.printStepStatus(dataPartition,step,iter,cur_time,dt,ResMax);
 				if( iter == 1 ) ResMax0 = ResMax;
 				if( ResMax<1.e-4 || ResMax0/(ResMax+1.e-16)>1000. ){
-					root.printStepStatus(dataPartition,step,iter,cur_time,dt,ResMax);
 					break; // more reasonal to break : order drop 2
 				}
 			}
 
 		}
-		
-		/*-----------record,tot file, restart file, etc.----------*/
-		writeTotFile();
+		if(iter==MaxOuterStep){
+			PetscLogStagePop();//profilling
+			CYCAS_GET_TIME(tend);
+			root.printSolutionNotGood(dataPartition);
+			break;
+		}		
 
 
 		if(cur_time >= total_time){
@@ -168,7 +168,7 @@ bool NavierStokesSolver::shouldPostProcess(int timestep,int outiter, double now)
 	if(IfSteady){
 		return (outiter-1)%noutput == 0;
 	}else{
-		return false;
+		return (timestep-1)%noutput==0 && outiter == 1;
 	}
 }
 
@@ -551,7 +551,7 @@ void NavierStokesSolver::InitFlowField( ){
 			Rn[i] = initvalues[3];
 			Tn[i] = initvalues[4];
 			Pn[i] = 0.;
-			if( DensityModel== 1 ) Rn[i]= (Pn[i]+PressureReference)/(Rcpcv*Tn[i]);
+		    if( DensityModel== 1 ) Rn[i]= (Pn[i]+PressureReference)/(Rcpcv*Tn[i]);
 			VisLam[i]= initvalues[5]; // 0.6666667e-2;  // 1.458e-6 * pow(Tn[i],1.5) /(Tn[i]+110.5) ;
 			VisTur[i]= 0.;
 			if( TurModel==1 )
@@ -565,8 +565,12 @@ void NavierStokesSolver::InitFlowField( ){
 	}
 	std::fill(deltaP,deltaP+Ncel,0.0);
 
+	int ridCount[7] = {0,0,0,0,0,0,0};
+
 	for(i=0;i!=Nbnd;++i){
+		assert(regionMap.find(Bnd[i].rid)!=regionMap.end());
 		BdRegion& reg = regionMap[Bnd[i].rid];
+		ridCount[reg.type1]++;
 		if(reg.type1==1){
 			if(reg.type2==0){
 				BTem[i] = reg.fixedValue;
@@ -584,11 +588,15 @@ void NavierStokesSolver::InitFlowField( ){
 			BTem[i]= reg.initvalues[5];
 			BTE[i] = reg.initvalues[6];
 			BED[i] = reg.initvalues[7];
+	 	}else if(reg.type1 == 3){
+	 		//pass
 		}else if(reg.type1==4){//sym
 	 		Bnd[i].q =0.0;//not implement yet
+	 	}else {
+	 		errorHandler.fatalLogicError("bounday didnt match, bid",Bnd[i].rid);
 	 	}
 	}
-
+	printf("bounday summary: wall:%d, inlet:%d, outlet:%d, sym:%d\n",ridCount[1],ridCount[2],ridCount[3],ridCount[4]);
 
 	// change grid boundary to actual boundary
 	for( i=0;i<Nfac;i++ )
@@ -611,7 +619,6 @@ void NavierStokesSolver::InitFlowField( ){
 	dataPartition->interfaceCommunicationBegin(VisTur);
 
 	dataPartition->interfaceCommunicationEnd();
-	
 }
 
 
@@ -626,8 +633,6 @@ void NavierStokesSolver::SaveTransientOldData( )
 			Vnp [i]= Vn[i];
 			Wnp [i]= Wn[i];
 			Tnp [i]= Tn[i];
-			TEp [i]= TE[i];
-			EDp [i]= ED[i];
 			for( j=0; j<Nspecies; j++ )
 				RSnp[i][j]= RSn[i][j];
 			if( TurModel==1 )
@@ -646,8 +651,6 @@ void NavierStokesSolver::SaveTransientOldData( )
 			Vnp2[i]= Vnp[i]= Vn[i];
 			Wnp2[i]= Wnp[i]= Wn[i];
 			Tnp2[i]= Tnp[i]= Tn[i];
-			TEp2[i]= TEp[i]= TE[i];
-			EDp2[i]= EDp[i]= ED[i];
 			for( j=0; j<Nspecies; j++ )
 				RSnp2[i][j]= RSnp[i][j]= RSn[i][j];
 			if( TurModel==1 )

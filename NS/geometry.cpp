@@ -119,10 +119,7 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
         dataPartition->PRINT_LOG(icell);
         */
         assert( ntags==2 || ntags==3 );
-        assert(regionMap.find(tag[0])!=regionMap.end());
-        if(regionMap[tag[0]].type1==6){
-            continue;
-        }
+
 	    if( elem_type==2 || elem_type==3 ){ // Boundary, Tri/Quad face
 		      //Bnd = (BoundaryData*) realloc(Bnd,(Nbnd+1)*sizeof(BoundaryData)); //deprecated : pool performace!
 	       	Bnd[ibnd].rid = tag[0];  // bndType[tag[0]];      // First tag is face type
@@ -192,8 +189,7 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 
 	}
 	assert(icel==Ncel);
-    Nbnd = ibnd;
-	//assert(ibnd==Nbnd);
+	assert(ibnd==Nbnd);
 	delete[] elementBuffer;
 
 
@@ -331,7 +327,7 @@ void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &
         Face[nf].cell1      = ic;   
         Face[nf].cell2      = VOID_CELL_ON_INTERFACE; //added by CXY: cell2 might not be set in the following FindFace,
        						      //thus results in a interface cell
-        Face[nf].bnd        = -10;  // inner face
+        Face[nf].bnd        = INNER_FACE_BOUNDARY;  // inner face
         Cell[ic].face[ Cell[ic].nface++ ] = nf;
         // add face to NodeFace
         for( k=0; k<4; k++ )// CXY: is this loop really necessary?
@@ -500,10 +496,16 @@ int NavierStokesSolver::CellFaceInfo()
 					dataPartition->PRINT_LOG( Cell[thisCell->cell[k]] );
 				}
 				*/
-				assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE);
+				assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE || Face[iface].cell2 == VOID_CELL_ON_BOUNDARY);
 				Face[iface].cell2 = voidCellCounter;
-				assert(thisCell->cell[k] = VOID_CELL_ON_INTERFACE);
+				assert(thisCell->cell[k]== VOID_CELL_ON_INTERFACE || thisCell->cell[k]== VOID_CELL_ON_BOUNDARY);
 				thisCell->cell[k] = voidCellCounter;
+                int boundaryBid = Bnd[ Face[iface].bnd ].rid;
+                if(Face[iface].bnd >=0 ){
+                    assert(regionMap[boundaryBid].type1==6);
+                    interface->needsTranslate.insert(make_pair(i,boundaryBid));
+                }
+
 				voidCellCounter++;
 				break;
 			}else {
@@ -531,8 +533,18 @@ int NavierStokesSolver::CellFaceInfo()
 	assert(iEnd == i + iStart);
 
 	//--------------interface communication to get gloabl index for virtual cell
-	dataPartition->interfaceCommunicationBegin(Cell);
+	dataPartition->interfaceCommunicationBegin(Cell,&regionMap);
 	dataPartition->interfaceCommunicationEnd();
+
+    //make periodic boundary "disappear" 
+    for(int i=0;i!=Nbnd;++i){
+        if(regionMap[  Bnd[i].rid ].type1 == 6){
+            Face[ Bnd[i].face ].bnd = INNER_FACE_BOUNDARY;
+            assert(Face[ Bnd[i].face  ].cell1 >= 0 && Face[  Bnd[i].face ].cell2 >= 0);
+        }
+    }
+    
+
 
 
     //-- face
@@ -662,6 +674,10 @@ int NavierStokesSolver::CellFaceInfo()
 			vec_minus( dx,Cell[ic2].x,Cell[ic1].x,3 );
 			// Face[i].rlencos= Face[i].area/vec_len(dx,3);
 			Face[i].rlencos = Face[i].area / fabs(vec_dot( dx,Face[i].n,3 )/Face[i].area);
+            if(Face[i].rlencos > 100.){
+                dataPartition->PRINT_LOG(Cell[ic1]);
+                dataPartition->PRINT_LOG(Cell[ic2]);
+            }
 		}
 
 
@@ -681,8 +697,16 @@ int NavierStokesSolver::CellFaceInfo()
 			vec_minus( Face[i].Xnac, Face[i].x, dx, 3);
 		}
 	}
-	//debug
-	/*
+    //debug
+    for(int i=0;i!=Nfac;++i){
+        if(Face[i].bnd>=0) continue;
+        if(Face[i].cell2 < Ncel) continue;
+        int c1 = Face[i].cell1;
+        int c2 = Face[i].cell2;
+        dataPartition->PRINT_LOG(Cell[c1]);
+        dataPartition->PRINT_LOG(Cell[c2]);
+    }
+    /*
 	MPI_Barrier(dataPartition->comm);
 	PetscPrintf(dataPartition->comm,"done\n");
 
@@ -712,7 +736,7 @@ int NavierStokesSolver::CellFaceInfo()
 		dataPartition->PRINT_LOG(Face[i].rlencos);
 	*/
 
-    	PetscPrintf(dataPartition->comm,"done\n");
+   	PetscPrintf(dataPartition->comm,"done\n");
 	MPI_Barrier(dataPartition->comm);
     return 0;
 }

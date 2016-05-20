@@ -124,8 +124,8 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 			else
 				bpv -= RUFace[iface];
 
-            		in   = Cell[i].cell[j]; //j-face neighbor cell
-            		if( in<0  ){  		// ???????????????????
+           	in   = Cell[i].cell[j]; //j-face neighbor cell
+          	if( in<0  ){  		// ???????????????????
 				if( DensityModel==0 )continue;
 				else if( DensityModel==1){
 					bnd= Face[iface].bnd;

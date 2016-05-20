@@ -215,7 +215,7 @@ void NavierStokesSolver::UpdateEnergy( )
 	// prepare the diffusion coefficient and source terms
 	for( i=0; i<Ncel; i++ )
 	{
-		kcond[i] = cp*(VisLam[i]/prl + VisTur[i]/prte)/cp;
+		kcond[i] = cp*(VisLam[i]/prl + VisTur[i]/prte)/cp;//only for gas i surpose
 	}
 
 	// part of viscous terms

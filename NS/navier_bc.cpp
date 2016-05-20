@@ -50,6 +50,9 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 			bw[i]= Wn[ic] - unormal * sav3n;
 			br[i]= Rn[ic];
 			break;
+		case(6)://periodic
+			//pass
+			break;
 
 		default:
 			errorHandler.fatalLogicError("no such boundary type in velocity bc:",regionMap[rid].type1);
@@ -140,6 +143,9 @@ void NavierStokesSolver::SetBCPressure(double*bp)
 		case(4):
 			bp[i] = Pn[ic];
 			break;
+		case(6)://periodic
+			//pass
+			break;
 		default:
 			char temp[256];
 			sprintf(temp,"no such boundary type %d \n ",rid);
@@ -162,6 +168,9 @@ void NavierStokesSolver::SetBCDeltaP(double*bp, double *dp)
 		case(3):
 		case(4):
 			bp[i] = dp[ic];
+			break;
+		case(6)://periodic
+			//pass
 			break;
 		default:
 			char temp[256];
@@ -192,6 +201,9 @@ void NavierStokesSolver::SetBCTemperature( double *bt )
 			break;
 		case(4):
 			bt[i]= Tn[ic];
+			break;
+		case(6)://periodic
+			//pass
 			break;
 		default:
 			char temp[256];

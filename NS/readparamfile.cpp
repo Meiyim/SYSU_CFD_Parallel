@@ -81,12 +81,15 @@ void NavierStokesSolver::ReadParamFile( )
 		}
 		else if( strcmp(keyw[0],"transient")==0 )
 		{
+			if(ikey!=4) errorHandler.fatalLogicError("transient requies 3 parameters") ;
 			IfSteady = false;
 			dt = atof(keyw[1]);
 			total_time= atof(keyw[2]);
-			if(      strcmp(keyw[3],"Euler")==0 )
+			MaxStep = (int)(total_time/dt);
+			MaxOuterStep = atof(keyw[3]);
+			if(      strcmp(keyw[4],"Euler")==0 )
 				TimeScheme = 1;
-			else if( strcmp(keyw[3],"Dual")==0 )
+			else if( strcmp(keyw[4],"Dual")==0 )
 				TimeScheme = 2;
 			else
 			{
@@ -282,7 +285,7 @@ void NavierStokesSolver::ReadParamFile( )
 				regionMap[bid].name= keyw[3];
 				regionMap[bid].type1 = 5;
 				regionMap[bid].type2 = 0;//fluid
-				if(ikey!=10){
+				if(ikey!=11){
 					errorHandler.fatalLogicError("fluid field required 8 parameters");
 				}
 				for(int i=4;i<=ikey;++i){
@@ -335,6 +338,6 @@ void NavierStokesSolver::ReadParamFile( )
 	fin.close( );
 	delete title;
 	if(dataPartition->comRank == root.rank){
-		root.regionMap = this->regionMap;
+		root.regionMap = &this->regionMap;
 	}
 }

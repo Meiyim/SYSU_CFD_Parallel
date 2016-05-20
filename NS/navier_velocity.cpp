@@ -10,8 +10,6 @@ using namespace std;
 int NavierStokesSolver::CalculateVelocity( )
 {
 //	ofstream of;
-	
-
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
 	PetscLogStagePush(1);
 	BuildVelocityMatrix(dataPartition->Au,dataPartition->bu,dataPartition->bv,dataPartition->bw );
@@ -37,6 +35,7 @@ int NavierStokesSolver::CalculateVelocity( )
 	PetscLogStagePop();
 	PetscLogStagePush(1);
 
+	exit(0);
 	//check	
 	
 	dataPartition->interfaceCommunicationBegin(Un);//update boundary
@@ -328,6 +327,9 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 				fdi[2] = ViscAreaLen*( dwdx*dxc[0]+dwdy*dxc[1]+dwdz*dxc[2] );
 
 				//dataPartition->PRINT_LOG(Face[iface].rlencos);
+				//dataPartition->PRINT_LOG(fde[0]);
+				//dataPartition->PRINT_LOG(fdi[0]);
+				//dataPartition->PRINT_LOG(fcs[0]);
 
 			}
 

@@ -177,7 +177,7 @@ public:
 class CellData{
 public:
     int nface;
-    int rid;					//point to BoundaryData
+    int rid;					//point to BdRegion
     int face[6], cell[6], vertices[8]; // maybe wasterful a bit. Make it dynamics to save memory
     				       //  face[nface]: for the faces index
     				       //  all elements are treated as 8 nodes hexahdron,

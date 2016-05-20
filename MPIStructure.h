@@ -44,8 +44,10 @@ class Interface{
 public:
 	// Constructor
 	Interface():
-		selfRank(-1),
-		otherRank(-1),
+		selfRank(CYCASHUGE_I),
+		otherRank(CYCASHUGE_I),
+		sendTagOffset(CYCASHUGE_I),
+		recvTagOffset(CYCASHUGE_I),
 		sendBuffer(NULL),
 		sendBufferGradient(NULL),
 		sendBufferCell(NULL)
@@ -54,6 +56,8 @@ public:
 	Interface(int s,int o,MPI_Comm c): //recvlist & sendlist must be setted by Caller dataGroup
 		selfRank(s),	
 		otherRank(o),
+		sendTagOffset(0),
+		recvTagOffset(0),
 		sendBuffer(NULL),
 		sendBufferGradient(NULL),
 		sendBufferCell(NULL),
@@ -62,6 +66,14 @@ public:
 		assert(o==-1||o==-2||o>=0);
 		if(o<0){//periodic bc interface point to self
 			otherRank = selfRank;
+			if(o==-2){
+				sendTagOffset = 1;	
+				recvTagOffset = 0;
+			}else if(o==-1){
+				sendTagOffset = 0;	
+				recvTagOffset = 1;
+			}
+
 		}
 
 		CellData cellSample;
@@ -94,11 +106,11 @@ public:
 	}
 
 	// MPI non blocking communication method !
-	int send(MPI_Request* ,CellData* phi,int tag); 		 // non-blocking method!! return immediatly
+	int send(MPI_Request* ,CellData* phi,int tag, const map<int,BdRegion>* rm); 		 // non-blocking method!! return immediatly
 	int recv(MPI_Request* ,CellData* phi,int tag); 		 // non-blocking method!! return immediatly
-	int send(MPI_Request* ,double* phi, int tag); 		 // non-blocking method!! return immediatly
+	int send(MPI_Request* ,double* phi, int tag, const map<int,BdRegion>* rm); 		 // non-blocking method!! return immediatly
 	int recv(MPI_Request* ,double* phi, int tag); 		 // non-blocking method!! return immediatly
-	int send(MPI_Request* ,double* phi[3], int tag); 		 // non-blocking method!! return immediatly
+	int send(MPI_Request* ,double* phi[3], int tag, const map<int,BdRegion>* rm); 		 // non-blocking method!! return immediatly
 	int recv(MPI_Request* ,double* phi[3], int tag); 		 // non-blocking method!! return immediatly
 
 	void getData(CellData* phi);
@@ -109,12 +121,16 @@ public:
 public:
 	/****************************************/
 	vector<set<int> > boundNodes;
-	vector<int> sendposis;//indexes of cells needs to communicate
-	int recvposi;         //index head of position > Ncel
-
+	vector<int> sendposis;  //indexes of cells needs to communicate
+	int recvposi;           //index head of position > Ncel
+	map<int,int> needsTranslate;// indexes in sendposis that needs translation when send;
+							    // this set is config when building neighboring in NavierStokesSolver::CellFaceInfo;
+								// <cellid, bid> : use bid to determin the exact translation method;
 private:	
 	int selfRank;
 	int otherRank;
+	int sendTagOffset;
+	int recvTagOffset;
 	double *sendBuffer;		//copy to this buffer and send;
 	double *sendBufferGradient;
 	CellData *sendBufferCell;
@@ -210,7 +226,7 @@ public:
 	 *	collective
 	 ***************************************************************/
 	template<typename T>
-	int interfaceCommunicationBegin(T var){
+	int interfaceCommunicationBegin(T var,const map<int,BdRegion>* rm = NULL){
 		MPI_Barrier(comm);
 		size_t nInter = interfaces.size();
 		MPI_Request* sendReq = new MPI_Request[nInter];	
@@ -218,11 +234,11 @@ public:
 		size_t reqCounter = 0;
 		for(map<int,Interface>::iterator iter = interfaces.begin(); iter!=interfaces.end(); ++iter){
 			Interface& _inter = iter->second;
-			_inter.send(sendReq+reqCounter,var,tagCounter);//non-blocking...
+			_inter.send(sendReq+reqCounter,var,tagCounter,rm);//non-blocking...
 			_inter.recv(recvReq+reqCounter,var,tagCounter);//non-blocking
 			reqCounter++;
 		}	
-		tagCounter++; //same tag in each interface communication
+		tagCounter+=2; //same tag in each interface communication
 
 		for(int i=0;i!=nInter;++i){
 			requests.push_back(sendReq[i]);
@@ -310,7 +326,7 @@ public:
 
 	std::vector<int> rootgridList;	  // the element number of each parition
 	std::vector<int> rootNCells;	  // the cell number of each partition
-	std::map<int,BdRegion> regionMap; // same as the one in NavierStokerSolver
+	std::map<int,BdRegion>* regionMap; // refer to the one in NavierStokerSolver
 	/*********************************************************/
 	RootProcess(int r):
 		rank(r),
@@ -318,7 +334,8 @@ public:
 		rootNVert(-1),
 		rootArrayBuffer(NULL), //NULL if not root
 		rootElems(NULL),
-		rootVerts(NULL)
+		rootVerts(NULL),
+		regionMap(NULL)
 	{}
 	~RootProcess(){
 		clean();
@@ -353,7 +370,8 @@ public:
 	void printEnding(DataPartition*,int,int);
 	void printStepStatus(DataPartition* , int,int,double,double,double);
 	void printSteadyStatus(DataPartition*,int,double);
-	void printSectionHead(DataPartition*, double);
+	void printSectionHead(DataPartition*);
+	void printSolutionNotGood(DataPartition*);
 
 	/***************************************************
 	 * 	 writing result to root

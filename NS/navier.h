@@ -16,6 +16,7 @@
 #define RESIDUAL_LEN 10
 #define VOID_CELL_ON_BOUNDARY -10
 #define VOID_CELL_ON_INTERFACE -20
+#define INNER_FACE_BOUNDARY -10
 
 
 using std::cout;

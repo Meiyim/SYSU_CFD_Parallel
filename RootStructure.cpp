@@ -207,12 +207,21 @@ void RootProcess::buildPeriodicInterface(InputElement** elements,idx_t* xadj, id
 	thatCenter[1] /= nThatBnd;
 	thatCenter[2] /= nThatBnd;
 
+	double connectionVec[3];
+	vec_minus(connectionVec,thatCenter,thisCenter,3);
+	assert( (*regionMap)[thisbid].type1==6 );
+	(*regionMap)[thisbid].initvalues[0] = connectionVec[0];
+	(*regionMap)[thisbid].initvalues[1] = connectionVec[1];
+	(*regionMap)[thisbid].initvalues[2] = connectionVec[2];
+
+
 	for(int i=0;i!=nThisBnd;++i){ //move to origin point
 		for(int j=0;j!=3;++j){
 			thisBnds[i].x[j] -= thisCenter[j];
 			thatBnds[i].x[j] -= thatCenter[j];
 		}
 	}
+
 
 
 	double* thisNormal = thisBnds[0].n;// bnd should in a plain surface !
@@ -423,13 +432,13 @@ void RootProcess::partition(DataPartition* dg, int N){
 
 
 	//build periodic boundary connectivity;
-	for(map<int,BdRegion>::iterator iter = regionMap.begin();iter!=regionMap.end();++iter){
+	for(map<int,BdRegion>::iterator iter = regionMap->begin();iter!=regionMap->end();++iter){
 		if(iter->second.type1 == 6 ){
 			int thatbid = iter->second.type2;
-			if(regionMap.find(thatbid)==regionMap.end()){
+			if(regionMap->find(thatbid)==regionMap->end()){
 				errorHandler.fatalLogicError("cant find corresponding boundary for period bc ",iter->first);
 			}
-			if(regionMap[thatbid].type1 !=6 || regionMap[thatbid].type2 != iter->first){
+			if((*regionMap)[thatbid].type1 !=6 || (*regionMap)[thatbid].type2 != iter->first){
 				errorHandler.fatalLogicError("periodic bc not correspond, bid ",iter->first);
 			}
 			
@@ -693,6 +702,14 @@ int RootProcess::getInterfaceSendBuffer(int pid ,int** buffer,map<int,int>* node
 	}
 	*/
 	
+	/*
+	map<double,vector<int> >::iterator iter1 = _connectionMap[-1].begin();
+	map<double,vector<int> >::iterator iter2 = _connectionMap[-2].begin();
+
+	for(;iter2!=_connectionMap[-2].end();iter2++,iter1++){
+		cout<<iter1->second[0]<<"--->"<<iter1->second[0]<<endl;
+	}
+	*/	
 
 
 	*buffer = new int[nI];
@@ -780,16 +797,22 @@ void RootProcess::printEnding(DataPartition* dg,int sec,int nsec){
 	printf( " -------------------------------------------------------------------------------- \n");
 	printf( "    The NSSolve used: %10d s, %15.5e ns of CPU time\n", sec,dnsec);
 }
-
+void RootProcess::printSolutionNotGood(DataPartition* dg){
+	if(dg->comRank!=rank) return;
+	printf("**************************************************\n");	
+	printf("********   CYCAS didnt get a good result    ******\n");	
+	printf("********   Iteration exceed step limitaion  ******\n");	
+	printf("**************************************************\n");	
+}
 void RootProcess::printStepStatus(DataPartition*dg, int step,int piter ,double time,double dt,double res){
 	if(dg->comRank!=rank) return;
-	printf("%15f\t%10d\t%10d\t%13.5f\t%13.5f\n",time,step,piter,dt,res);
+	printf("%15f\t%10d\t%10d\t%13.4f\t%15.10f\n",time,step,piter,dt,res);
 }
 void RootProcess::printSteadyStatus(DataPartition*dg,int outiter,double res){
 	if(dg->comRank!=rank) return;
 	printf("%15s\t%10s\t%10d\t%13s\t%15.10f\n","---","---",outiter,"---",res);
 }
-void RootProcess::printSectionHead(DataPartition* dg,double timeElapse){;
+void RootProcess::printSectionHead(DataPartition* dg){
 	if(dg->comRank!=rank) return;
-	printf("%15s\t%10s\t%10s\t%13s\t%15s\n","TIME","CAL STEP","ITER","DELT","MAX RES");
+		printf("%15s\t%10s\t%10s\t%13s\t%15s\n","TIME","CAL STEP","ITER","DELT","MAX RES");
 }

@@ -49,8 +49,9 @@ public:
 		sendTagOffset(CYCASHUGE_I),
 		recvTagOffset(CYCASHUGE_I),
 		sendBuffer(NULL),
-		sendBufferGradient(NULL),
-		sendBufferCell(NULL)
+		sendBufferCell(NULL),
+		doubleBufCounter(0),
+		cellBufCounter(0)
 	{}
 
 	Interface(int s,int o,MPI_Comm c): //recvlist & sendlist must be setted by Caller dataGroup
@@ -59,8 +60,9 @@ public:
 		sendTagOffset(0),
 		recvTagOffset(0),
 		sendBuffer(NULL),
-		sendBufferGradient(NULL),
 		sendBufferCell(NULL),
+		doubleBufCounter(0),
+		cellBufCounter(0),
 		comm(c)
 	{
 		assert(o==-1||o==-2||o>=0);
@@ -101,7 +103,6 @@ public:
 
 	~Interface(){
 		if(sendBuffer!=NULL) delete [] sendBuffer;
-		if(sendBufferGradient!=NULL) delete [] sendBufferGradient;
 		if(sendBufferCell!=NULL) delete []sendBufferCell;
 	}
 
@@ -113,9 +114,11 @@ public:
 	int send(MPI_Request* ,double* phi[3], int tag, const map<int,BdRegion>* rm); 		 // non-blocking method!! return immediatly
 	int recv(MPI_Request* ,double* phi[3], int tag); 		 // non-blocking method!! return immediatly
 
-	void getData(CellData* phi);
-	void getData(double* phi);
-	void getData(double* phi[3]);
+	void allocateBuffer();
+	void restoreBuffer();	
+	double* getDoubleBuffer();
+	double* get2DDoubleBuffer();
+	CellData* getCellBuffer();
 
 	size_t getWidth(){return sendposis.size();}
 public:
@@ -131,9 +134,12 @@ private:
 	int otherRank;
 	int sendTagOffset;
 	int recvTagOffset;
+	//buffer
 	double *sendBuffer;		//copy to this buffer and send;
-	double *sendBufferGradient;
 	CellData *sendBufferCell;
+	//bufferCounter
+	size_t doubleBufCounter;
+	size_t cellBufCounter;
 	MPI_Comm comm;
 	MPI_Datatype MPI_CellData; //a variable to hold the customized MPI TYPE, contains 22 Ints, 4 Doubles
 };
@@ -259,6 +265,9 @@ public:
 		}
 		requests.clear();
 		tagCounter=0;//clear all communication
+		for(map<int,Interface>::iterator iter = interfaces.begin();iter!=interfaces.end();++iter){
+			iter->second.restoreBuffer();	
+		}
 
 		return 0;
 

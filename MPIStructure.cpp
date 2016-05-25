@@ -3,6 +3,8 @@
 
 using namespace std;
 
+#define MAX_DOUBLE_ARRAY_COMMUNICATION 18
+#define MAX_CELL_COMMUNICATION 1
 
 int DataPartition::initPetsc(){ //collcetive
 
@@ -98,7 +100,9 @@ int DataPartition::buildInterfaceFromBuffer(int* buffer){
 		printf("-->%d : width %d\n",iter.first,iter.second.getWidth());
 		//printf("\n");
 	}
-	
+	for(map<int,Interface>::iterator iter = interfaces.begin();iter!=interfaces.end();++iter){
+		iter->second.allocateBuffer();
+	}	
 	
 	return 0;
 }
@@ -536,16 +540,16 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,double const*
 ****************************************/
 int Interface::send(MPI_Request* req, double* phi,int tag, const map<int,BdRegion>* rm = NULL){
 	size_t width = getWidth();
-	if(sendBuffer==NULL)
-		sendBuffer = new double[width];
-
+	assert(sendBuffer!=NULL);
 	tag+=sendTagOffset;
 
+	double* _buff = getDoubleBuffer();
+
 	for(size_t i=0;i!=width;++i){ //openMP optimizeable
-		sendBuffer[i] = phi[sendposis[i]];
+		_buff[i] = phi[sendposis[i]];
 	}
 
-	MPI_Issend(sendBuffer,	width, MPI_DOUBLE, 
+	MPI_Issend(_buff,	width, MPI_DOUBLE, 
 			otherRank,
 			tag, //TAG
 			comm,
@@ -572,25 +576,25 @@ int Interface::recv(MPI_Request* req, double* phi,int tag){
 
 int Interface::send(MPI_Request* req, CellData* phi,int tag, const map<int,BdRegion>* rm = NULL){
 	size_t width = getWidth();
-	if(sendBufferCell==NULL)
-		sendBufferCell = new CellData[width];
-
+	assert(sendBufferCell!=NULL);
 	tag+=sendTagOffset;
 
+	CellData * _buff = getCellBuffer();
+
 	for(size_t i=0;i!=width;++i){ //openMP optimizeable
-		sendBufferCell[i] = phi[sendposis[i]];
+		_buff[i] = phi[sendposis[i]];
 		if(needsTranslate.find(sendposis[i])!=needsTranslate.end()  ){
 			int bid = needsTranslate[sendposis[i]]; //perform translation !
 			map<int,BdRegion>::const_iterator iter = rm->find(bid);
 			assert(iter->second.type1 == 6);
 			const BdRegion& reg = iter->second;
-			sendBufferCell[i].x[0] += reg.initvalues[0];
-			sendBufferCell[i].x[1] += reg.initvalues[1];
-			sendBufferCell[i].x[2] += reg.initvalues[2];
+			_buff[i].x[0] += reg.initvalues[0];
+			_buff[i].x[1] += reg.initvalues[1];
+			_buff[i].x[2] += reg.initvalues[2];
 		}
 	}
 
-	MPI_Issend(sendBufferCell,width, MPI_CellData,
+	MPI_Issend(_buff,width, MPI_CellData,
 			otherRank,
 			tag, //TAG
 			comm,
@@ -618,17 +622,17 @@ int Interface::recv(MPI_Request* req, CellData* phi,int tag){
 
 int Interface::send(MPI_Request* req, double* phi[3],int tag, const map<int,BdRegion>* rm = NULL){
 	size_t width = getWidth();
-	if(sendBufferGradient==NULL)
-		sendBufferGradient = new double[3*width];
+	assert(sendBuffer!=NULL);
 
 	tag+=sendTagOffset;
+	double* _buff = get2DDoubleBuffer();
 
 	for(size_t i=0;i!=width;++i) //openMP optimizeable
 		for(int j=0;j!=3;++j)
-			sendBufferGradient[i*3+j] = phi[sendposis[i]][j];
+			_buff[i*3+j] = phi[sendposis[i]][j];
 
 
-	MPI_Issend(sendBufferGradient,	3*width, MPI_DOUBLE, 
+	MPI_Issend(_buff,	3*width, MPI_DOUBLE, 
 			otherRank,
 			tag, //TAG
 			comm,
@@ -654,37 +658,35 @@ int Interface::recv(MPI_Request* req, double* phi[3],int tag){
 	return 0;
 }
 
-
-void Interface::getData(CellData* phi){
-	/*
-	size_t width = getWidth();
-	for(int i=0;i!=width;++i){
-		phi[recvposis[i]] = recvBufferCell[i];
-	}
-	*/
+double* Interface::getDoubleBuffer(){
+	if(doubleBufCounter>=MAX_DOUBLE_ARRAY_COMMUNICATION)
+		errorHandler.fatalRuntimeError("out of send buffers... to much communication simutanuesly");
+	return sendBuffer+(doubleBufCounter++)*getWidth();
+}
+double* Interface::get2DDoubleBuffer(){
+	if(doubleBufCounter>=MAX_DOUBLE_ARRAY_COMMUNICATION)
+		errorHandler.fatalRuntimeError("out of send buffers... to much communication simutanuesly");
+	double* ret = sendBuffer+(doubleBufCounter)*getWidth();
+	doubleBufCounter+=3;
+	return ret;
 
 }
+CellData* Interface::getCellBuffer(){
+	if(cellBufCounter>=MAX_CELL_COMMUNICATION)
+		errorHandler.fatalRuntimeError("out of send buffers... to much communication simutanuesly");
+	return sendBufferCell+(cellBufCounter++)*getWidth();
 
-void Interface::getData(double* phi){
-	/*
-	size_t width = getWidth();
-	for(int i=0;i!=width;++i)
-		phi[recvposis[i]] = recvBuffer[i];
-	*/
 }
-
-
-
-void Interface::getData(double* phi[3]){
-	/*
+void Interface::allocateBuffer(){
 	size_t width = getWidth();
-	for(int i=0;i!=width;++i)
-		for(int j=0;j!=3;++j)
-			phi[recvposis[i]][j] = recvBufferGradient[i*3+j];
-	*/
+	sendBuffer = new double[MAX_DOUBLE_ARRAY_COMMUNICATION*width];// allow 15 communication at the same time
+	sendBufferCell = new CellData[MAX_CELL_COMMUNICATION*width];//Cell communication should not overlap
+	return;	
 }
-
-
+void Interface::restoreBuffer(){
+	doubleBufCounter=0;	
+	cellBufCounter=0;
+}
 
 
 

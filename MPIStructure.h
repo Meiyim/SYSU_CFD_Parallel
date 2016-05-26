@@ -337,6 +337,10 @@ public:
 	std::vector<int> rootNCells;	  // the cell number of each partition
 	std::map<int,BdRegion>* regionMap; // refer to the one in NavierStokerSolver
 	/*********************************************************/
+
+	std::ofstream totFile;
+	std::ofstream monitorFile;
+
 	RootProcess(int r):
 		rank(r),
 		rootNGlobal(-1),
@@ -348,6 +352,10 @@ public:
 	{}
 	~RootProcess(){
 		clean();
+		if(totFile.is_open())
+			totFile.close();
+		if(monitorFile.is_open())
+			monitorFile.close();
 		delete []rootArrayBuffer;
 	}
 

@@ -232,10 +232,14 @@ struct BoundaryData
                              // center to cell center
     double  yplus;           // y+
     double  uplus;           // u+
-    double  shear[3];        // shearstress components
+    double  shear[3];        // shear force component, the meaning of this attribute is modified by CXY:
     double  h;               // local heattransfer coef.
     double  q;               // local heat flux (in W/m2)
     double  T;               // local wall temperature
+    BoundaryData(){
+    	for(int i=0;i!=3;++i)	
+    		shear[i] = 0.;
+    }
 };
 
 

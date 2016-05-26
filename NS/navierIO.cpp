@@ -346,4 +346,39 @@ void NavierStokesSolver::ReadBackupFile( )
 
 void NavierStokesSolver::OutputMoniter( )
 {
+	map<int,vector<double> > wallForces;
+	//wall monitor
+	for(map<int,BdRegion>::const_iterator iter = regionMap.begin();iter!=regionMap.end();++iter){
+		MPI_Barrier(dataPartition->comm);
+		int bid  = iter->first;
+		if (iter->second.type1 == 1) {//for walls
+			double f[3] = {0.,0.,0.};
+			double F[3] = {0.,0.,0.};
+			for(int i=0;i!=Nbnd;++i){
+				if(Bnd[i].rid == bid){
+					f[0] += Bnd[i].shear[0];		
+					f[1] += Bnd[i].shear[1];		
+					f[2] += Bnd[i].shear[2];		
+				}
+			}
+			MPI_Reduce(f,F,3,MPI_DOUBLE,MPI_SUM,root.rank,MPI_COMM_WORLD);	
+			if(dataPartition->comRank == root.rank){
+				wallForces.insert(make_pair(bid,vector<double> (F,F+3)));
+			}
+		}
+	}
+	if(dataPartition->comRank == root.rank){
+		char temp[4096];	
+		for(map<int,vector<double> >::const_iterator iter = wallForces.begin();iter!=wallForces.end();++iter){
+			sprintf(temp,"wall: %d force: %e, %e, %e\n",
+					iter->first,
+					iter->second[0],
+					iter->second[1],
+					iter->second[2]
+				);
+			root.monitorFile<<temp;
+		}
+	}
+	MPI_Barrier(dataPartition->comm);
+
 }

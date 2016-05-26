@@ -39,12 +39,8 @@ void NavierStokesSolver::NSSolve( )
 	CYCAS_GET_TIME(tstart);
 
 	cur_time = 0.0;
-	if(IfSteady)
-		dt = CYCASHUGE_D;
-
-	cur_time += dt;
 	if(IfSteady){
-		MaxOuterStep = MaxStep;
+		MaxOuterStep = 2;
 	}
 	//MaxOuterStep=2;//test
     for( step=1; step<=MaxStep; step++ ) //step : total time step
@@ -55,21 +51,10 @@ void NavierStokesSolver::NSSolve( )
 
 		// outer iteration, drive residual to zero for every physical time step
 		for( iter=1; iter<MaxOuterStep; iter++ ){
+			cur_time += dt;
 
-			//------------   Record   ------------//
-			if( shouldBackup(step,iter,cur_time) )
-				WriteBackupFile();
-			if( shouldPostProcess(step,iter,cur_time) ){
-				Output2Tecplot();
-				root.printSectionHead(dataPartition);
-			}
-
-			//----------- record,tot file, restart file, etc.----//
-			writeTotFile();
-				
 			//------------   SIMPLE_C ------------//
 			MPI_Barrier(dataPartition->comm);
-				
 			std::fill(localRes,localRes+RESIDUAL_LEN,0.0);
 			std::fill(Residual,Residual+RESIDUAL_LEN,0.0);
 			
@@ -78,7 +63,6 @@ void NavierStokesSolver::NSSolve( )
 			
 			CalculatePressure ( ); //calculate deltaP and correct P,[R], U,V,W
 					       //interface communication U,V,W,P,R
-
 			PetscLogStagePush(otherStage);//Profilling
 			
 			//------------   Physics Models   ------------//
@@ -107,35 +91,50 @@ void NavierStokesSolver::NSSolve( )
 			
 			if( IfSteady ){
 				//steady
-				root.printSteadyStatus(dataPartition,iter,ResMax);
-				if( ResMax<ResidualSteady )break;
+				root.printSteadyStatus(dataPartition,step,ResMax);
+				break;
 			}else{
 				//unsteady
 				root.printStepStatus(dataPartition,step,iter,cur_time,dt,ResMax);
 				if( iter == 1 ) ResMax0 = ResMax;
-				if( ResMax<1.e-4 || ResMax0/(ResMax+1.e-16)>1000. ){
+				if( /*ResMax<1.e-4 ||*/ ResMax0/(ResMax+1.e-16)>1000. ){
 					break; // more reasonal to break : order drop 2
 				}
 			}
 
 		}
-		if(iter==MaxOuterStep){
-			PetscLogStagePop();//profilling
-			CYCAS_GET_TIME(tend);
-			root.printSolutionNotGood(dataPartition);
-			break;
-		}		
+		
+		//------------   Record tot, tecplot , restart...   --------//
+		if( shouldBackup(step,cur_time) )
+			WriteBackupFile();
+		if( shouldPostProcess(step,cur_time) ){
+			Output2Tecplot();
+			writeTotFile();
+			OutputMoniter();
+			root.printSectionHead(dataPartition);
+		}
 
 
-		if(cur_time >= total_time){
-			PetscLogStagePop();//profilling
-			CYCAS_GET_TIME(tend);
-			break;
-		}else{//time advance
-			cur_time+=dt;
-		}	
+		if(!IfSteady){
+			if(cur_time >= total_time){
+				PetscLogStagePop();//profilling
+				CYCAS_GET_TIME(tend);
+				break;
+			}else{//time advance
+			}		
+		}else{
+			if(ResMax<ResidualSteady){
+				break;
+			}
+		}
+	
 	}
 
+
+	if(IfSteady&&step==MaxStep){
+			PetscLogStagePop();//profilling
+			root.printSolutionNotGood(dataPartition);
+	}
 	//extra work before solve is complete 
 	Output2Tecplot();
 
@@ -150,13 +149,12 @@ void NavierStokesSolver::NSSolve( )
 /*******************************************************/
 //	determint if should output to tecplot, vtk...
 /*******************************************************/
-bool NavierStokesSolver::shouldBackup(int timestep,int outiter,double now){
+bool NavierStokesSolver::shouldBackup(int timestep,double now){
 	if(IfSteady){
-		return (outiter-1)%noutput == 0;
+		return (timestep-1)%noutput == 0;
 	}else{
-		return false;
+		return (timestep-1)%noutput==0 ;
 	}
-
 }
 
 
@@ -164,11 +162,11 @@ bool NavierStokesSolver::shouldBackup(int timestep,int outiter,double now){
 //	determint if should backUp
 //	currently the same frequency as post process
 /*******************************************************/
-bool NavierStokesSolver::shouldPostProcess(int timestep,int outiter, double now){
+bool NavierStokesSolver::shouldPostProcess(int timestep, double now){
 	if(IfSteady){
-		return (outiter-1)%noutput == 0;
+		return (timestep-1)%noutput == 0;
 	}else{
-		return (timestep-1)%noutput==0 && outiter == 1;
+		return (timestep-1)%noutput==0 ;
 	}
 }
 
@@ -680,6 +678,7 @@ NavierStokesSolver::NavierStokesSolver():
 	field(NULL),
 	oldField(NULL),
 	oldField2(NULL),
+
 	iOptions(new int[INT_OPTION_NO]),
 	dbOptions(new double[DB_OPTION_NO]),
 	//option sets
@@ -748,6 +747,7 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete oldField;
 	delete oldField2;
 	
+
 
 	delete []iOptions;
 	delete []dbOptions;

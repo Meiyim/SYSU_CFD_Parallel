@@ -216,8 +216,8 @@ private:
 	//initiation
 	void ReadParamFile   ( );
 	//post process
-	bool shouldPostProcess(int step,int iter,double now);		//should output
-	bool shouldBackup(int step,int iter,double now);
+	bool shouldPostProcess(int iter,double now);		//should output
+	bool shouldBackup(int iter,double now);
 };
 
 namespace TurKEpsilonVar

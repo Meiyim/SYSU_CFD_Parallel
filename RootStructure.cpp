@@ -16,6 +16,8 @@ int numberOfNodesInElementTypeOf[8] = {//command
 void RootProcess::init(DataPartition* dg){
 	 //only root may init
 	if(dg->comRank!=rank) return;
+	totFile.open("totResult.tot");
+	monitorFile.open("monitorResult.mon");
 	//printer = new TerminalPrinter;
 	//other initiation stuff 
 }

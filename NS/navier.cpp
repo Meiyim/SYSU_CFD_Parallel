@@ -50,8 +50,8 @@ void NavierStokesSolver::NSSolve( )
 		}
 
 		// outer iteration, drive residual to zero for every physical time step
+		cur_time += dt;
 		for( iter=1; iter<MaxOuterStep; iter++ ){
-			cur_time += dt;
 
 			//------------   SIMPLE_C ------------//
 			MPI_Barrier(dataPartition->comm);
@@ -109,10 +109,10 @@ void NavierStokesSolver::NSSolve( )
 			WriteBackupFile();
 		if( shouldPostProcess(step,cur_time) ){
 			Output2Tecplot();
-			writeTotFile();
-			OutputMoniter();
 			root.printSectionHead(dataPartition);
 		}
+		writeTotFile();
+		OutputMoniter();
 
 
 		if(!IfSteady){

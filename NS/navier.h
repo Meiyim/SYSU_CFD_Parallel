@@ -10,7 +10,7 @@
 #define NDEBUG
 #endif
 #include <assert.h>
-#include "../MPIStructure.h"
+#include "MPIStructure.h"
 #include "tools.h"
 
 #define RESIDUAL_LEN 10

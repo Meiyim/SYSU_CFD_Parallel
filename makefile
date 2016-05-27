@@ -49,13 +49,13 @@ cl:
 cycas2:  $(OBJSFILE) chkopts
 	-${MYLINKER} -o $@ $(OBJSFILE)  ${PETSC_LIB} $(METIS_LIB) $(CPPFLAGS)
 
-$(BIN)main.o: main.cpp 
+$(BIN)main.o: $(NSSRC)main.cpp 
 	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
-$(BIN)MPIStruct.o: MPIStructure.cpp
+$(BIN)MPIStruct.o: $(NSSRC)MPIStructure.cpp
 	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
-$(BIN)RootStruct.o: RootStructure.cpp
+$(BIN)RootStruct.o: $(NSSRC)RootStructure.cpp
 	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)navier.o: $(NSSRC)navier.cpp

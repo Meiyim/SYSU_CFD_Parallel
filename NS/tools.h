@@ -4,7 +4,7 @@
 #include <time.h>
 #include <string>
 #include <stdlib.h>
-#include "../MPIStructure.h"
+#include "MPIStructure.h"
 using namespace std;
 
 #define CYCASMAX(x,y)  ((x)>(y)?(x):(y))

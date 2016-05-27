@@ -106,7 +106,7 @@ void NavierStokesSolver::Output2Tecplot()
 
 	ofstream of;
 	char tecTitle[256];
-	sprintf(tecTitle,"tec/res%04d.dat",int(this->outputCounter++));
+	sprintf(tecTitle,"tec/res%04d.dat",int(this->outputCounter));
 	of.open(tecTitle);
 	
 	string head;

@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <string>
+#include <string.h>
 #include <stdlib.h>
 #include "MPIStructure.h"
 using namespace std;
@@ -10,8 +11,7 @@ using namespace std;
 #define CYCASMAX(x,y)  ((x)>(y)?(x):(y))
 #define CYCASMIN(x,y)  ((x)<(y)?(x):(y))
 #define CYCASSIGN(x)   ((x)>0?1:(-1))
-#define CYCAS_GET_TIME(ts)
-#define CYCAS_GET_TIME(ts) 
+#define CYCAS_GET_TIME(ts) gettimeofday(&ts,NULL);
 
 // maybe SIGN still has problem, not for 0
 // vector manipulation. should be defined as inline function for higher efficiency

@@ -158,7 +158,7 @@ int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* 
 		disp+=bufSizes[i];
 	}
 
-	int ret = MPI_File_open(MPI_COMM_WORLD,title.c_str(), MPI_MODE_RDWR, MPI_INFO_NULL, &thefile);
+	int ret = MPI_File_open(MPI_COMM_WORLD,(char*)title.c_str(), MPI_MODE_RDWR, MPI_INFO_NULL, &thefile);
 	if(ret!=MPI_SUCCESS){ 
 		throw runtime_error("MPI Parallel I/O fail: cant open file \n");
 	}
@@ -168,7 +168,7 @@ int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* 
 		throw runtime_error("MPI Parallel I/O fail: cant set view \n");
 	}
 
-	ret = MPI_File_write(thefile,buffer.c_str(),myBufSize,MPI_CHAR,MPI_STATUS_IGNORE);
+	ret = MPI_File_write(thefile,(char*)buffer.c_str(),myBufSize,MPI_CHAR,MPI_STATUS_IGNORE);
 	if(ret!=MPI_SUCCESS){ 
 		throw runtime_error("MPI Parallel I/O fail: cant write buffer \n");
 	}

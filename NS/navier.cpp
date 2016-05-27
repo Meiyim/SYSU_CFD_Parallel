@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sstream>
 #include <limits.h>
+#include <sys/time.h>
 #include "navier.h"
 #include "tools.h"
 #include "terminalPrinter.h"
@@ -17,8 +18,8 @@ void NavierStokesSolver::NSSolve( )
 {
 	int iter;
 	double ResMax,ResMax0;
-	timespec tstart ={0,0};
-	timespec tend ={0,0};
+	timeval tstart ={0,0};
+	timeval tend ={0,0};
 	
 	//profiling
 	PetscLogStage buildVelocityStage = 1;
@@ -140,7 +141,7 @@ void NavierStokesSolver::NSSolve( )
 
 	root.printEnding(dataPartition,
 			tend.tv_sec-tstart.tv_sec,
-			tend.tv_nsec-tstart.tv_nsec);
+			tend.tv_usec-tstart.tv_usec);
 
 	return;
 }

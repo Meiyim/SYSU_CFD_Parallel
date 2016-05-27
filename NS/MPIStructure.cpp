@@ -96,11 +96,8 @@ int DataPartition::buildInterfaceFromBuffer(int* buffer){
 
 	
 	printf("partition %d: ninterface: %lu\n",comRank,ninterfaces);
-	for( auto& iter : interfaces ){
-		printf("-->%d : width %d\n",iter.first,iter.second.getWidth());
-		//printf("\n");
-	}
 	for(map<int,Interface>::iterator iter = interfaces.begin();iter!=interfaces.end();++iter){
+		printf("-->%d : width %d\n",iter->first,iter->second.getWidth());
 		iter->second.allocateBuffer();
 	}	
 	

@@ -98,7 +98,7 @@ void NavierStokesSolver::NSSolve( )
 				//unsteady
 				root.printStepStatus(dataPartition,step,iter,cur_time,dt,ResMax);
 				if( iter == 1 ) ResMax0 = ResMax;
-				if( /*ResMax<1.e-4 ||*/ ResMax0/(ResMax+1.e-16)>1000. ){
+				if( /*ResMax<1.e-4 ||*/ ResMax0/(ResMax+1.e-16)>100. ){
 					break; // more reasonal to break : order drop 2
 				}
 			}

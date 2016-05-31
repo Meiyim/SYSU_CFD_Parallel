@@ -507,8 +507,8 @@ int NavierStokesSolver::CellFaceInfo()
 				Face[iface].cell2 = voidCellCounter;
 				assert(thisCell->cell[k]== VOID_CELL_ON_INTERFACE || thisCell->cell[k]== VOID_CELL_ON_BOUNDARY);
 				thisCell->cell[k] = voidCellCounter;
-                int boundaryBid = Bnd[ Face[iface].bnd ].rid;
                 if(Face[iface].bnd >=0 ){
+                    int boundaryBid = Bnd[ Face[iface].bnd ].rid;
                     assert(regionMap[boundaryBid].type1==6);
                     interface->needsTranslate.insert(make_pair(interface->sendposis[i],boundaryBid));
                 }

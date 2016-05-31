@@ -76,6 +76,9 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	 *	Read Cells
 	 ******************************************/
 	Bnd = new BoundaryData[Nbnd];	//pre_allocation
+    if(Bnd==NULL){
+        errorHandler.fatalRuntimeError("allocate Bnd array fail: system run out of memory") ;
+    }
 	int width = 0;
 	for(map<int,Interface>::iterator iter = dataPartition->interfaces.begin();iter!=dataPartition->interfaces.end();++iter){
 		width += iter->second.getWidth();
@@ -83,7 +86,9 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 
 	dataPartition->nVirtualCell = width;
 	Cell = new CellData[Ncel + width]; //pre_allocation
-		
+	if(Cell==NULL){
+        errorHandler.fatalRuntimeError("allocate Cell array fail: system run out of memory") ;
+    }	
 	//printf("read cell: %d and %d\n",Nbnd,Ncel);
 
    	counter = 0; 
@@ -215,16 +220,13 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 int NavierStokesSolver::CreateFaces( )
 {
     int i,j,id,n1,n2,n3,n4,n5,n6,n7,n8;
-    int *NumNodeFace, **NodeFace;
     
 	fflush(stdout);
 	PetscPrintf(dataPartition->comm,"constructing faces...");
 	fflush(stdout);
 
-    NumNodeFace = new int[Nvrt];
-    NodeFace    = new_Array2D<int>( Nvrt,500 ); //CXY: not a good idea
-	for( i=0; i<Nvrt; i++ )
-		NumNodeFace[i] = 0;
+    set<int>* NodeFace    = new set<int> [Nvrt];
+
 	for( i=0; i<Ncel; i++ )
 		Cell[i].nface = 0;
 	/* //CXY: seems not useful
@@ -239,6 +241,9 @@ int NavierStokesSolver::CreateFaces( )
    	 
 	Nfac = 0;
 	Face = new FaceData[Nbnd];	// modified by CXY
+    if(Face==NULL){
+            errorHandler.fatalRuntimeError("allocate face array fail: system run out of memory") ;
+    }
 
    	 for( i=0; i<Nbnd; i++ )
     	{
@@ -252,7 +257,7 @@ int NavierStokesSolver::CreateFaces( )
         	for( j=0;j<4;j++ )
         	{
             		id = Face[Nfac].vertices[j];
-            		NodeFace[id][NumNodeFace[id]++]= Nfac;
+                    NodeFace[id].insert(Nfac);
         	}
 		Nfac++;  // face accumulation is at last
     	}
@@ -269,20 +274,19 @@ int NavierStokesSolver::CreateFaces( )
         	n6= Cell[i].vertices[5];
         	n7= Cell[i].vertices[6];
         	n8= Cell[i].vertices[7];
-        	FindFace( i,n1,n2,n3,n4, Nfac, NumNodeFace,NodeFace );//Nface++
-        	FindFace( i,n5,n6,n7,n8, Nfac, NumNodeFace,NodeFace );//Nface++
-        	FindFace( i,n1,n2,n6,n5, Nfac, NumNodeFace,NodeFace );//Nface++
-        	FindFace( i,n2,n3,n7,n6, Nfac, NumNodeFace,NodeFace );//Nface++
-        	FindFace( i,n4,n3,n7,n8, Nfac, NumNodeFace,NodeFace );//Nface++
-        	FindFace( i,n1,n4,n8,n5, Nfac, NumNodeFace,NodeFace );//Nface++
+        	FindFace( i,n1,n2,n3,n4, Nfac, NodeFace );//Nface++
+        	FindFace( i,n5,n6,n7,n8, Nfac, NodeFace );//Nface++
+        	FindFace( i,n1,n2,n6,n5, Nfac, NodeFace );//Nface++
+        	FindFace( i,n2,n3,n7,n6, Nfac, NodeFace );//Nface++
+        	FindFace( i,n4,n3,n7,n8, Nfac, NodeFace );//Nface++
+        	FindFace( i,n1,n4,n8,n5, Nfac, NodeFace );//Nface++
     	}
 
 	//printf("Rank: %d Number of faces: %d\n",dataPartition->comRank,Nfac);
 
-	delete [] NumNodeFace;
-	delete_Array2D<int>( NodeFace, Nvrt, 500 );
+	delete [] NodeFace;
 
-    	PetscPrintf(dataPartition->comm,"done\n");
+    PetscPrintf(dataPartition->comm,"done\n");
 	MPI_Barrier(dataPartition->comm);
 
 	
@@ -290,7 +294,7 @@ int NavierStokesSolver::CreateFaces( )
 }
 
 void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &nf, 
-        int *NumNodeface, int **NodeFace )
+       set<int>* NodeFace )
 {
     int fid,k,irepeat,iface,ifn1,ifn2,ifn3,ifn4,id;
     irepeat = 0;
@@ -300,9 +304,9 @@ void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &
     if( irepeat>1 ) return;
     // find 
     fid= -100;
-    for( k=0; k<NumNodeface[n1]; k++ )
+    for( set<int>::iterator iter=NodeFace[n1].begin();iter!=NodeFace[n1].end();++iter)
     {
-        iface= NodeFace[n1][k];
+        iface= *iter;
         ifn1 = Face[iface].vertices[0];
         ifn2 = Face[iface].vertices[1];
         ifn3 = Face[iface].vertices[2];
@@ -320,6 +324,9 @@ void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &
     if( fid<0 )
     {
 	Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) );//CXY: not a good idea
+        if(Face==NULL){
+            errorHandler.fatalRuntimeError("allocate face array fail: system run out of memory") ;
+        }
         Face[nf].vertices[0]= n1;
         Face[nf].vertices[1]= n2;
         Face[nf].vertices[2]= n3;
@@ -333,7 +340,7 @@ void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &
         for( k=0; k<4; k++ )// CXY: is this loop really necessary?
         {
             id = Face[nf].vertices[k];
-            NodeFace[id][ NumNodeface[id]++ ] = nf;
+            NodeFace[id].insert(nf);
         }
 	nf++; // face accumulation is at last
     }

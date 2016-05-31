@@ -267,15 +267,23 @@ public:
     			// type2 = corresponding bid;
 
 
-    double fixedValue;
+    double fixedValue;// init or bnd values
     double initvalues[10];//u,v,w,p,ro,t,te,ed
+
+    double  scarlarRecord; // for monitor output
+    double  vectorRecord[3];// 
     BdRegion():
         type1(-1),
         type2(-1),
-        fixedValue(CYCASHUGE_I)
-    {}
+        fixedValue(CYCASHUGE_I),
+        scarlarRecord(0.0)
+    {
+    	vectorRecord[0] = vectorRecord[1] = vectorRecord[2] = 0.0;
+    }
 
-    BdRegion(double* buffer,int len){		 //construct from buffer
+    BdRegion(double* buffer,int len):	 //construct from buffer
+    	scarlarRecord(0.0)
+    {
     	int icounter = 0;
    		type1 = (int)buffer[icounter++];
    		type2 = (int)buffer[icounter++];
@@ -283,6 +291,7 @@ public:
     	for(int i=0;i!=len-3;++i){
     		initvalues[i] = buffer[icounter++];
     	}
+    	vectorRecord[0] = vectorRecord[1] = vectorRecord[2] = 0.0;
     }
 
     int getSendBuffer(double* buffer){		//user's responsibility to alloc&free memory

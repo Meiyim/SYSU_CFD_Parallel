@@ -346,38 +346,78 @@ void NavierStokesSolver::ReadBackupFile( )
 
 void NavierStokesSolver::OutputMoniter( )
 {
-	map<int,vector<double> > wallForces;
+	map<int,vector<double> > regionRecord;
 	//wall monitor
-	for(map<int,BdRegion>::const_iterator iter = regionMap.begin();iter!=regionMap.end();++iter){
-		MPI_Barrier(dataPartition->comm);
-		int bid  = iter->first;
-		if (iter->second.type1 == 1) {//for walls
-			double f[3] = {0.,0.,0.};
-			double F[3] = {0.,0.,0.};
-			for(int i=0;i!=Nbnd;++i){
-				if(Bnd[i].rid == bid){
-					f[0] += Bnd[i].shear[0];		
-					f[1] += Bnd[i].shear[1];		
-					f[2] += Bnd[i].shear[2];		
-				}
-			}
-			MPI_Reduce(f,F,3,MPI_DOUBLE,MPI_SUM,root.rank,MPI_COMM_WORLD);	
-			if(dataPartition->comRank == root.rank){
-				wallForces.insert(make_pair(bid,vector<double> (F,F+3)));
-			}
+	for(map<int,BdRegion>::iterator iter = regionMap.begin();iter!=regionMap.end();++iter){
+		for(int i=0;i!=3;++i)
+			iter->second.vectorRecord[i] = 0.0;
+		iter->second.scarlarRecord = 0.0;	
+	}
+	for(int i=0;i!=Nbnd;++i){
+		map<int,BdRegion>::iterator iter = regionMap.find( Bnd[i].rid );
+		BdRegion& reg = iter->second;
+		if(reg.type1 == 1){ 	//record wall  drag / lift force
+			reg.vectorRecord[0]  += Bnd[i].shear[0];
+			reg.vectorRecord[1]  += Bnd[i].shear[1];
+			reg.vectorRecord[2]  += Bnd[i].shear[2];
 		}
 	}
+
+	for(int i=0;i!=Ncel;++i){
+		map<int,BdRegion>::iterator iter = regionMap.find( Cell[i].rid );
+		BdRegion& reg = iter->second;
+		if(reg.type1==5 && reg.type2==0){
+			reg.scarlarRecord += pow(Wn[i] ,2) * Cell[i].vol;
+		}
+	}
+
+	for(map<int,BdRegion>::iterator iter = regionMap.begin();iter!=regionMap.end();++iter){
+		int rid  = iter->second.type1;
+		if(rid != 1 && rid !=5 ) continue;
+		if(iter->first == 0 ) continue;
+
+		double sumScar = 0.0;
+		double sumVec[3] = {0.,0.,0.};
+
+		MPI_Reduce(&( iter->second.scarlarRecord ),&sumScar,1,MPI_DOUBLE,MPI_SUM,root.rank,MPI_COMM_WORLD);	
+		MPI_Reduce( iter->second.vectorRecord , sumVec,3,MPI_DOUBLE,MPI_SUM,root.rank,MPI_COMM_WORLD);	
+		vector<double> toInsert(sumVec,sumVec+3);
+		toInsert.push_back(sumScar);
+		regionRecord.insert( make_pair( iter->first, toInsert  ) );
+		MPI_Barrier(dataPartition->comm);
+	}
+
 	if(dataPartition->comRank == root.rank){
 		char temp[4096];	
-		for(map<int,vector<double> >::const_iterator iter = wallForces.begin();iter!=wallForces.end();++iter){
-			sprintf(temp,"wall: %d force: %e, %e, %e\n",
+		for(map<int,vector<double> >::const_iterator iter = regionRecord.begin();iter!=regionRecord.end();++iter){
+			string regionName, vectorName, scarlarName;
+			switch(regionMap[iter->first].type1){
+			case 1:	
+				regionName = "wall";
+				vectorName = "drag/lift force";
+				scarlarName = "Null";
+				break;
+			case 5:
+				regionName = "fluid";
+				vectorName = "Null";
+				scarlarName = "w energy";
+				break;
+			default:
+				assert(false);
+			}
+			sprintf(temp,"%s: %d %s: %e, %e, %e\t%s : %e   ||",
+					regionName.c_str(),
 					iter->first,
+					vectorName.c_str(),
 					iter->second[0],
 					iter->second[1],
-					iter->second[2]
+					iter->second[2],
+					scarlarName.c_str(),
+					iter->second[3]
 				);
 			root.monitorFile<<temp;
 		}
+		root.monitorFile<<endl;
 	}
 	MPI_Barrier(dataPartition->comm);
 

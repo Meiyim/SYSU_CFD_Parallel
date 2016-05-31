@@ -150,7 +150,7 @@ public:
 
 	void OutputGrid      (); //modified by CXY
 	int  CreateFaces     ( );
-	void FindFace( int, int,int,int,int, int&, int*,int** );
+	void FindFace( int, int,int,int,int, int&, set<int>* );
 	int  CellFaceInfo    ();//modified by CXY //the return value indicates the number of virtual cell beyond Ncel
 	int  CheckAndAllocate();		    //modified by CXY: input the number of virtual cells
 

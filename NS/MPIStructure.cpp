@@ -580,8 +580,8 @@ int Interface::send(MPI_Request* req, CellData* phi,int tag, const map<int,BdReg
 
 	for(size_t i=0;i!=width;++i){ //openMP optimizeable
 		_buff[i] = phi[sendposis[i]];
-		if(needsTranslate.find(sendposis[i])!=needsTranslate.end()  ){
-			int bid = needsTranslate[sendposis[i]]; //perform translation !
+		if(needsTranslate.find(i)!=needsTranslate.end()  ){
+			int bid = needsTranslate[i]; //perform translation !
 			map<int,BdRegion>::const_iterator iter = rm->find(bid);
 			assert(iter->second.type1 == 6);
 			const BdRegion& reg = iter->second;

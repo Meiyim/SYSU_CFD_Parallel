@@ -474,4 +474,20 @@ void NavierStokesSolver::CalRUFace2( )
 			RUFace[i] -= rf*Face[i].area *aprf/d12*vol *( (P2-P1) - dpn );
 		}
 	}
+
+/*
+	Checker ck("chkecker in cal ruface");
+	for(i=0;i!=Ncel;++i){
+		for(int j=0;j!=Cell[i].nface;++j){
+			int iface = Cell[i].face[j];
+			if(Face[iface].cell2 < 0)continue;
+			if(Face[iface].cell1 == i ) 
+				ck.check(RUFace[iface]);
+			if(Face[iface].cell2 == i ) 
+				ck.check(-RUFace[iface]);
+
+		}
+	}
+	ck.report();
+	*/
 }

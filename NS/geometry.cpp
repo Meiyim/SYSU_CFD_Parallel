@@ -510,7 +510,7 @@ int NavierStokesSolver::CellFaceInfo()
                 if(Face[iface].bnd >=0 ){
                     int boundaryBid = Bnd[ Face[iface].bnd ].rid;
                     assert(regionMap[boundaryBid].type1==6);
-                    interface->needsTranslate.insert(make_pair(interface->sendposis[i],boundaryBid));
+                    interface->needsTranslate.insert(make_pair(i,boundaryBid));
                 }
 
 				voidCellCounter++;
@@ -707,6 +707,9 @@ int NavierStokesSolver::CellFaceInfo()
         if(Face[iface].cell2 < Ncel) continue;
         int c1 = Face[iface].cell1;
         int c2 = Face[iface].cell2;
+        double dx[3];
+        vec_minus( dx,Cell[c2].x,Cell[c1].x,3 );
+        dataPartition->PRINT_LOG(vec_len(dx,3));
         //dataPartition->PRINT_LOG(Face[iface].rlencos/Face[iface].area);
         //dataPartition->PRINT_LOG(Cell[c1]);
         //dataPartition->PRINT_LOG(Cell[c2]);

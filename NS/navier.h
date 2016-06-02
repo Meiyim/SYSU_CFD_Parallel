@@ -162,6 +162,7 @@ public:
 	void scatterGridFile(int** elemBuffer,double** vertexBuffer,int** interfaceBuffer);		//CXY: a MPI ScatterV routine
 
 	void InitFlowField  ( );
+	void readyToSolve();
 	
 
 

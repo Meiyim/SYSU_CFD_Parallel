@@ -338,8 +338,8 @@ public:
 	std::map<int,BdRegion>* regionMap; // refer to the one in NavierStokerSolver
 	/*********************************************************/
 
-	std::ofstream totFile;
-	std::ofstream monitorFile;
+	std::fstream totFile;
+	std::fstream monitorFile;
 
 	RootProcess(int r):
 		rank(r),
@@ -393,7 +393,7 @@ public:
 	/***************************************************
 	 * 	 writing result to root
 	 * *************************************************/
-	void write(DataPartition* dg);
+	void writeMonitorFile(DataPartition* dg,const char* chs);
 
 
 private:

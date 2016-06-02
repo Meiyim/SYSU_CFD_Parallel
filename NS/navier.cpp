@@ -43,6 +43,9 @@ void NavierStokesSolver::NSSolve( )
 	if(IfSteady){
 		MaxOuterStep = 2;
 	}
+
+	readyToSolve();
+
 	//MaxOuterStep=2;//test
     for( step=1; step<=MaxStep; step++ ) //step : total time step
     {
@@ -511,9 +514,46 @@ void NavierStokesSolver::initSolverParam()
 }
 
 
-void NavierStokesSolver::InitFlowField( ){
-	int i;
+void NavierStokesSolver::readyToSolve(){  // call right befor NS Loop
+	//Init output files
+	if(dataPartition->comRank == root.rank){
+		char temp[4096];	
+		sprintf(temp,"%20s || ","time");
+		root.writeMonitorFile(dataPartition,temp);
 
+		for(map<int,BdRegion >::const_iterator iter = regionMap.begin();iter!=regionMap.end();++iter){
+			string regionName, vectorName, scarlarName;
+			switch(iter->second.type1){
+			case 1:	
+				regionName = "wall";
+				vectorName = "drag/lift force";
+				scarlarName = "Null";
+				break;
+			case 5:
+				regionName = "fluid";
+				vectorName = "Null";
+				scarlarName = "w energy";
+				break;
+			default:
+				continue;
+			}
+			if(iter->first==0) continue;
+			sprintf(temp,"%20s: %20d: %20s | %20s || ",
+					regionName.c_str(),
+					iter->first,
+					vectorName.c_str(),
+					scarlarName.c_str()
+				);
+			root.writeMonitorFile(dataPartition,temp);
+		}
+		root.writeMonitorFile(dataPartition,"\n");
+	}
+	MPI_Barrier(dataPartition->comm);
+
+}
+void NavierStokesSolver::InitFlowField( ){//NSSolve ready to solve
+	int i;
+	//Init Flow Field
 	if( IfReadBackup ) 
 		ReadBackupFile( );
 	else{

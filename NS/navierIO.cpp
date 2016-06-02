@@ -387,37 +387,22 @@ void NavierStokesSolver::OutputMoniter( )
 		MPI_Barrier(dataPartition->comm);
 	}
 
+	//Init output files
 	if(dataPartition->comRank == root.rank){
 		char temp[4096];	
+		sprintf(temp,"%20e || ",cur_time);
+		root.writeMonitorFile(dataPartition,temp);
 		for(map<int,vector<double> >::const_iterator iter = regionRecord.begin();iter!=regionRecord.end();++iter){
-			string regionName, vectorName, scarlarName;
-			switch(regionMap[iter->first].type1){
-			case 1:	
-				regionName = "wall";
-				vectorName = "drag/lift force";
-				scarlarName = "Null";
-				break;
-			case 5:
-				regionName = "fluid";
-				vectorName = "Null";
-				scarlarName = "w energy";
-				break;
-			default:
-				assert(false);
-			}
-			sprintf(temp,"%s: %d %s: %e, %e, %e\t%s : %e   ||",
-					regionName.c_str(),
-					iter->first,
-					vectorName.c_str(),
+
+			sprintf(temp,"%20e, %20e, %20e | %20e || ",
 					iter->second[0],
 					iter->second[1],
 					iter->second[2],
-					scarlarName.c_str(),
 					iter->second[3]
 				);
-			root.monitorFile<<temp;
+			root.writeMonitorFile(dataPartition,temp);
 		}
-		root.monitorFile<<endl;
+		root.writeMonitorFile(dataPartition,"\n");
 	}
 	MPI_Barrier(dataPartition->comm);
 

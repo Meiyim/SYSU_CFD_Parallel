@@ -7,6 +7,9 @@
 #define NCOMMON 3
 #define CRITICAL 1.e-10
 
+#define TOT_FILE_TITLE "totResult.tot"
+#define MONITOR_FILE_TITLE "monitorResult.mon"
+
 using namespace std;
 
 int numberOfNodesInElementTypeOf[8] = {//command
@@ -16,8 +19,10 @@ int numberOfNodesInElementTypeOf[8] = {//command
 void RootProcess::init(DataPartition* dg){
 	 //only root may init
 	if(dg->comRank!=rank) return;
-	totFile.open("totResult.tot");
-	monitorFile.open("monitorResult.mon");
+	totFile.open(TOT_FILE_TITLE,ios::out);
+	totFile.close();
+	monitorFile.open(MONITOR_FILE_TITLE,ios::out);
+	monitorFile.close();
 	//printer = new TerminalPrinter;
 	//other initiation stuff 
 }
@@ -475,17 +480,11 @@ void RootProcess::partition(DataPartition* dg, int N){
 
 
 
-
-void RootProcess::write(DataPartition* dg){
+void RootProcess::writeMonitorFile(DataPartition* dg,const char* chs){
 	if(dg->comRank!=rank) return; //only in root
-	printf("writing....");
-	std::ofstream outfile("result.dat");
-	//char temp[256];
-	for(size_t i=0;i!=rootNGlobal;++i){
-		//sprintf(temp,"%15d\tx:%15e\tb:%15e\n",i+1,rootuBuffer[i],rootbuBuffer[i]);
-		//outfile<<temp;
-	}
-	outfile.close();
+	monitorFile.open(MONITOR_FILE_TITLE,ios::app);
+	monitorFile<<chs;
+	monitorFile.close();
 }
 
 

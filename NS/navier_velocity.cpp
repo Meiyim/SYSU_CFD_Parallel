@@ -161,8 +161,8 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 					Bnd[bnd].shear[1] *= Visc;
 					Bnd[bnd].shear[2] *= Visc;
 					Bnd[bnd].shear[0] += Pn[i] * sav1;
-					Bnd[bnd].shear[0] += Pn[i] * sav2;
-					Bnd[bnd].shear[0] += Pn[i] * sav3;
+					Bnd[bnd].shear[1] += Pn[i] * sav2;
+					Bnd[bnd].shear[2] += Pn[i] * sav3;
 
 					fde[0]= ViscAreaLen*Un[i];
 					fde[1]= ViscAreaLen*Vn[i];

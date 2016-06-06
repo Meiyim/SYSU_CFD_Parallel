@@ -19,10 +19,8 @@ int numberOfNodesInElementTypeOf[8] = {//command
 void RootProcess::init(DataPartition* dg){
 	 //only root may init
 	if(dg->comRank!=rank) return;
-	totFile.open(TOT_FILE_TITLE,ios::out);
-	totFile.close();
-	monitorFile.open(MONITOR_FILE_TITLE,ios::out);
-	monitorFile.close();
+	totFile.open(TOT_FILE_TITLE);
+	monitorFile.open(MONITOR_FILE_TITLE);
 	//printer = new TerminalPrinter;
 	//other initiation stuff 
 }
@@ -482,9 +480,8 @@ void RootProcess::partition(DataPartition* dg, int N){
 
 void RootProcess::writeMonitorFile(DataPartition* dg,const char* chs){
 	if(dg->comRank!=rank) return; //only in root
-	monitorFile.open(MONITOR_FILE_TITLE,ios::app);
 	monitorFile<<chs;
-	monitorFile.close();
+	monitorFile.flush();
 }
 
 

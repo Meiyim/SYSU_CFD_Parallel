@@ -47,6 +47,64 @@ void RootProcess::clean(){
 }
 
 
+void RootProcess::readBin(DataPartition* dg, const string& title){
+	if(dg->comRank!=rank) return; //only in root
+	int itemp;
+	string line;
+
+	printf("start reading in root...");
+	fflush(stdout);
+	std::ifstream infile(title.c_str(),std::ios::binary);
+	
+	//skip 6 lines
+	if(!infile) throw logic_error("cant find grid file\n");
+
+	infile.read((char*)&rootNVert,sizeof(size_t));
+	if(rootNVert<=0) throw logic_error("vertex less than 0\n");
+
+	/**************************************************
+	 *	PHASE 1: 
+	 **************************************************/
+	//read verts
+	rootVerts = new InputVert[rootNVert];
+
+	for(size_t i=0;i!=rootNVert;++i){
+		infile.read((char*)&itemp,sizeof(int));
+		infile.read((char*)&(rootVerts[i].x),sizeof(double));
+		infile.read((char*)&(rootVerts[i].y),sizeof(double));
+		infile.read((char*)&(rootVerts[i].z),sizeof(double));
+	}
+	//read cells
+
+	infile.read((char*)&rootNElement,sizeof(size_t));
+	if(rootNElement<=0) throw logic_error("elements of the mesh file less than 0\n");
+	rootElems = new InputElement* [rootNElement];
+
+	int _type;
+	int _ntag;
+	int _v=0;
+	rootNGlobal = 0;
+	for(size_t i=0;i!=rootNElement;++i){
+		infile.read((char*)&itemp,sizeof(int));
+		infile.read((char*)&_type,sizeof(int));
+		infile.read((char*)&_ntag,sizeof(int));
+
+		rootElems[i] = new InputElement(_type,_ntag,numberOfNodesInElementTypeOf[_type]);
+
+		for(int j=0;j!=_ntag;++j)
+			infile.read((char*)&(rootElems[i]->tag[j]),sizeof(int));
+		for(int j=0 ; j != numberOfNodesInElementTypeOf[_type]; ++j){
+			infile.read((char*)&_v, sizeof(int));
+			rootElems[i]->vertex[j] = _v-1;	//read all the vertex of the msh
+		}
+		if(rootElems[i]->type > 3) ++rootNGlobal; 
+	}
+
+	infile.close();
+	printf("done\n");
+}
+
+
 void RootProcess::read(DataPartition* dg,const string& title){
 	if(dg->comRank!=rank) return; //only in root
 	int itemp;

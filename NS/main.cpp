@@ -20,9 +20,12 @@ ErrorHandler errorHandler;//abort when fatal error
 int main(int argc, char* argv[]){
 	PetscErrorCode ierr;
 	PetscBool shouldReadLocal = PETSC_FALSE;
+	PetscBool isMshFileBinary = PETSC_FALSE;
+
 
 	ierr = PetscInitialize(&argc,&argv,NULL,NULL); CHKERRQ(ierr);
 	PetscOptionsGetBool(NULL,"-readLocally",&shouldReadLocal,NULL);
+	PetscOptionsGetBool(NULL,"-mshBinary",&isMshFileBinary,NULL);
 
 	/******************************************
 	 * START UP
@@ -31,14 +34,13 @@ int main(int argc, char* argv[]){
 	NavierStokesSolver* nsSolver = new NavierStokesSolver;
 
 	nsSolver->initSolverParam(); 	//root only : read param.in and check
-	nsSolver->readAndPartition();	//root only : read msh and partition
-
 	nsSolver->broadcastSolverParam(); 	//collective fetch param from root
 
 	int* elementBuffer 	= NULL;
 	double* vertexBuffer 	= NULL;
 	int*  interfaceBuffer 	= NULL;
 	if(shouldReadLocal == PETSC_FALSE){ //transfer geometry through MPI
+		nsSolver->readAndPartition(isMshFileBinary==PETSC_TRUE);	//root only : read msh and partition
 		nsSolver->broadcastPartitionInfo();
 		nsSolver->scatterGridFile(&elementBuffer,&vertexBuffer,&interfaceBuffer);//collective
 	}else{

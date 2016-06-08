@@ -21,9 +21,13 @@ using namespace std;
 //	
 //	root ONLY
 /*******************************************************/
-void NavierStokesSolver::readAndPartition(){
+void NavierStokesSolver::readAndPartition(bool mshBinary){
 	root.init(dataPartition);
-	root.read(dataPartition,string(GridFileName));
+    if(mshBinary){
+        root.readBin(dataPartition,string(GridFileName));
+    }else{
+        root.read(dataPartition,string(GridFileName));
+    }
 	root.partition(dataPartition, dataPartition->comSize);
 	//root.reorder
 }

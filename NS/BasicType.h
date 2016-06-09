@@ -12,7 +12,7 @@
 #define SMALL 1.e-16
 #define CYCASHUGE_D std::numeric_limits<double>::max()
 #define CYCASHUGE_I std::numeric_limits<int>::max()
-#define INT_OPTION_NO 14 
+#define INT_OPTION_NO 15 
 #define DB_OPTION_NO  23
 #define TECPLOT_NVAR  13
 

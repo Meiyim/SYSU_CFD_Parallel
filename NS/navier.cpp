@@ -452,6 +452,7 @@ void NavierStokesSolver::initSolverParam()
 	DensityModel = 0;
 	SolveEnergy  = false;
 	SolveSpecies = false;
+	shouldOutputBinary = false;
 	Nspecies     = 0;
 
 	PressureReference= 1.01325e5; cellPressureRef=0;
@@ -511,6 +512,11 @@ void NavierStokesSolver::initSolverParam()
 	ReadParamFile( );
 	// some parameters check work, e.g. 
 	
+}
+
+
+void NavierStokesSolver::readCommand(const map<string,bool>& cl){
+	shouldOutputBinary = getCommand(cl,"-outBinary");
 }
 
 
@@ -728,17 +734,18 @@ NavierStokesSolver::NavierStokesSolver():
 	IfSteady			(iOptions[1]),
 	SolveEnergy			(iOptions[2]),
 	SolveSpecies		(iOptions[3]),
+	shouldOutputBinary  (iOptions[4]),
 	//int
-	MaxOuterStep		(iOptions[4]),
-	TurModel			(iOptions[5]),
-	DensityModel		(iOptions[6]),
-	limiter				(iOptions[7]),
-	TimeScheme			(iOptions[8]),
-	noutput				(iOptions[9]),
-	outputFormat		(iOptions[10]),
-	Nspecies			(iOptions[11]),
-	cellPressureRef		(iOptions[12]),
-	MaxStep				(iOptions[13]),
+	MaxOuterStep		(iOptions[5]),
+	TurModel			(iOptions[6]),
+	DensityModel		(iOptions[7]),
+	limiter				(iOptions[8]),
+	TimeScheme			(iOptions[9]),
+	noutput				(iOptions[10]),
+	outputFormat		(iOptions[11]),
+	Nspecies			(iOptions[12]),
+	cellPressureRef		(iOptions[13]),
+	MaxStep				(iOptions[14]),
 	//double
 	PressureReference	(dbOptions[0]),
 	gama				(dbOptions[1]),

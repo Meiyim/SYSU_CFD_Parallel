@@ -20,12 +20,19 @@ ErrorHandler errorHandler;//abort when fatal error
 int main(int argc, char* argv[]){
 	PetscErrorCode ierr;
 	PetscBool shouldReadLocal = PETSC_FALSE;
-	PetscBool isMshFileBinary = PETSC_FALSE;
+	PetscBool mshFileIsBinary = PETSC_FALSE;
+	PetscBool outputIsBinary = PETSC_FALSE;
 
 
 	ierr = PetscInitialize(&argc,&argv,NULL,NULL); CHKERRQ(ierr);
-	PetscOptionsGetBool(NULL,"-readLocally",&shouldReadLocal,NULL);
-	PetscOptionsGetBool(NULL,"-mshBinary",&isMshFileBinary,NULL);
+	std::map<std::string,bool> commandline;
+	observeCommand(commandline,"-readLocally");
+	observeCommand(commandline,"-mshBinary");
+	observeCommand(commandline,"-outBinary");
+	if(!parseCommand(commandline)){
+		ierr = PetscFinalize(); CHKERRQ(ierr);
+		return 0;
+	}
 
 	/******************************************
 	 * START UP
@@ -34,13 +41,14 @@ int main(int argc, char* argv[]){
 	NavierStokesSolver* nsSolver = new NavierStokesSolver;
 
 	nsSolver->initSolverParam(); 	//root only : read param.in and check
+	nsSolver->readCommand(commandline);
 	nsSolver->broadcastSolverParam(); 	//collective fetch param from root
 
 	int* elementBuffer 	= NULL;
 	double* vertexBuffer 	= NULL;
 	int*  interfaceBuffer 	= NULL;
 	if(shouldReadLocal == PETSC_FALSE){ //transfer geometry through MPI
-		nsSolver->readAndPartition(isMshFileBinary==PETSC_TRUE);	//root only : read msh and partition
+		nsSolver->readAndPartition(mshFileIsBinary==PETSC_TRUE);	//root only : read msh and partition
 		nsSolver->broadcastPartitionInfo();
 		nsSolver->scatterGridFile(&elementBuffer,&vertexBuffer,&interfaceBuffer);//collective
 	}else{

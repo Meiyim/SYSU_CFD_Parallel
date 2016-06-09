@@ -143,5 +143,11 @@ void checkMemberArray(T* arr, size_t len, double T::* m_ptr,char* name){
  ********************************************/
 int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* dg,int head);
 
+//Commandline Parsor
+//accepte bool command line only
+void observeCommand(map<string,bool>& cl, const string& command);
+bool parseCommand(map<string,bool>& cl);
+bool getCommand(const map<string,bool>& cl, const string& command);
+
 
 #endif

@@ -180,4 +180,34 @@ int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* 
 }
 
 
+//command line parsor
+void observeCommand(map<string,bool>& cl, const string& command){
+	cl.insert(make_pair(command,false));
+}
+bool parseCommand(map<string,bool>& cl){
+	PetscBool temp = PETSC_FALSE;
+	PetscBool temp2 = PETSC_FALSE;
+	PetscOptionsGetBool(NULL,"-help",&temp,NULL);
+	PetscOptionsGetBool(NULL,"-helpCycas",&temp2,NULL);
+	if(temp==PETSC_TRUE || temp2==PETSC_TRUE){
+		for(map<string,bool>::iterator iter = cl.begin();iter!=cl.end();++iter){
+			PetscPrintf(MPI_COMM_WORLD,"%s\n",iter->first.c_str());
+		}	
+		return false;
+	}
+	for(map<string,bool>::iterator iter = cl.begin();iter!=cl.end();++iter){
+		PetscOptionsGetBool(NULL,iter->first.c_str(),&temp,NULL);
+		iter->second = temp==PETSC_TRUE;
+		temp = PETSC_FALSE;
+	}
+	return true;
+
+}
+bool getCommand(const map<string,bool>& cl, const string& command){
+	map<string,bool>::const_iterator iter = cl.find(command);	
+	assert(iter!=cl.end());
+	return iter->second;
+}
+
+
 

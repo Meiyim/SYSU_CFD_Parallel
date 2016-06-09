@@ -51,11 +51,12 @@ public:
 	double* dbOptions;//len 33	//handles for double option pool
 
 	//original bools
-	/******Length - 4***********/
+	/******Length - 5***********/
 	int& IfReadBackup;
 	int& IfSteady;
 	int& SolveEnergy;
 	int& SolveSpecies;
+	int& shouldOutputBinary;
 
 	/******Length - 10***********/
 	int& MaxOuterStep;
@@ -157,6 +158,7 @@ public:
 // Init flow field
     // read solver param, material, post, everything except 
 	void initSolverParam(); 		//CXY: root ONLY	
+	void readCommand(const std::map<std::string,bool>&);				//CXY: root ONLY
 	void broadcastSolverParam();	//CXY: now a MPI BROADCAST routine
 	void broadcastPartitionInfo();  //CXY: a MPI BROADCAST routine
 	void scatterGridFile(int** elemBuffer,double** vertexBuffer,int** interfaceBuffer);		//CXY: a MPI ScatterV routine

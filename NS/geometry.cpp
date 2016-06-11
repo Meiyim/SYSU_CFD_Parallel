@@ -201,22 +201,16 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	assert(ibnd==Nbnd);
 	delete[] elementBuffer;
 
-
-
-	//printf("rank: %d complete reading geo: icell %d, ncel %d\tibnd %d,nbnd %d\t,nvert%d \n",dataPartition->comRank,icel,Ncel,ibnd,Nbnd,Nvrt);
-
-	/*
-	for(int i=0;i!=Ncel;++i){
-		dataPartition->PRINT_LOG(Cell[i]);
-	}
-	*/
-
 	MPI_Barrier(dataPartition->comm);
-	OutputGrid(); //output tecplot: grid.dat
+    if(shouldOutputBinary){
+        OutputGridBinary();
+    }else{
+        OutputGrid(); //output tecplot: grid.dat
+    }
 	
 	PetscPrintf(dataPartition->comm,"done\n");
 	MPI_Barrier(dataPartition->comm);
-    	return 0;
+   	return 0;
 }
 
 

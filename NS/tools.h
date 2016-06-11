@@ -141,7 +141,8 @@ void checkMemberArray(T* arr, size_t len, double T::* m_ptr,char* name){
  * collective
  * must ensure passing the buffer of same length to the function
  ********************************************/
-int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* dg,int head);
+int parallelWriteBuffer(const string& title,const void* buffer,int myBufSize,DataPartition* dg, int head);
+
 
 //Commandline Parsor
 //accepte bool command line only

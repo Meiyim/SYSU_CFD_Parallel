@@ -112,7 +112,11 @@ void NavierStokesSolver::NSSolve( )
 		if( shouldBackup(step,cur_time) )
 			WriteBackupFile();
 		if( shouldPostProcess(step,cur_time) ){
-			Output2Tecplot();
+			if(shouldOutputBinary){
+				Output2TecplotBinary();
+			}else{
+				Output2Tecplot();
+			}
 			root.printSectionHead(dataPartition);
 		}
 		writeTotFile();

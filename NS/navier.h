@@ -150,6 +150,7 @@ public:
 // Geometry
 
 	void OutputGrid      (); //modified by CXY
+	void OutputGridBinary();
 	int  CreateFaces     ( );
 	void FindFace( int, int,int,int,int, int&, set<int>* );
 	int  CellFaceInfo    ();//modified by CXY //the return value indicates the number of virtual cell beyond Ncel
@@ -207,6 +208,7 @@ public:
 // Post process
 	void OutputMoniter  ( );
 	void Output2Tecplot ( );
+	void Output2TecplotBinary();
 	void Output2VTK     ( );
 	void WriteBackupFile( );
 	void ReadBackupFile ( );

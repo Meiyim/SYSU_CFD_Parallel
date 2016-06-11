@@ -144,11 +144,10 @@ std::ostream& operator<<(std::ostream& out,const FaceData& fac){
  * collective
  * must ensure passing the buffer of same length to the function
  ********************************************/
-int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* dg, int head){//collective
+int parallelWriteBuffer(const string& title,const void* buffer,int myBufSize,DataPartition* dg, int head){//collective
 	MPI_File thefile;
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	int myBufSize = buffer.size();
 	int* bufSizes = new int[dg->comSize];
 	int disp = 0;
 	
@@ -168,7 +167,7 @@ int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* 
 		throw runtime_error("MPI Parallel I/O fail: cant set view \n");
 	}
 
-	ret = MPI_File_write(thefile,(char*)buffer.c_str(),myBufSize,MPI_CHAR,MPI_STATUS_IGNORE);
+	ret = MPI_File_write(thefile,(char*)buffer,myBufSize,MPI_CHAR,MPI_STATUS_IGNORE);
 	if(ret!=MPI_SUCCESS){ 
 		throw runtime_error("MPI Parallel I/O fail: cant write buffer \n");
 	}
@@ -184,6 +183,7 @@ int parallelWriteBuffer(const string& title,const string& buffer,DataPartition* 
 void observeCommand(map<string,bool>& cl, const string& command){
 	cl.insert(make_pair(command,false));
 }
+
 bool parseCommand(map<string,bool>& cl){
 	PetscBool temp = PETSC_FALSE;
 	PetscBool temp2 = PETSC_FALSE;
@@ -201,8 +201,8 @@ bool parseCommand(map<string,bool>& cl){
 		temp = PETSC_FALSE;
 	}
 	return true;
-
 }
+
 bool getCommand(const map<string,bool>& cl, const string& command){
 	map<string,bool>::const_iterator iter = cl.find(command);	
 	assert(iter!=cl.end());

@@ -19,10 +19,6 @@ ErrorHandler errorHandler;//abort when fatal error
 
 int main(int argc, char* argv[]){
 	PetscErrorCode ierr;
-	PetscBool shouldReadLocal = PETSC_FALSE;
-	PetscBool mshFileIsBinary = PETSC_FALSE;
-	PetscBool outputIsBinary = PETSC_FALSE;
-
 
 	ierr = PetscInitialize(&argc,&argv,NULL,NULL); CHKERRQ(ierr);
 	std::map<std::string,bool> commandline;
@@ -47,8 +43,8 @@ int main(int argc, char* argv[]){
 	int* elementBuffer 	= NULL;
 	double* vertexBuffer 	= NULL;
 	int*  interfaceBuffer 	= NULL;
-	if(shouldReadLocal == PETSC_FALSE){ //transfer geometry through MPI
-		nsSolver->readAndPartition(mshFileIsBinary==PETSC_TRUE);	//root only : read msh and partition
+	if(!commandline["-readLocally"]){ //transfer geometry through MPI
+		nsSolver->readAndPartition(commandline["-mshBinary"]);	//root only : read msh and partition
 		nsSolver->broadcastPartitionInfo();
 		nsSolver->scatterGridFile(&elementBuffer,&vertexBuffer,&interfaceBuffer);//collective
 	}else{

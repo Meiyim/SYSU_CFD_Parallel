@@ -385,7 +385,7 @@ public:
 	 * 	 print screen
 	 * *************************************************/
 	void printStarter(DataPartition*);
-	void printEnding(DataPartition*,int,int);
+	void printEnding(DataPartition*, double);
 	void printStepStatus(DataPartition* , int,int,double,double,double);
 	void printSteadyStatus(DataPartition*,int,double);
 	void printSectionHead(DataPartition*);

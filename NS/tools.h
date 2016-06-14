@@ -12,6 +12,7 @@ using namespace std;
 #define CYCASMIN(x,y)  ((x)<(y)?(x):(y))
 #define CYCASSIGN(x)   ((x)>0?1:(-1))
 #define CYCAS_GET_TIME(ts) gettimeofday(&ts,NULL);
+#define CYCAS_GET_ELAPSE_TIME(t1,t2) ((double)(t1.tv_sec - t2.tv_sec) - (t1.tv_usec-t2.tv_usec)/1.e6)
 
 // maybe SIGN still has problem, not for 0
 // vector manipulation. should be defined as inline function for higher efficiency

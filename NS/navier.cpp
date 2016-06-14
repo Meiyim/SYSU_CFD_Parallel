@@ -19,6 +19,7 @@ void NavierStokesSolver::NSSolve( )
 	int iter;
 	double ResMax,ResMax0;
 	timeval tstart ={0,0};
+	timeval tCheckout = {0,0};
 	timeval tend ={0,0};
 	
 	//profiling
@@ -38,6 +39,7 @@ void NavierStokesSolver::NSSolve( )
 
 	MPI_Barrier(dataPartition->comm);
 	CYCAS_GET_TIME(tstart);
+	CYCAS_GET_TIME(tCheckout);
 
 	cur_time = 0.0;
 	if(IfSteady){
@@ -111,7 +113,7 @@ void NavierStokesSolver::NSSolve( )
 		//------------   Record tot, tecplot , restart...   --------//
 		if( shouldBackup(step,cur_time) )
 			WriteBackupFile();
-		if( shouldPostProcess(step,cur_time) ){
+		if( shouldPostProcess(step,cur_time,tCheckout) ){
 			if(shouldOutputBinary){
 				Output2TecplotBinary();
 			}else{
@@ -147,8 +149,8 @@ void NavierStokesSolver::NSSolve( )
 	Output2Tecplot();
 
 	root.printEnding(dataPartition,
-			tend.tv_sec-tstart.tv_sec,
-			tend.tv_usec-tstart.tv_usec);
+			CYCAS_GET_ELAPSE_TIME(tend,tstart)
+			);
 
 	return;
 }
@@ -170,11 +172,33 @@ bool NavierStokesSolver::shouldBackup(int timestep,double now){
 //	determint if should backUp
 //	currently the same frequency as post process
 /*******************************************************/
-bool NavierStokesSolver::shouldPostProcess(int timestep, double now){
+bool NavierStokesSolver::shouldPostProcess(int timestep, double now,timeval& tv){
 	if(IfSteady){
-		return (timestep-1)%noutput == 0;
+		if ((timestep-1)%noutput == 0){
+			timeval _tv;
+			CYCAS_GET_TIME(_tv);
+			double speedPerCycle = CYCAS_GET_ELAPSE_TIME(_tv,tv);
+			speedPerCycle /= noutput;
+			tv.tv_sec = _tv.tv_sec;
+			tv.tv_usec = _tv.tv_usec;
+			PetscPrintf(dataPartition->comm,"*****************************    TIME/CYCLE %15.5e   *******************************\n",speedPerCycle);
+			return true;
+		}else{
+			return false;
+		}
 	}else{
-		return (timestep-1)%noutput==0 ;
+		if((timestep-1)%noutput==0){
+			timeval _tv;
+			CYCAS_GET_TIME(_tv);
+			double speedPerCycle = CYCAS_GET_ELAPSE_TIME(_tv,tv);
+			speedPerCycle /= noutput;
+			tv.tv_sec = _tv.tv_sec;
+			tv.tv_usec = _tv.tv_usec;
+			PetscPrintf(dataPartition->comm,"*****************************    TIME/CYCLE %15.5e   *******************************\n",speedPerCycle);
+			return true;
+		}else{
+			return false;
+		}
 	}
 }
 

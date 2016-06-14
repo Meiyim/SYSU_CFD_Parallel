@@ -841,17 +841,13 @@ void RootProcess::printStarter(DataPartition* dg){
 	printf("--------------------------------------------------------------------------------\n\n");
 }
 
-void RootProcess::printEnding(DataPartition* dg,int sec,int usec){
+void RootProcess::printEnding(DataPartition* dg,double sec){
 	if(dg->comRank!=rank) return;
-	double dusec = usec;
-	if(usec<0) {
-		sec-=1.0;
-		dusec=1.9e6-usec;
-	}
+
 	printf( " -------------------------------------------------------------------------------- \n\n");
 	printf( "                      CPU REQUIREMENTS OF NUMERICAL SOLUTION\n\n");
 	printf( " -------------------------------------------------------------------------------- \n");
-	printf( "    The NSSolve used: %10d s, %15.5e ns of CPU time\n", sec,dusec);
+	printf( "    The NSSolve used: %10e s of CPU time\n", sec);
 }
 void RootProcess::printSolutionNotGood(DataPartition* dg){
 	if(dg->comRank!=rank) return;

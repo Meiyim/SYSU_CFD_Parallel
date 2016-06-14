@@ -221,7 +221,7 @@ private:
 	//initiation
 	void ReadParamFile   ( );
 	//post process
-	bool shouldPostProcess(int iter,double now);		//should output
+	bool shouldPostProcess(int iter,double now,timeval& tv);		//should output
 	bool shouldBackup(int iter,double now);
 };
 

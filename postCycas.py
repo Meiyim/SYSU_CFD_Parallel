@@ -128,13 +128,12 @@ def buildTec(directory):
     of.close()
 
 if __name__ == "__main__":
-    buildTec('./tec/')
-#if __name__ == "__main__":
-#    if len(sys.argv)<= 1 or sys.argv[1] == "-help":
-#        print '-in: filename'
-#        print '-out: dir'
-#    elif  sys.argv[1] == "-in":
-#        compressIn(sys.argv[2])
-#    elif  sys.argv[1] == '-out':
-#        buildTec(sys.argv[2]);
+    if len(sys.argv)<= 1 or sys.argv[1] == "-help":
+        print '-in: filename'
+        print '-out: dir'
+    elif  sys.argv[1] == "-in":
+        compressIn(sys.argv[2])
+    elif  sys.argv[1] == '-out':
+        buildTec(sys.argv[2]);
+
 

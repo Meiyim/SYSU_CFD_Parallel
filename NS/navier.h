@@ -139,7 +139,7 @@ public:
  *	   METHODS
 *******************************************/
 //CXY:
-	void readAndPartition(bool);
+	void readAndPartition(bool,bool);
 
 
  	//first 3 parameter is input buffer:

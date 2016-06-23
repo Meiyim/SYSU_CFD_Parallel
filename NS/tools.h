@@ -32,6 +32,7 @@ void SolveLinearEqu( Vector* Func(QMatrix*, Vector*, Vector*, int,PrecondProcTyp
 void ErrorStop( string str );
 char *trimwhitespace(char *str);
 double ttime (void);
+int stringHash(const std::string& str);
 
 
 template <typename T>

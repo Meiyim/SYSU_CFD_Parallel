@@ -98,6 +98,13 @@ double ttime (void)
     return (sec);
 }
 
+//WARNING: if string hash is used, Gmesh rid in param.in should not greeter than 9 !!!
+int stringHash(const std::string& str){
+	int ret = 1;
+	for(int i=0;i!=str.size();++i)
+		ret += (int)str[i] - (int)'0';
+	return ret;
+}
 
 /********************************************
  * below is implement by CHENXUYI
@@ -187,8 +194,8 @@ void observeCommand(map<string,bool>& cl, const string& command){
 bool parseCommand(map<string,bool>& cl){
 	PetscBool temp = PETSC_FALSE;
 	PetscBool temp2 = PETSC_FALSE;
-	PetscOptionsGetBool(NULL,"-help",&temp,NULL);
-	PetscOptionsGetBool(NULL,"-helpCycas",&temp2,NULL);
+	PetscOptionsGetBool(NULL,NULL,"-help",&temp,NULL);
+	PetscOptionsGetBool(NULL,NULL,"-helpCycas",&temp2,NULL);
 	if(temp==PETSC_TRUE || temp2==PETSC_TRUE){
 		for(map<string,bool>::iterator iter = cl.begin();iter!=cl.end();++iter){
 			PetscPrintf(MPI_COMM_WORLD,"%s\n",iter->first.c_str());
@@ -196,7 +203,7 @@ bool parseCommand(map<string,bool>& cl){
 		return false;
 	}
 	for(map<string,bool>::iterator iter = cl.begin();iter!=cl.end();++iter){
-		PetscOptionsGetBool(NULL,iter->first.c_str(),&temp,NULL);
+		PetscOptionsGetBool(NULL,NULL,iter->first.c_str(),&temp,NULL);
 		iter->second = temp==PETSC_TRUE;
 		temp = PETSC_FALSE;
 	}

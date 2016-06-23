@@ -9,7 +9,7 @@ NSSRC		 = ./NS/
 #-Llibpath -llibname
 #libname is the lib filename without prefix "lib" .e.g 
 #libmylib.a --> -lmylib
-METIS_LIB	 = -lmetis
+METIS_LIB	 = -lmetis -lcgns
 
 INCLUDE = -I./NS -I./
 

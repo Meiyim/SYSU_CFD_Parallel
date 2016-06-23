@@ -17,7 +17,7 @@ void NavierStokesSolver::ReadParamFile( )
 	char      *keyw[20];
 	std::string str;
 
-	PetscOptionsGetString(NULL,"-param",_commandlinetitle,sizeof(_commandlinetitle),&flg);
+	PetscOptionsGetString(NULL,NULL,"-param",_commandlinetitle,sizeof(_commandlinetitle),&flg);
 	if(flg){
 		title = new string(_commandlinetitle);
 	}else{
@@ -39,7 +39,7 @@ void NavierStokesSolver::ReadParamFile( )
 		
 		// skip comment line
 		if( str[0]=='/' && str[1]=='/' ) continue;
-		if( str.size()==1 )continue;
+		if( str.size()==1 || str.size()==0 )continue;
 		// clear keyw[] before putting value
 		for( i=0; i<20; i++ )
 			keyw[i][0] = '\0';
@@ -200,68 +200,68 @@ void NavierStokesSolver::ReadParamFile( )
 			}
 			if( strcmp(keyw[2],"Twall")==0 )
 			{
-				if(ikey!=3){
+				if(ikey!=4){
 					errorHandler.fatalLogicError("temperature wall field requied 1 parameters");
 				}
-				regionMap[bid].name="Twall";
+				regionMap[bid].name=keyw[3];
 				regionMap[bid].type1 = 1;
 				regionMap[bid].type2 = 0;//given T
-				regionMap[bid].fixedValue = atof(keyw[3]);
+				regionMap[bid].fixedValue = atof(keyw[4]);
 		
 			}
 			else if( strcmp(keyw[2],"Hwall")==0 ){
-				if(ikey!=3){
+				if(ikey!=4){
 					errorHandler.fatalLogicError("heat flux wall field requied 1 parameters");
 				}
-				regionMap[bid].name="Hwall";
+				regionMap[bid].name=keyw[3];
 				regionMap[bid].type1 = 1;
 				regionMap[bid].type2 = 1;//given flux
-				regionMap[bid].fixedValue = atof(keyw[3]);
+				regionMap[bid].fixedValue = atof(keyw[4]);
 			}
 			else if( strcmp(keyw[2],"sym")==0 ){
-				if(ikey!=2){
+				if(ikey!=3){
 					errorHandler.fatalLogicError("symmetric field requied no parameters");
 				}
-				regionMap[bid].name="sym";
+				regionMap[bid].name=keyw[3];
 				regionMap[bid].type1 = 4;
 				regionMap[bid].type2 = 0;
 				regionMap[bid].fixedValue = 0.0;
 			}
 			else if( strcmp(keyw[2],"inlet")==0 ){
-				if(ikey!=10){
+				if(ikey!=11){
 					errorHandler.fatalLogicError("inlet field requied 8 parameters");
 				}
-				regionMap[bid].name="inlet";
+				regionMap[bid].name=keyw[3];
 				regionMap[bid].type1 = 2;
 				regionMap[bid].type2 = 0;
 				double* initvalues = regionMap[bid].initvalues;
-				initvalues[0] = atof(keyw[3]);//u
-				initvalues[1] = atof(keyw[4]);//v
-				initvalues[2] = atof(keyw[5]);//w
-				initvalues[3] = atof(keyw[6]);//p
-				initvalues[4] = atof(keyw[7]);//r
-				initvalues[5] = atof(keyw[8]);//t
+				initvalues[0] = atof(keyw[4]);//u
+				initvalues[1] = atof(keyw[5]);//v
+				initvalues[2] = atof(keyw[6]);//w
+				initvalues[3] = atof(keyw[7]);//p
+				initvalues[4] = atof(keyw[8]);//r
+				initvalues[5] = atof(keyw[9]);//t
 				if( TurModel==1 ){
-					initvalues[6] = atof(keyw[9]);//te
-					initvalues[7] = atof(keyw[10]);//ed
+					initvalues[6] = atof(keyw[10]);//te
+					initvalues[7] = atof(keyw[11]);//ed
 				}
 			}	
 			else if( strcmp(keyw[2],"outlet")==0 ){
-				if(ikey!=3){
+				if(ikey!=4){
 					errorHandler.fatalLogicError("outlet field requied 1 parameter");
 				}
-				regionMap[bid].name="outlet";
+				regionMap[bid].name=keyw[3];
 				regionMap[bid].type1 = 3;
 				regionMap[bid].type2 = 0;
-				regionMap[bid].fixedValue = atof(keyw[3]); //pout
+				regionMap[bid].fixedValue = atof(keyw[4]); //pout
 			}
 			else if( strcmp(keyw[2],"period")==0) {
-				if(ikey != 3){
+				if(ikey != 4){
 					errorHandler.fatalLogicError("periodic bc requied 2 parameters");
 				}
-				regionMap[bid].name="period";
+				regionMap[bid].name=keyw[3];
 				regionMap[bid].type1 = 6;
-				regionMap[bid].type2 = atoi(keyw[3]); //corresponding boundary bid;
+				regionMap[bid].type2 = atoi(keyw[4]); //corresponding boundary bid;
 				regionMap[bid].fixedValue = 0.0;
 			}
 			else

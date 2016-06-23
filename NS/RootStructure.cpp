@@ -3,6 +3,9 @@
 #include"metis.h"
 #include"tools.h"
 #include"MPIStructure.h"
+extern "C"{
+#include "cgnslib.h"
+}
 
 #define NCOMMON 3
 #define CRITICAL 1.e-10
@@ -47,6 +50,14 @@ void RootProcess::clean(){
 }
 
 
+/*******************************************************/
+// USING GMSH Notation
+// read a Compressed Gmesh file
+// Output:
+// rootNGlobal
+// rootNElement
+// rootElems
+/*******************************************************/
 void RootProcess::readBin(DataPartition* dg, const string& title){
 	if(dg->comRank!=rank) return; //only in root
 	int itemp;
@@ -105,6 +116,236 @@ void RootProcess::readBin(DataPartition* dg, const string& title){
 }
 
 
+
+/*******************************************************/
+// USING CGNS Notation
+// Output:
+// rootNGlobal
+// rootNElement, rootNVerts
+// rootElems,rootVerts
+/*******************************************************/
+#define CGNS_VERBOSE
+void RootProcess::readCGNS(DataPartition* dg, const string& title){
+	if(dg->comRank != rank) return;	
+	printf("start reading CGNS in root");
+	fflush(stdout);
+    int icg;
+    // open files
+	float version;
+    if( cg_open(title.c_str(), CG_MODE_READ, &icg) )
+    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+    // check CGNS Library Version used for file creation:
+    if( cg_version(icg,&version) )
+    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+
+#ifdef CGNS_VERBOSE
+    cout<<"\nLibrary Version used for file creation:"<<version<<endl;
+#endif
+    
+    int  i,j, ier;
+    // read zone and grid types
+    int        ibase = 1,
+               zone  = 1;
+    char       zonename[200];
+    ZoneType_t zonetype;
+    cgsize_t        size;
+    if(  cg_zone_read(icg, ibase, zone, zonename, &size) )//this size is node size
+    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+
+#ifdef CGNS_VERBOSE
+    cout<<"Name of Zone"<<zone<<" is"<<zonename<<endl;
+    printf("zone %d name: %s, size: %d\n",zone,zonename,size);
+#endif
+    zone=1;
+    if(cg_zone_type(icg, ibase, zone, &zonetype))
+    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+#ifdef CGNS_VERBOSE
+    cout<<"  Zone type is "<< cg_ZoneTypeName(zonetype)<<endl;
+#endif
+    if(      zonetype == Structured )
+    {
+    	errorHandler.fatalLogicError("structured grids. stop");
+    }
+    else if( zonetype == Unstructured ){
+    	//pass
+    }
+    else
+    {
+    	errorHandler.fatalLogicError("unknown zonetype.");
+    }
+    
+    // grid coordinates
+    cgsize_t range_min=1,range_max=size;
+    int ncoords, NDim,
+        nnode     = size;
+    DataType_t  datatype;
+    char        coordname[200];
+    if( cg_ncoords(icg,ibase,zone, &ncoords) )
+    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+
+#ifdef CGNS_VERBOSE
+    cout<< "ncoords: "<< ncoords<<endl;
+#endif
+    NDim   = ncoords;
+    assert(NDim==3);
+   	rootNVert = size;
+   	rootVerts = new InputVert[rootNVert];
+    for( int idim=1; idim<=NDim; idim++ )
+    {
+        if(  cg_coord_info(icg,ibase,zone, idim,  &datatype, coordname) )
+	    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+        if( std::string(DataTypeName[datatype]) != "RealDouble" ){
+        	errorHandler.fatalLogicError("error, change coordinate datatype to single/Double");
+        }
+        double* temp = new double[size];
+        if(  cg_coord_read( icg,ibase,zone, coordname, datatype, 
+                             &range_min,&range_max, temp ) )
+	    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+        if(idim==1){
+	        for(int i=0;i!=size;++i)
+	            rootVerts[i].x = temp[i];
+        }if(idim==2){
+	        for(int i=0;i!=size;++i)
+	            rootVerts[i].y = temp[i];
+        }if(idim==3){
+	        for(int i=0;i!=size;++i)
+	            rootVerts[i].z = temp[i];
+        }
+        delete [] temp;
+#ifdef CGNS_VERBOSE
+        printf("%s: type: %s %d --> %d\n",coordname,DataTypeName[datatype],range_min,range_max);
+#endif
+    }
+
+    int ncell =0;
+    // cell connectivity and boundary
+    int       nelem =0, nelem0,count, nsection, parent_flag;
+    cgsize_t  ElementDataSize, *elements;
+    char      elementSectionName[100];
+    cgsize_t  start,end;
+    int nbndry,npe;
+    ElementType_t   type;
+
+    if(cg_nsections(icg,ibase,zone,&nsection) )
+    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+#ifdef CGNS_VERBOSE
+    printf("section number %d\n",nsection);
+    cout<<"read Element Connectivity:\n";    
+#endif
+    rootNElement = 0;
+    rootNGlobal = 0;
+    for(int section = 1;section<=nsection;++section){
+        ier = cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
+                 &start,&end,&nbndry,&parent_flag);
+        rootNElement+=(end-start)+1;
+        if(type>9) //volumn section
+        	rootNGlobal+=(end-start)+1;
+    }
+    rootElems = new  InputElement* [rootNElement];
+
+//		rootElems[i] = new InputElement(_type,_ntag,numberOfNodesInElementTypeOf[_type]);
+
+    size_t iE = 0;
+    for( int section=1; section<=nsection; section++ )
+    {
+        ier = cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
+                 &start,&end,&nbndry,&parent_flag);
+ #ifdef CGNS_VERBOSE
+        cout<< elementSectionName << ", type:" << cg_ElementTypeName(type) << endl;
+ #endif
+        ier = cg_ElementDataSize(icg,ibase,zone,section, &ElementDataSize);
+        elements = new cgsize_t[ElementDataSize];
+        ier = cg_elements_read(icg,ibase,zone,section, elements, NULL );
+        int nelem_sec= end-start+1 ;
+        // single-type grids
+        if( type != MIXED )
+        {
+            // pure elements
+            ier = cg_npe(type, &npe);
+            // store in cell elements/boundary
+            assert(NDim==3);
+            if( NDim==3 && type>= 5)
+            {
+                for( i=0; i< nelem_sec; i++ )
+				{
+					int _type = -1;
+					switch (type){
+					case TRI_3:
+						_type = 2;
+						break;
+					case QUAD_4:
+						_type = 3;
+						break;
+                    case  TETRA_4:
+						_type = 4;
+                        break;
+                    case  HEXA_8:
+						_type = 5;
+                        break;
+                    default:
+                    	errorHandler.fatalLogicError("unknown element type",cg_ElementTypeName(type));
+                    }
+
+                   	rootElems[i+iE] = new InputElement(_type,2,npe);
+                    for( j=0;j!=npe; j++ )
+                    	rootElems[i+iE]->vertex[j] = elements[i*npe+j] - 1;//why -1 ???
+                    for(map<int,BdRegion>::const_iterator iter = regionMap->begin();iter!=regionMap->end();++iter){
+                    	if(iter->second.name == string(elementSectionName) ){
+		                    rootElems[i+iE]->tag[0] = iter->first;
+		                    break;
+                    	}else if(iter==regionMap->end()){
+                    		assert(false);
+                    	}
+                    }
+ #ifdef CGNS_VERBOSE 
+                    //printf("found rid %d\n",rootElems[i+iE]->tag[0]);
+ #endif                    
+				}
+                iE += nelem_sec;
+            }else
+                cout<< "useless data?";
+        }
+        // mixed-type grids
+        else
+        {
+            // mixed element. Assume it only belongs to cells? not boundary
+            //to be implement
+            assert(false);
+            /*
+            nelem0= nelem ;
+            nelem = nelem + nelem_sec ;
+            count = 0 ;
+            for( i=1; i<=nelem_sec; i++ )
+            {
+                count= count + 1 ;
+                type = (ElementType_t)elements[count] ;
+                ier  = cg_npe( type, &npe );
+                //KNode[i]= npe ;
+				for( j=1;j<=npe;j++ )
+					ENode[i][j] = elements[count+j];  // (count+1:count+npe);
+                count = count+npe ;
+            }
+            */
+        }
+        delete [] elements;
+    }
+#ifdef CGNS_VERBOSE
+    printf("nelement %d, nvert %d, nglobal %d\n",rootNElement,rootNVert,rootNGlobal);
+#endif
+    cg_close(icg);
+    cout<<"done"<<endl;
+}
+
+
+
+
+/*******************************************************/
+// USING GMSH Notation
+// Output:
+// rootNGlobal
+// rootNElement
+// rootElems
+/*******************************************************/
 void RootProcess::read(DataPartition* dg,const string& title){
 	if(dg->comRank!=rank) return; //only in root
 	int itemp;

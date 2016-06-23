@@ -369,6 +369,8 @@ public:
 	 * *************************************************/
 	void read(DataPartition* dg,const string& title);
 	void readBin(DataPartition* dg,const string& title);
+	void readCGNS(DataPartition* dg,const string& title);
+
 
 	/***************************************************
 	 * 	 root Only

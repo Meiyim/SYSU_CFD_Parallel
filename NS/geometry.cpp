@@ -21,9 +21,11 @@ using namespace std;
 //	
 //	root ONLY
 /*******************************************************/
-void NavierStokesSolver::readAndPartition(bool mshBinary){
+void NavierStokesSolver::readAndPartition(bool mshBinary,bool readCgns){
 	root.init(dataPartition);
-    if(mshBinary){
+    if(readCgns){
+        root.readCGNS(dataPartition,string(GridFileName));
+    }else if(mshBinary){
         root.readBin(dataPartition,string(GridFileName));
     }else{
         root.read(dataPartition,string(GridFileName));
@@ -34,7 +36,9 @@ void NavierStokesSolver::readAndPartition(bool mshBinary){
 
 
 
+
 /*******************************************************/
+//  USING GMSH Notation
 //	original msh reading function
 //	read geometry from MPI_Buffer
 //	local

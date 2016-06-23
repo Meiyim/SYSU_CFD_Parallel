@@ -25,6 +25,7 @@ int main(int argc, char* argv[]){
 	observeCommand(commandline,"-readLocally");
 	observeCommand(commandline,"-mshBinary");
 	observeCommand(commandline,"-outBinary");
+	observeCommand(commandline,"-cgns");
 	if(!parseCommand(commandline)){
 		ierr = PetscFinalize(); CHKERRQ(ierr);
 		return 0;
@@ -44,7 +45,7 @@ int main(int argc, char* argv[]){
 	double* vertexBuffer 	= NULL;
 	int*  interfaceBuffer 	= NULL;
 	if(!commandline["-readLocally"]){ //transfer geometry through MPI
-		nsSolver->readAndPartition(commandline["-mshBinary"]);	//root only : read msh and partition
+		nsSolver->readAndPartition(getCommand(commandline,"-mshBinary"), getCommand(commandline,"-cgns"));	//root only : read msh and partition
 		nsSolver->broadcastPartitionInfo();
 		nsSolver->scatterGridFile(&elementBuffer,&vertexBuffer,&interfaceBuffer);//collective
 	}else{

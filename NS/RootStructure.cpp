@@ -194,24 +194,42 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     {
         if(  cg_coord_info(icg,ibase,zone, idim,  &datatype, coordname) )
 	    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
-        if( std::string(DataTypeName[datatype]) != "RealDouble" ){
-        	errorHandler.fatalLogicError("error, change coordinate datatype to single/Double");
+        if( std::string(DataTypeName[datatype]) == "RealDouble" ){
+	        double* temp = new double[size];
+	        if(  cg_coord_read( icg,ibase,zone, coordname, datatype, 
+	                             &range_min,&range_max, temp ) )
+		    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+	        if(idim==1){
+		        for(int i=0;i!=size;++i)
+		            rootVerts[i].x = temp[i];
+	        }if(idim==2){
+		        for(int i=0;i!=size;++i)
+		            rootVerts[i].y = temp[i];
+	        }if(idim==3){
+		        for(int i=0;i!=size;++i)
+		            rootVerts[i].z = temp[i];
+	        }
+	        delete [] temp;
+        }else if(std::string(DataTypeName[datatype]) == "RealSingle"){
+        	float* temp = new float[size];
+	        if(  cg_coord_read( icg,ibase,zone, coordname, datatype, 
+	                             &range_min,&range_max, temp ) )
+		    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
+	        if(idim==1){
+		        for(int i=0;i!=size;++i)
+		            rootVerts[i].x = temp[i];
+	        }if(idim==2){
+		        for(int i=0;i!=size;++i)
+		            rootVerts[i].y = temp[i];
+	        }if(idim==3){
+		        for(int i=0;i!=size;++i)
+		            rootVerts[i].z = temp[i];
+	        }
+	        delete [] temp;
+        }else{
+        	assert(false);
         }
-        double* temp = new double[size];
-        if(  cg_coord_read( icg,ibase,zone, coordname, datatype, 
-                             &range_min,&range_max, temp ) )
-	    	errorHandler.fatalLogicError("CGNS error",cg_get_error());
-        if(idim==1){
-	        for(int i=0;i!=size;++i)
-	            rootVerts[i].x = temp[i];
-        }if(idim==2){
-	        for(int i=0;i!=size;++i)
-	            rootVerts[i].y = temp[i];
-        }if(idim==3){
-	        for(int i=0;i!=size;++i)
-	            rootVerts[i].z = temp[i];
-        }
-        delete [] temp;
+
 #ifdef CGNS_VERBOSE
         printf("%s: type: %s %d --> %d\n",coordname,DataTypeName[datatype],range_min,range_max);
 #endif
@@ -226,6 +244,16 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     int nbndry,npe;
     ElementType_t   type;
 
+    //ignoring section created by FLUENT...
+    set<string> sectionsToBeIgnored; 
+    sectionsToBeIgnored.insert("interface1-002");
+    sectionsToBeIgnored.insert("interface1-003");
+    sectionsToBeIgnored.insert("interface2-004");
+    sectionsToBeIgnored.insert("interface2-005");
+    sectionsToBeIgnored.insert("interface1");
+    sectionsToBeIgnored.insert("interface2");
+
+
     if(cg_nsections(icg,ibase,zone,&nsection) )
     	errorHandler.fatalLogicError("CGNS error",cg_get_error());
 #ifdef CGNS_VERBOSE
@@ -237,22 +265,57 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     for(int section = 1;section<=nsection;++section){
         ier = cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
                  &start,&end,&nbndry,&parent_flag);
+
+        if(sectionsToBeIgnored.find(string(elementSectionName)) != sectionsToBeIgnored.end()){
+        	continue;
+        }
+        if(!(section==5 ||
+        	 section==24
+        	/*
+        	 section==6 ||
+        	 section==7 ||
+        	 section==8 ||
+        	 section== 19
+        	 */
+        	)){
+        	continue;
+        }
+
         rootNElement+=(end-start)+1;
         if(type>9) //volumn section
         	rootNGlobal+=(end-start)+1;
     }
+
     rootElems = new  InputElement* [rootNElement];
 
 //		rootElems[i] = new InputElement(_type,_ntag,numberOfNodesInElementTypeOf[_type]);
+
+
 
     size_t iE = 0;
     for( int section=1; section<=nsection; section++ )
     {
         ier = cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
                  &start,&end,&nbndry,&parent_flag);
+        if(sectionsToBeIgnored.find(string(elementSectionName)) != sectionsToBeIgnored.end()){
+        	printf("ignoring section: %s\n",elementSectionName);
+        	continue;
+        }
+        if(!(section==5 ||
+        	 section==24
+        	/*
+        	 section==6 ||
+        	 section==7 ||
+        	 section==8 ||
+        	 section== 19
+        	 */
+        	)){
+        	continue;
+        }
  #ifdef CGNS_VERBOSE
         cout<< elementSectionName << ", type:" << cg_ElementTypeName(type) << endl;
  #endif
+
         ier = cg_ElementDataSize(icg,ibase,zone,section, &ElementDataSize);
         elements = new cgsize_t[ElementDataSize];
         ier = cg_elements_read(icg,ibase,zone,section, elements, NULL );
@@ -261,30 +324,35 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
         if( type != MIXED )
         {
             // pure elements
-            ier = cg_npe(type, &npe);
-            // store in cell elements/boundary
             assert(NDim==3);
             if( NDim==3 && type>= 5)
             {
+    			int _type = -1;
+	            ier = cg_npe(type, &npe);
+				switch (type){
+				case TRI_3:
+					_type = 2;
+					break;
+				case QUAD_4:
+					_type = 3;
+					break;
+                case  TETRA_4:
+					_type = 4;
+                    break;
+                case PYRA_5:
+                	_type = 7;
+                    break;
+                case PENTA_6:
+                	_type = 6;
+                	break;
+                case  HEXA_8:
+					_type = 5;
+                    break;
+                default:
+                	errorHandler.fatalLogicError("unknown element type",cg_ElementTypeName(type));
+                }
                 for( i=0; i< nelem_sec; i++ )
 				{
-					int _type = -1;
-					switch (type){
-					case TRI_3:
-						_type = 2;
-						break;
-					case QUAD_4:
-						_type = 3;
-						break;
-                    case  TETRA_4:
-						_type = 4;
-                        break;
-                    case  HEXA_8:
-						_type = 5;
-                        break;
-                    default:
-                    	errorHandler.fatalLogicError("unknown element type",cg_ElementTypeName(type));
-                    }
 
                    	rootElems[i+iE] = new InputElement(_type,2,npe);
                     for( j=0;j!=npe; j++ )
@@ -294,12 +362,9 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
 		                    rootElems[i+iE]->tag[0] = iter->first;
 		                    break;
                     	}else if(iter==regionMap->end()){
-                    		assert(false);
+                    		errorHandler.fatalLogicError("mismatch boundary(section) in CGNS reader",elementSectionName);
                     	}
                     }
- #ifdef CGNS_VERBOSE 
-                    //printf("found rid %d\n",rootElems[i+iE]->tag[0]);
- #endif                    
 				}
                 iE += nelem_sec;
             }else
@@ -308,24 +373,51 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
         // mixed-type grids
         else
         {
-            // mixed element. Assume it only belongs to cells? not boundary
+            //mixed element. Assume it only belongs to cells? not boundary
             //to be implement
-            assert(false);
-            /*
-            nelem0= nelem ;
-            nelem = nelem + nelem_sec ;
-            count = 0 ;
-            for( i=1; i<=nelem_sec; i++ )
+            //assert(false);
+            int count = 0 ;
+            for( i=0; i<nelem_sec; i++ )
             {
-                count= count + 1 ;
-                type = (ElementType_t)elements[count] ;
+                type = (ElementType_t)elements[count++] ;
                 ier  = cg_npe( type, &npe );
-                //KNode[i]= npe ;
-				for( j=1;j<=npe;j++ )
-					ENode[i][j] = elements[count+j];  // (count+1:count+npe);
-                count = count+npe ;
+				int _type = -1;
+				switch (type){
+				case TRI_3:
+					_type = 2;
+					break;
+				case QUAD_4:
+					_type = 3;
+					break;
+                case  TETRA_4:
+					_type = 4;
+                    break;
+                case PYRA_5:
+                	_type = 7;
+                    break;
+                case PENTA_6:
+                	_type = 6;
+                	break;
+                case  HEXA_8:
+					_type = 5;
+                    break;
+                default:
+                	errorHandler.fatalLogicError("unknown element type",cg_ElementTypeName(type));
+                }
+
+               	rootElems[i+iE] = new InputElement(_type,2,npe);
+                for( j=0;j!=npe; j++ )
+                	rootElems[i+iE]->vertex[j] = elements[count++] - 1;//why -1 ???
+                for(map<int,BdRegion>::const_iterator iter = regionMap->begin();iter!=regionMap->end();++iter){
+                	if(iter->second.name == string(elementSectionName) ){
+	                    rootElems[i+iE]->tag[0] = iter->first;
+	                    break;
+                	}else if(iter==regionMap->end()){
+                		errorHandler.fatalLogicError("mismatch boundary(section) in CGNS reader",elementSectionName);
+                	}
+                }
             }
-            */
+            iE+=nelem_sec;
         }
         delete [] elements;
     }
@@ -600,8 +692,9 @@ void RootProcess::partition(DataPartition* dg, int N){
 
 
 	int nv=0;
-	for(size_t i=0;i!=rootNElement;++i)
+	for(size_t i=0;i!=rootNElement;++i){
 		nv += numberOfNodesInElementTypeOf[rootElems[i]->type];	
+	}
 
 	rootgridList.resize(N);
 	rootNCells.resize(N); 
@@ -628,12 +721,45 @@ void RootProcess::partition(DataPartition* dg, int N){
 	idx_t *xadj = NULL;
 	idx_t *adjncy = NULL;
 
+
+	ofstream of("metisfile");
+	of<<rootNElement<<endl;
+	for(size_t i =0;i!=rootNElement;++i){
+		nv = numberOfNodesInElementTypeOf[rootElems[i]->type];
+		for(int j=0;j!=nv;++j)
+			of<<rootElems[i]->vertex[j]+1<<" ";
+		of<<endl;
+	}
+	of.close();
+
+
 	int ret = METIS_MeshToDual(&_ne,&_nv,eptr,eind,
 			&_ncommon,
 			&_numflg,
 			&xadj,&adjncy);		//METIS Mesh to Graph
 
 	if(ret!=METIS_OK) errorHandler.fatalRuntimeError("METIS Partition error!\n");
+
+
+
+	cout<<"start test"<<endl;
+	for(idx_t i=0;i!=_ne;++i){
+		if(xadj[i+1]-xadj[i] > 6){
+			set<idx_t> iset;
+			for(idx_t j=eptr[i];j!=eptr[i+1];++j)
+				iset.insert(eind[j]);
+			for(idx_t j=xadj[i];j!=xadj[i+1];++j){
+				set<idx_t> jset;	
+				for(idx_t k=eptr[j];k!=eptr[j+1];++k)
+					iset.insert(eind[k]);
+				vector<idx_t> inter;
+				std::set_intersection(iset.begin(),iset.end(),jset.begin(),jset.end(),back_inserter(inter));
+				printf("intersection at direction %d is %u",j,inter.size());
+			}
+
+			errorHandler.fatalRuntimeError("METIS Has Problem");	
+		}
+	}
 
 	delete []eptr;delete [] eind; eptr=NULL;eptr=NULL;
 
@@ -658,6 +784,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	if(ret!=METIS_OK) errorHandler.fatalRuntimeError("METIS Partition error!\n");
 	printf("METIS partition successfuly, partitioned into %d part, totally edgecut%ld \n",N,edgecut);
 	
+	errorHandler.fatalRuntimeError("just abort");
 		
 	for(size_t i=0;i!=rootNElement;++i){
 		rootElems[i]->pid = epart[i];

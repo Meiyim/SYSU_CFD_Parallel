@@ -37,6 +37,9 @@ CLEANFILES       = rhs.vtk solution.vtk
 include ${PETSC_DIR}/lib/petsc/conf/variables
 include ${PETSC_DIR}/lib/petsc/conf/rules
 
+testcgns:
+	mpirun -np 2 ./cycas2 -cgns
+
 test:
 	mpirun -np 2 ./cycas2  
 	

@@ -245,13 +245,10 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     ElementType_t   type;
 
     //ignoring section created by FLUENT...
-    set<string> sectionsToBeIgnored; 
-    sectionsToBeIgnored.insert("interface1-002");
-    sectionsToBeIgnored.insert("interface1-003");
-    sectionsToBeIgnored.insert("interface2-004");
-    sectionsToBeIgnored.insert("interface2-005");
-    sectionsToBeIgnored.insert("interface1");
-    sectionsToBeIgnored.insert("interface2");
+    set<string> sectionsToRead; 
+    for(map<int,BdRegion>::const_iterator iter = regionMap->begin();iter!=regionMap->end();++iter){
+    	sectionsToRead.insert(iter->second.name);
+    }
 
 
     if(cg_nsections(icg,ibase,zone,&nsection) )
@@ -266,20 +263,20 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
         ier = cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
                  &start,&end,&nbndry,&parent_flag);
 
-        if(sectionsToBeIgnored.find(string(elementSectionName)) != sectionsToBeIgnored.end()){
+        if(sectionsToRead.find(string(elementSectionName)) == sectionsToRead.end()){
         	continue;
         }
+        /*
         if(!(section==5 ||
         	 section==24
-        	/*
         	 section==6 ||
         	 section==7 ||
         	 section==8 ||
         	 section== 19
-        	 */
         	)){
         	continue;
         }
+        */
 
         rootNElement+=(end-start)+1;
         if(type>9) //volumn section
@@ -297,21 +294,11 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     {
         ier = cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
                  &start,&end,&nbndry,&parent_flag);
-        if(sectionsToBeIgnored.find(string(elementSectionName)) != sectionsToBeIgnored.end()){
-        	printf("ignoring section: %s\n",elementSectionName);
+        if(sectionsToRead.find(string(elementSectionName)) == sectionsToRead.end()){
+        	printf("***********************  ignoring section: %s *********************\n",elementSectionName);
         	continue;
         }
-        if(!(section==5 ||
-        	 section==24
-        	/*
-        	 section==6 ||
-        	 section==7 ||
-        	 section==8 ||
-        	 section== 19
-        	 */
-        	)){
-        	continue;
-        }
+
  #ifdef CGNS_VERBOSE
         cout<< elementSectionName << ", type:" << cg_ElementTypeName(type) << endl;
  #endif
@@ -694,6 +681,9 @@ void RootProcess::partition(DataPartition* dg, int N){
 	int nv=0;
 	for(size_t i=0;i!=rootNElement;++i){
 		nv += numberOfNodesInElementTypeOf[rootElems[i]->type];	
+		if(rootElems[i]->type == 2){
+			nv++;//extra space for triangle... make it looks like a tetrahedra
+		}
 	}
 
 	rootgridList.resize(N);
@@ -704,33 +694,36 @@ void RootProcess::partition(DataPartition* dg, int N){
 
 	idx_t edgecut;
 
+	//ofstream mof("metistest");
+	//mof<<rootNElement<<endl;
+	int dummyIndexForTriangleElement = rootNVert; // add a dummy index turns a triangle into tetrahedra
 	eptr[0]=0;
 	for(size_t i=0;i!=rootNElement;++i){
 		nv = numberOfNodesInElementTypeOf[rootElems[i]->type];
-		for(int j=0;j!=nv;++j)
+		int j;
+		for(j=0;j!=nv;++j){
 			eind[eptr[i]+j] =  rootElems[i]->vertex[j];
+			//mof<<rootElems[i]->vertex[j]+1<<" ";
+		}
+		if(rootElems[i]->type == 2){
+			nv++;
+			eind[eptr[i]+j] = dummyIndexForTriangleElement++;
+			//mof<<rootNVert+1<<" ";
+		}
+		//mof<<endl;
+
 		eptr[i+1]=eptr[i]+nv;
 	}
+	//mof.close();
 	
 	//call metis
 	idx_t _ncommon = NCOMMON;
 	idx_t _numflg = 0;
 	idx_t _ne = rootNElement;
-	idx_t _nv = rootNVert;
+	idx_t _nv = dummyIndexForTriangleElement;
 	idx_t _np = N;
 	idx_t *xadj = NULL;
 	idx_t *adjncy = NULL;
-
-
-	ofstream of("metisfile");
-	of<<rootNElement<<endl;
-	for(size_t i =0;i!=rootNElement;++i){
-		nv = numberOfNodesInElementTypeOf[rootElems[i]->type];
-		for(int j=0;j!=nv;++j)
-			of<<rootElems[i]->vertex[j]+1<<" ";
-		of<<endl;
-	}
-	of.close();
 
 
 	int ret = METIS_MeshToDual(&_ne,&_nv,eptr,eind,
@@ -739,7 +732,6 @@ void RootProcess::partition(DataPartition* dg, int N){
 			&xadj,&adjncy);		//METIS Mesh to Graph
 
 	if(ret!=METIS_OK) errorHandler.fatalRuntimeError("METIS Partition error!\n");
-
 
 
 	cout<<"start test"<<endl;
@@ -784,7 +776,6 @@ void RootProcess::partition(DataPartition* dg, int N){
 	if(ret!=METIS_OK) errorHandler.fatalRuntimeError("METIS Partition error!\n");
 	printf("METIS partition successfuly, partitioned into %d part, totally edgecut%ld \n",N,edgecut);
 	
-	errorHandler.fatalRuntimeError("just abort");
 		
 	for(size_t i=0;i!=rootNElement;++i){
 		rootElems[i]->pid = epart[i];

@@ -264,7 +264,7 @@ int NavierStokesSolver::CreateFaces( )
 		Nfac++;  // face accumulation is at last
     	}
 
-	assert(Nfac==Nbnd);
+	    assert(Nfac==Nbnd);
     	// interior faces
     	for( i=0;i<Ncel;i++ )
     	{

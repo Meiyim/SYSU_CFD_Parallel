@@ -2,7 +2,6 @@
  *
  *	CYCAS 2 Parallel Power by PETSC
  *         CHEN XU YI-------2016/02/01	
- *
  * 
 ***********************************************************/
 
@@ -55,13 +54,19 @@ int main(int argc, char* argv[]){
 
 	//parse the gridfile as original, buffer freeed, boundInfo got;
 	nsSolver->ReadGridFile(elementBuffer,vertexBuffer,interfaceBuffer);
-
 	nsSolver->dataPartition->initPetsc();
+
+	//reorder cells of different body rid (FLUID & SOLID) within each partition...
+	nsSolver->reorderCell();
 
 	//build faces. same sequence as Original;
 	nsSolver->CreateFaces();
 	nsSolver->CellFaceInfo();
 	nsSolver->CheckAndAllocate();
+
+	//Reorder Fluid & Solid
+	nsSolver->buildCoupledFace();
+
 	nsSolver->InitFlowField();
 	
 	/******************************************

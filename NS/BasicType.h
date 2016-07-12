@@ -3,6 +3,7 @@
 #include<limits>
 #include<numeric>
 #include<string>
+#include<algorithm>
 /********************************************************
  * define the basic type in NavierStorkesSolver
  ********************************************************/
@@ -12,7 +13,7 @@
 #define SMALL 1.e-16
 #define CYCASHUGE_D std::numeric_limits<double>::max()
 #define CYCASHUGE_I std::numeric_limits<int>::max()
-#define INT_OPTION_NO 15 
+#define INT_OPTION_NO 16 
 #define DB_OPTION_NO  23
 #define TECPLOT_NVAR  13
 
@@ -170,6 +171,14 @@ public:
 			vertices[i] = CYCASHUGE_I;
 		for(int i=0;i!=3;++i)
 			x[i] = n[i] = Xpac[i] = Xnac[i] = CYCASHUGE_D;
+	}
+	void reverse(){
+		std::swap(cell1,cell2);
+		lambda = 1. - lambda;
+		for(int i=0;i!=3;++i){
+			n[i] = 0. - n[i];
+			std::swap(Xpac[i],Xnac[i]);
+		}
 	}
 };
 

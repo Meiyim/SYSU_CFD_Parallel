@@ -18,38 +18,38 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 	ofstream of;
 	using namespace TurKEpsilonVar;
 
-	Prod     = new double[Ncel];
-	TESource = new double[Ncel];
-	EDSource = new double[Ncel];
+	Prod     = new double[Nfluid];
+	TESource = new double[Nfluid];
+	EDSource = new double[Nfluid];
 	VisTE    = new double[Ncel+dataPartition->nVirtualCell];//note the Size
 	VisED    = new double[Ncel+dataPartition->nVirtualCell];
-	ApTE     = new double[Ncel];
-	ApED     = new double[Ncel];
-	vec_init( TESource,Ncel,0. );
-	vec_init( EDSource,Ncel,0. );
-	vec_init( ApTE,    Ncel,0. );
-	vec_init( ApED,    Ncel,0. );
+	ApTE     = new double[Nfluid];
+	ApED     = new double[Nfluid];
+	vec_init( TESource,Nfluid,0. );
+	vec_init( EDSource,Nfluid,0. );
+	vec_init( ApTE,    Nfluid,0. );
+	vec_init( ApED,    Nfluid,0. );
 	// viscosity and source term
-	for( i=0; i<Ncel; i++ )
+	for( i=0; i<Nfluid; i++ )
 	{
 		vol = Cell[i].vol;
 		// turbulent kinetic viscosity
-        	VisTE[i] = VisLam[i] + VisTur[i] / Sigma_k ;
-        	// turbulent dissipation viscosity
-        	VisED[i] = VisLam[i] + VisTur[i] / Sigma_e ;
+    	VisTE[i] = VisLam[i] + VisTur[i] / Sigma_k ;
+    	// turbulent dissipation viscosity
+    	VisED[i] = VisLam[i] + VisTur[i] / Sigma_e ;
 
 		// source terms
 		dudx = dUdX[i];
 		dvdx = dVdX[i];
 		dwdx = dWdX[i];
-        	// rate of production of turbulent energy (eq. 9.40)
-        	s1 = (dudx[0]+dudx[0])*dudx[0] + (dudx[1]+dvdx[0])*dudx[1] + (dudx[2]+dwdx[0])*dudx[2];
-	        s2 = (dvdx[0]+dudx[1])*dvdx[0] + (dvdx[1]+dvdx[1])*dvdx[1] + (dvdx[2]+dwdx[1])*dvdx[2];
-       		s3 = (dwdx[0]+dudx[2])*dwdx[0] + (dwdx[1]+dvdx[2])*dwdx[1] + (dwdx[2]+dwdx[2])*dwdx[2];
+    	// rate of production of turbulent energy (eq. 9.40)
+    	s1 = (dudx[0]+dudx[0])*dudx[0] + (dudx[1]+dvdx[0])*dudx[1] + (dudx[2]+dwdx[0])*dudx[2];
+        s2 = (dvdx[0]+dudx[1])*dvdx[0] + (dvdx[1]+dvdx[1])*dvdx[1] + (dvdx[2]+dwdx[1])*dvdx[2];
+   		s3 = (dwdx[0]+dudx[2])*dwdx[0] + (dwdx[1]+dvdx[2])*dwdx[1] + (dwdx[2]+dwdx[2])*dwdx[2];
 
-        	Prod[i] = VisTur[i] * ( s1 + s2 + s3 ) ;
-        	// dissipation
-        	Dis     = Rn[i] * ED[i];
+    	Prod[i] = VisTur[i] * ( s1 + s2 + s3 ) ;
+    	// dissipation
+    	Dis     = Rn[i] * ED[i];
 		// bouyancy production term: - Gi/(sigma_h,t rho) drho/dx
         	// Pbouy =
 		TESource[i] = Prod[i] * vol ;   //   - Dis  ;
@@ -70,7 +70,7 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 
 	if( !IfSteady ){
 		if(      TimeScheme==1 ){  // Euler forwards
-			for( i=0; i<Ncel; i++ ){
+			for( i=0; i<Nfluid; i++ ){
 				coef        = Rn[i]/dt*Cell[i].vol;
 				ApTE[i]    += coef;
 				TESource[i]+= coef * TEp[i];
@@ -79,7 +79,7 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 			}
 		}
 		else if( TimeScheme==2 ){  // 2nd order BDF
-			for( i=0; i<Ncel; i++ ){
+			for( i=0; i<Nfluid; i++ ){
 				coef        = Rn[i]/dt*Cell[i].vol;
 				ApTE[i]    += 1.5*coef;
 				TESource[i]+= coef * (2*TEp[i]-0.5*TEp2[i]);
@@ -102,7 +102,7 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 		errorHandler.fatalRuntimeError(temp);
 	}
 
-	for(i=0;i<Ncel;++i){
+	for(i=0;i<Nfluid;++i){
 		if(TE[i]<1.e-9){
 			TE[i] = 1.e-9;
 		}
@@ -112,7 +112,7 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 	 *	solve terbulence dissipation
 	 *****************************/
 	
-	for( i=0; i<Ncel; i++ )
+	for( i=0; i<Nfluid; i++ )
 	{
 		// ED production & dissipation. similarity to TE
 		fact = ED[i]/(TE[i]+SMALL)*Cell[i].vol;
@@ -162,14 +162,14 @@ void NavierStokesSolver::UpdateTurKEpsilon( )
 		errorHandler.fatalRuntimeError(temp);
 	}
 
-	for(i=0;i<Ncel;++i){
+	for(i=0;i<Nfluid;++i){
 		if(ED[i]<1.e-12){
 			ED[i] = 1.e-12;
 		}
 	}
 
 	// Calculate the turbulent viscosity
-	for( i=0; i<Ncel; i++ )
+	for( i=0; i<Nfluid; i++ )
     	{
 		if( ED[i]>1.e-12 )
 			VisTur[i]= Cmu * Rn[i] * TE[i]*TE[i]/ (ED[i]+SMALL);
@@ -208,12 +208,13 @@ void NavierStokesSolver::UpdateEnergy( )
 
 //	Q_Constr(&As,   "matrixU",   Ncel, False, Rowws, Normal, True);
 	kcond  = new double[Ncel + dataPartition->nVirtualCell]; //note the size;
-	ESource= new double[Ncel];
-	ApE    = new double[Ncel];
-	vec_init( ESource, Ncel, 0. );
-	vec_init( ApE,     Ncel, 0. );
+	ESource= new double[Nfluid];
+	ApE    = new double[Nfluid];
+	vec_init( ESource, Nfluid, 0. );
+	vec_init( ApE,     Nfluid, 0. );
+	vec_init( kcond, Nfluid+dataPartition->nVirtualCell,CYCASHUGE_D);
 	// prepare the diffusion coefficient and source terms
-	for( i=0; i<Ncel; i++ )
+	for( i=0; i<Nfluid; i++ )
 	{
 		kcond[i] = cp*(VisLam[i]/prl + VisTur[i]/prte)/cp;//only for gas i surpose
 	}
@@ -227,7 +228,9 @@ void NavierStokesSolver::UpdateEnergy( )
 	{
 		c1 = Face[i].cell1;
 		c2 = Face[i].cell2;
-		if( c2<0 )
+		if(c1>=Nfluid) continue;
+
+		if( Face[i].bnd>=0 )
 		{
 			VisL = VisLam[c1];
 			VisT = VisTur[c1];
@@ -285,18 +288,18 @@ void NavierStokesSolver::UpdateEnergy( )
 	}//end if : densityModel == 1
 
 	// boundary
-	SetBCTemperature( BTem );
+	SetBCTemperature( BTem);
 	// source terms, e.g., energy release, condensation/vaporization
 	if( !IfSteady ){
 	if(      TimeScheme==1 ){  // Euler forwards
-		for( i=0; i<Ncel; i++ ){
+		for( i=0; i<Nfluid; i++ ){
 			coef       = Rn[i]/dt * Cell[i].vol;
 			ApE[i]    += coef;
 			ESource[i]+= coef * Tnp[i];
 		}
 	}
 	else if( TimeScheme==2 ){  // 2nd order BDF
-		for( i=0; i<Ncel; i++ ){
+		for( i=0; i<Nfluid; i++ ){
 			coef       = Rn[i]/dt * Cell[i].vol;
 			ApE[i]    += 1.5*coef;
 			ESource[i]+= coef * (2*Tnp[i]-0.5*Tnp2[i]);
@@ -318,6 +321,10 @@ void NavierStokesSolver::UpdateEnergy( )
 	dataPartition->interfaceCommunicationBegin(Tn);
 	dataPartition->interfaceCommunicationEnd();
 
+	if(SolveConjungateHeat){
+		SetBCSolidTemperature(dPhidX,kcond);
+	}
+
 	
 	// clipping work
 	delete [] kcond;
@@ -332,6 +339,7 @@ void NavierStokesSolver::UpdateEnergy( )
 //--------------------------------------------
 void NavierStokesSolver::UpdateSpecies( )
 {
+	/*
 	int i,is;
 	double **DiffC, **ScSource,*ApS, coef;
 
@@ -384,18 +392,12 @@ void NavierStokesSolver::UpdateSpecies( )
 		for( i=0; i<Ncel; i++ ) ;
 //			xsol.Cmp[i+1]= RSn[is][i];
 
-/*
-//		SolveLinearEqu( GMRESIter, &As, &xsol, &bs, 500, SSORPrecond, 1.3, 1.e-8, &Iter, &IterRes );
-		if( Iter>=500 && IterRes>1.e-8 ){
-			cout<<"Energy cannot converge."<<Iter<<" "<<IterRes<<endl;
-			exit(0);
-		}
-*/
 		for( i=0; i<Ncel; i++ );
 //			RSn[is][i] = xsol.Cmp[i+1];
 
 //		Q_Destr ( &As );
 	}
+		*/
 }
 
 
@@ -417,8 +419,7 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 	dataPartition->interfaceCommunicationBegin(DiffCoef);
 	dataPartition->interfaceCommunicationEnd();
 
-
-	for( i=0; i<Ncel; i++ )
+	for( i=0; i<Nfluid; i++ )
 	{
 
 		app = App[i];
@@ -429,8 +430,8 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 		for( j=0;j<Cell[i].nface;j++ )
 		{
 			iface  = Cell[i].face[j];
-			ip     = Face[iface].cell1;
-			in     = Face[iface].cell2;
+			ip     = i;
+			in     = Cell[i].cell[j];
 			
 			if( in<0 ) // boundary, i=ip naturally
 			{

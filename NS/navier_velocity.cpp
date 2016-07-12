@@ -16,12 +16,12 @@ int NavierStokesSolver::CalculateVelocity( )
 	PetscLogStagePop();
 	PetscLogStagePush(2);
 	
-	double *const _array1 = new double[Ncel];
-	double *const _array2 = new double[Ncel];
-	double *const _array3 = new double[Ncel];
-	std::copy(Un,Un+Ncel,_array1);
-	std::copy(Vn,Vn+Ncel,_array2);
-	std::copy(Wn,Wn+Ncel,_array3);
+	double *const _array1 = new double[Nfluid];
+	double *const _array2 = new double[Nfluid];
+	double *const _array3 = new double[Nfluid];
+	std::copy(Un,Un+Nfluid,_array1);
+	std::copy(Vn,Vn+Nfluid,_array2);
+	std::copy(Wn,Wn+Nfluid,_array3);
 
 	// solve U,V,W
 	try{
@@ -45,7 +45,7 @@ int NavierStokesSolver::CalculateVelocity( )
 	dataPartition->interfaceCommunicationEnd();
 	
 
-	for(int i=0;i!=Ncel;++i){//optimizeable
+	for(int i=0;i!=Nfluid;++i){//optimizeable
 		localRes[0] += fabs(_array1[i]-Un[i])*Cell[i].vol;
 		localRes[1] += fabs(_array2[i]-Vn[i])*Cell[i].vol;
 		localRes[2] += fabs(_array3[i]-Wn[i])*Cell[i].vol;
@@ -68,7 +68,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 		dudx,dudy,dudz,dvdx,dvdy,dvdz,dwdx,dwdy,dwdz,
 		sav1,sav2,sav3,RUnormal,ViscAreaLen, 
 		su,sv,sw, ufi,vfi,wfi,ufh,vfh,wfh,fcs[3]={0.}, fde[3],fdi[3], dx[3],
-		s1,s2, coef;
+		coef;
 
 
 	SetBCVelocity( BRo,BU,BV,BW );
@@ -97,11 +97,11 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 		Limiter_WENO( Pn, dPdX );
 	}*/
 
-	for( i=0; i<Ncel; i++ )
+	for( i=0; i<Nfluid; i++ )
 	{
 		app = 0.;
 		nj  = 0 ;
-		su=0.; sv=0.; sw=0.; s1=0.;s2=0.;
+		su=0.; sv=0.; sw=0.; //s1=0.;s2=0.;
 		for( j=0;j<6;j++ ) apn[j] = 0.;
 
 		// unsteady terms, here it can be optimzed by stored old data
@@ -125,9 +125,9 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 		for( j=0;j<Cell[i].nface;j++ )
 		{
 			iface  = Cell[i].face[j];
-			ip     = Face[iface].cell1;
-			in     = Face[iface].cell2;
-			
+			ip     = i;
+			in     = Cell[i].cell[j];
+
 			if( in<0 ) // boundary, i=ip naturally
 			{
 				bnd= Face[iface].bnd;
@@ -400,7 +400,9 @@ void NavierStokesSolver::CalRUFace( )
 	{
 		c1 = Face[i].cell1;
 		c2 = Face[i].cell2;
-		if( c2<0 )
+		if(Face[i].bnd==INNER_FACE_BOUNDARY_SOLID) continue;
+
+		if( Face[i].bnd>=0 )
 		{
 			bnd= Face[i].bnd;
 			ruf= BU[bnd]*BRo[bnd];
@@ -425,15 +427,15 @@ void NavierStokesSolver::CalRUFace( )
 void NavierStokesSolver::CalRUFace2( )
 {
 	int i, bnd, c1,c2;
-	double rf,ruf,rvf,rwf,lambda,lambda2, sav1n,sav2n,sav3n,dpx,dpy,dpz,dpn,
+	double rf,ruf,rvf,rwf,lambda,lambda2, /*sav1n,sav2n,sav3n*/dpx,dpy,dpz,dpn,
 		dx[3],P1,P2,d12,aprf,vol;
 	for( i=0; i<Nfac; i++ )
 	{
 		c1 = Face[i].cell1;
 		c2 = Face[i].cell2;
-		if( c2<0 )
+		if(Face[i].bnd==INNER_FACE_BOUNDARY_SOLID) continue;
+		if((bnd=Face[i].bnd)>=0)
 		{
-			bnd= Face[i].bnd;
 			ruf= BU[bnd]*BRo[bnd];
 			rvf= BV[bnd]*BRo[bnd];
 			rwf= BW[bnd]*BRo[bnd];
@@ -460,9 +462,9 @@ void NavierStokesSolver::CalRUFace2( )
 			vol  = lambda*Cell[c1].vol + lambda2*Cell[c2].vol;
 
 			// interpolated pressure gradient
-			sav1n = Face[i].n[0]/Face[i].area;
-			sav2n = Face[i].n[1]/Face[i].area;
-			sav3n = Face[i].n[2]/Face[i].area;
+			//sav1n = Face[i].n[0]/Face[i].area;
+			//sav2n = Face[i].n[1]/Face[i].area;
+			//sav3n = Face[i].n[2]/Face[i].area;
 			dpx= lambda*dPdX[c1][0] + lambda2*dPdX[c2][0];
 			dpy= lambda*dPdX[c1][1] + lambda2*dPdX[c2][1];
 			dpz= lambda*dPdX[c1][2] + lambda2*dPdX[c2][2];

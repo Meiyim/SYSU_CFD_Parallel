@@ -47,7 +47,6 @@ void NavierStokesSolver::NSSolve( )
 	}
 
 	readyToSolve();
-
 	//MaxOuterStep=2;//test
     for( step=1; step<=MaxStep; step++ ) //step : total time step
     {
@@ -83,6 +82,9 @@ void NavierStokesSolver::NSSolve( )
 			//2. energy couple
 			if( SolveEnergy  ) {
 				UpdateEnergy ( );
+				if(SolveConjungateHeat){
+					//UpdateSolidTempconjunerature();
+				}
 			}
 
 			//3. species transport
@@ -92,7 +94,6 @@ void NavierStokesSolver::NSSolve( )
 
 			/*-----------check if should break----------*/
 			MPI_Allreduce(localRes,Residual,RESIDUAL_LEN,MPI_DOUBLE,MPI_SUM,dataPartition->comm);
-
 			ResMax = vec_max( Residual,RESIDUAL_LEN );
 			
 			if( IfSteady ){
@@ -142,8 +143,8 @@ void NavierStokesSolver::NSSolve( )
 
 
 	if(IfSteady&&step==MaxStep){
-			PetscLogStagePop();//profilling
-			root.printSolutionNotGood(dataPartition);
+		PetscLogStagePop();//profilling
+		root.printSolutionNotGood(dataPartition);
 	}
 	//extra work before solve is complete 
 	Output2Tecplot();
@@ -481,6 +482,7 @@ void NavierStokesSolver::initSolverParam()
 	SolveEnergy  = false;
 	SolveSpecies = false;
 	shouldOutputBinary = false;
+	SolveConjungateHeat = false;
 	Nspecies     = 0;
 
 	PressureReference= 1.01325e5; cellPressureRef=0;
@@ -585,6 +587,8 @@ void NavierStokesSolver::readyToSolve(){  // call right befor NS Loop
 	MPI_Barrier(dataPartition->comm);
 
 }
+
+
 void NavierStokesSolver::InitFlowField( ){//NSSolve ready to solve
 	int i;
 	//Init Flow Field
@@ -612,27 +616,38 @@ void NavierStokesSolver::InitFlowField( ){//NSSolve ready to solve
 				}
 			}
 		}
-
 		for( i=0; i<Ncel; i++ )
 		{
 			int rid = Cell[i].rid;
 			assert(regionMap.find(rid)!=regionMap.end());
-			double* initvalues = regionMap[rid].initvalues;
-			Un[i] = initvalues[0];
-			Vn[i] = initvalues[1];
-			Wn[i] = initvalues[2];
-			Rn[i] = initvalues[3];
-			Tn[i] = initvalues[4];
-			Pn[i] = 0.;
-		    if( DensityModel== 1 ) Rn[i]= (Pn[i]+PressureReference)/(Rcpcv*Tn[i]);
-			VisLam[i]= initvalues[5]; // 0.6666667e-2;  // 1.458e-6 * pow(Tn[i],1.5) /(Tn[i]+110.5) ;
-			VisTur[i]= 0.;
-			if( TurModel==1 )
-			{
-				TE[i]    = initvalues[6];  // 1.e-4*(Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]);
-				ED[i]    = initvalues[7];    // TurKEpsilonVar::Cmu * pow(TE[i],1.5) / 1.;
-				VisTur[i]= Rn[i]*TurKEpsilonVar::Cmu * TE[i]*TE[i]/(ED[i]+SMALL);
+			BdRegion& reg = regionMap[rid];
+			assert(reg.type1==5);
+			if(reg.type2==0){ //fluid init...
+				double* initvalues = reg.initvalues;
+				Un[i] = initvalues[0];
+				Vn[i] = initvalues[1];
+				Wn[i] = initvalues[2];
+				Rn[i] = initvalues[3];
+				Tn[i] = initvalues[4];
+				Pn[i] = 0.;
+			    if( DensityModel== 1 ) Rn[i]= (Pn[i]+PressureReference)/(Rcpcv*Tn[i]);
+				VisLam[i]= initvalues[5]; // 0.6666667e-2;  // 1.458e-6 * pow(Tn[i],1.5) /(Tn[i]+110.5) ;
+				VisTur[i]= 0.;
+				if( TurModel==1 )
+				{
+					TE[i]    = initvalues[6];  // 1.e-4*(Un[i]*Un[i]+Vn[i]*Vn[i]+Wn[i]*Wn[i]);
+					ED[i]    = initvalues[7];    // TurKEpsilonVar::Cmu * pow(TE[i],1.5) / 1.;
+					VisTur[i]= Rn[i]*TurKEpsilonVar::Cmu * TE[i]*TE[i]/(ED[i]+SMALL);
+				}
+			}else if(reg.type2==1){ //solid init
+				double* initvalues = reg.initvalues;
+				Tn[i] = initvalues[0];
+				VisLam[i] = initvalues[1];
+				Rn[i] = initvalues[2];
+			}else{
+				assert(false);
 			}
+
 		}
 
 	}
@@ -662,9 +677,22 @@ void NavierStokesSolver::InitFlowField( ){//NSSolve ready to solve
 			BTE[i] = reg.initvalues[6];
 			BED[i] = reg.initvalues[7];
 	 	}else if(reg.type1 == 3){
-	 		//pass
+			BU[i] = 0.;
+			BV[i] = 0.;
+			BW[i] = 0.;
+			BRo[i] = 0.;
+			BTem[i]= 0.;
+			BTE[i] = 0.;
+			BED[i] = 0.;
 		}else if(reg.type1==4){//sym
-	 		Bnd[i].q =0.0;//not implement yet
+			BU[i] = 0.;
+			BV[i] = 0.;
+			BW[i] = 0.;
+			BRo[i] = 0.;
+			BTem[i]= 0.;
+			BTE[i] = 0.;
+			BED[i] = 0.;
+			Bnd[i].q =0.0;//not implement yet
 	 	}else if(reg.type1 == 6){//periodic
 	 		//pass 
 	 	}else {
@@ -763,17 +791,18 @@ NavierStokesSolver::NavierStokesSolver():
 	SolveEnergy			(iOptions[2]),
 	SolveSpecies		(iOptions[3]),
 	shouldOutputBinary  (iOptions[4]),
+	SolveConjungateHeat (iOptions[5]),
 	//int
-	MaxOuterStep		(iOptions[5]),
-	TurModel			(iOptions[6]),
-	DensityModel		(iOptions[7]),
-	limiter				(iOptions[8]),
-	TimeScheme			(iOptions[9]),
-	noutput				(iOptions[10]),
-	outputFormat		(iOptions[11]),
-	Nspecies			(iOptions[12]),
-	cellPressureRef		(iOptions[13]),
-	MaxStep				(iOptions[14]),
+	MaxOuterStep		(iOptions[6]),
+	TurModel			(iOptions[7]),
+	DensityModel		(iOptions[8]),
+	limiter				(iOptions[9]),
+	TimeScheme			(iOptions[10]),
+	noutput				(iOptions[11]),
+	outputFormat		(iOptions[12]),
+	Nspecies			(iOptions[13]),
+	cellPressureRef		(iOptions[14]),
+	MaxStep				(iOptions[15]),
 	//double
 	PressureReference	(dbOptions[0]),
 	gama				(dbOptions[1]),
@@ -789,6 +818,9 @@ NavierStokesSolver::NavierStokesSolver():
 	gravity				(dbOptions+11), //gravity components: 11,12,13
 	URF					(dbOptions+14),  //URF 	14~21 //length 8
 	ResidualSteady		(dbOptions[22]),
+	//
+	Ncel(0),Nbnd(0),Nfac(0),
+	NcoupledBnd(0),
 
 	//all put NULL to avoid wild pointer
 	Vert(NULL),Face(NULL),Cell(NULL),Bnd(NULL),
@@ -833,7 +865,6 @@ NavierStokesSolver::~NavierStokesSolver()
 	delete [] Cell;	
 	delete [] Bnd;
 
-		
 	//these are just pointers.
 	// delete variables
 	/*

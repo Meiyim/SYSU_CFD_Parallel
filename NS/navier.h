@@ -16,14 +16,12 @@
 #define RESIDUAL_LEN 10
 #define VOID_CELL_ON_BOUNDARY -10
 #define VOID_CELL_ON_INTERFACE -20
-#define INNER_FACE_BOUNDARY -10
+#define INNER_FACE_BOUNDARY -10 
+#define INNER_FACE_BOUNDARY_SOLID -11
 
 
 using std::cout;
 using std::endl;
-
-//Error class used at Krylov iteration
-
 
 
 // geometry, face & cell data
@@ -51,12 +49,13 @@ public:
 	double* dbOptions;//len 33	//handles for double option pool
 
 	//original bools
-	/******Length - 5***********/
+	/******Length - 6***********/
 	int& IfReadBackup;
 	int& IfSteady;
 	int& SolveEnergy;
 	int& SolveSpecies;
 	int& shouldOutputBinary;
+	int& SolveConjungateHeat;
 
 	/******Length - 10***********/
 	int& MaxOuterStep;
@@ -94,18 +93,21 @@ public:
 
 	char   GridFileName[100];
 
-    	// --- time evolution
+    // --- time evolution
 	int    step;
-    	double cur_time, Residual[RESIDUAL_LEN],localRes[RESIDUAL_LEN];
+    double cur_time, Residual[RESIDUAL_LEN],localRes[RESIDUAL_LEN];
 
+    // geometry, local, build from mesh files
+	int          Nvrt, Ncel, Nbnd,Nfac; // the local size of the mesh ,build from mesh files
+	int 	NcoupledBnd; // ConjungateHeatTransfer : 0 ----->(Nbnd-NcoupledBnd) ---->Nbnd
 
-    	// geometry, local, build from mesh files
-    	
-	int          Nvrt, Ncel, Nfac, Nbnd; // the local size of the mesh ,build from mesh files
 	double       **Vert; // coordinate x,y,z
-    	FaceData     *Face;
+    FaceData     *Face;
    	CellData     *Cell;
-    	BoundaryData *Bnd;
+    BoundaryData *Bnd;
+
+    int Nfluid, Nsolid;//Conjungate HeatTransfer: 0 ----> Nfluid ----> Nsolid+Nfluid(NCel)
+
 
 	/**************POINTERS TO this->field*******************/
     	// physical variables at cell center, all local
@@ -120,7 +122,6 @@ public:
 	/**************POINTERS TO this->oldfield2*******************/
 	double  *Rnp2,*Unp2, *Vnp2, *Wnp2, *Tnp2, *TEp2, *EDp2,**RSnp2;   // BDF 2nd
 
-
 	double *deltaP;
 	double  *VisLam, *VisTur;
 	double  **dPdX, **dUdX,**dVdX,**dWdX, *Apr, **dPhidX	;
@@ -129,7 +130,7 @@ public:
 	// Boundary faces values
 	double  *BRo,*BU,*BV,*BW,*BPre, *BTem,**BRS, *BTE,*BED;
    	
-        //CXY: should upgrade to PETSC	
+    //CXY: should upgrade to PETSC	
 	// laspack library work array 
 	//QMatrix As,Ap;                // As for non-sysmmetric, Ap for sysmmetric matrix
 	//Vector  bs,bu,bv,bw,bp, xsol; // right-hand-side vector
@@ -146,6 +147,10 @@ public:
 	//last 1 parameter is output boundaryinfo;
 	////read geometry from a buffer,
 	int  ReadGridFile    (int*,double*,int*);
+
+	//function  especially for Conjungate Fluid - Solid Heat Transfer
+	int  reorderCell();
+	int  buildCoupledFace();
 
 // Geometry
 
@@ -194,7 +199,7 @@ public:
 	int  Gradient    ( double*, double*, double** );
     // int  Divergence  ( double*, double*, double*, double*, double*, double*, double* );
 	int  Limiter_MLP  (double[],double **);
-	int  Limiter_Barth(double[],double **);
+	int  Limiter_Barth(double[],double **, size_t, size_t); //can be used on solid part
 	int  Limiter_WENO (double[],double **);
 
 	// Boundary condition. one defact is arrays cost too much memory, especially 2D
@@ -204,6 +209,13 @@ public:
 	void SetBCTemperature( double *bt );
 	void SetBCSpecies ( double **brs );
 	void SetBCKEpsilon( double *TESource,double *EDSource,double *ApTE,double*ApED,double *Prod);
+
+// Solid Calculation
+	void UpdateSolidTemperature();
+	void SetBCSolidTemperature(double**,double*);
+	void BuildSolidMatrix(double *Phi, double *BPhi, double *DiffCoef, double *source, double *App,Mat& A,Vec& b);
+	int solidGradient( double*, double*, double** );
+
 
 // Post process
 	void OutputMoniter  ( );

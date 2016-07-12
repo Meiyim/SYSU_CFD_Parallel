@@ -166,6 +166,12 @@ public:
 	Mat Ap;
 	Mat As;
 
+	// matrix for solid part...(have different dimension)
+	Mat ASolid;
+	Vec bSolid; //(size: nLocolSolid)
+	Vec xsolSolid;
+
+
 	PetscErrorCode ierr;
 	MPI_Comm comm;
 
@@ -173,13 +179,18 @@ public:
 	KSP ksp;	
 	PC pc;
 
+	KSP kspSolid;
+	PC pcSolid;
+
 	/***********MPI_PARAMETER*************/
 	int mpiErr;
 	int comRank;
 	int comSize;
 	int nLocal; 	// number of local cell, same as Ncel
+	int nLocalSolid;
 	int nVirtualCell;
 	int nGlobal;    // number of global cell
+	int nGlobalSolid;
 	int nProcess;   // number of partitions
 	int* gridList;  //size of nProcess , gridList[comRank] == nLocal;
 
@@ -191,8 +202,10 @@ public:
 	DataPartition():
 		comm(MPI_COMM_WORLD),
 		nLocal(0),
+		nLocalSolid(0),//nlocol + nlocalsolid == ncel
 		nVirtualCell(0),
 		nGlobal(0),
+		nGlobalSolid(0),
 		nProcess(0),
 		gridList(NULL),
 		tagCounter(0)
@@ -227,6 +240,8 @@ public:
 
 	int solveScarlar_GMRES(double tol, int maxIter,double const* xs);
 
+	int solveSolidTemp_GMRES(double tol, int maxIter,double const* xs);
+
 	
 	/*************MPI INTERFACE COMMUNICATION***********************
 	 *	collective
@@ -246,7 +261,7 @@ public:
 		}	
 		tagCounter+=2; //same tag in each interface communication
 
-		for(int i=0;i!=nInter;++i){
+		for(size_t i=0;i!=nInter;++i){
 			requests.push_back(sendReq[i]);
 			requests.push_back(recvReq[i]);
 		}

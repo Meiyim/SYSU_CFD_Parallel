@@ -5,11 +5,11 @@ using namespace std;
 
 #define MAX_DOUBLE_ARRAY_COMMUNICATION 18
 #define MAX_CELL_COMMUNICATION 1
+#define PETSC_SOLVE_VERBOSE
 
 int DataPartition::initPetsc(){ //collcetive
 
 	MPI_Barrier(comm);
-
 		
 	//init PETSC vec
 	ierr = VecCreateMPI(comm,nLocal,nGlobal,&bu);CHKERRQ(ierr); 
@@ -44,11 +44,23 @@ int DataPartition::initPetsc(){ //collcetive
 	ierr = MatMPIAIJSetPreallocation(As,MAX_LOCAL_PREALLOCATION,NULL,MAX_LOCAL_PREALLOCATION,NULL);CHKERRQ(ierr);	
 
 	//init KSP context
-	ierr = KSPCreate(comm,&ksp);
+	ierr = KSPCreate(comm,&ksp);CHKERRQ(ierr);
+
+	if(nGlobalSolid!=0){
+		//congjungate heat activated	
+		//seperately context for conjungate heat transfer
+		ierr = VecCreateMPI(comm,nLocalSolid,nGlobalSolid,&bSolid);CHKERRQ(ierr); 
+		ierr = VecSet(bSolid,0.0);CHKERRQ(ierr);
+		ierr = MatCreate(comm,&ASolid);CHKERRQ(ierr);     
+		ierr = MatSetSizes(ASolid,nLocalSolid,nLocalSolid,nGlobalSolid,nGlobalSolid);CHKERRQ(ierr);
+		ierr = MatSetType(ASolid,MATAIJ);CHKERRQ(ierr);
+		ierr = MatMPIAIJSetPreallocation(ASolid,MAX_LOCAL_PREALLOCATION,NULL,MAX_LOCAL_PREALLOCATION,NULL);CHKERRQ(ierr);	
+
+		ierr = KSPCreate(comm,&kspSolid);CHKERRQ(ierr);
+	}
 
 //	printf("PETSC NO. %d init complete, dimension %d x %d = %d\n",comRank,nLocal,nProcess,nGlobal);
 	MPI_Barrier(comm);
-
 	return 0;
 }
 
@@ -97,7 +109,7 @@ int DataPartition::buildInterfaceFromBuffer(int* buffer){
 	
 	printf("partition %d: ninterface: %lu\n",comRank,ninterfaces);
 	for(map<int,Interface>::iterator iter = interfaces.begin();iter!=interfaces.end();++iter){
-		printf("-->%d : width %d\n",iter->first,iter->second.getWidth());
+		printf("-->%d : width %lu\n",iter->first,iter->second.getWidth());
 		iter->second.allocateBuffer();
 	}	
 	
@@ -110,9 +122,8 @@ int DataPartition::buildInterfaceFromBuffer(int* buffer){
  *	scatter geometry data to each partition
  *****************************************************/
 int DataPartition::fetchDataFrom(RootProcess& root){ //collective 
-	int sourceRank=root.rank;
 
-	int destCount=0;
+	///int destCount=0;
 	int* sourceCount = new int[nProcess];
 	int* offsets = new int[nProcess];
 	double* localArray = NULL; 
@@ -127,7 +138,7 @@ int DataPartition::fetchDataFrom(RootProcess& root){ //collective
 		sourceCount[i] = gridList[i];
 		offsets[i] = offsets[i-1] + sourceCount[i];
 	}
-	destCount = nLocal;
+	//destCount = nLocal;
 	ierr = VecGetArray(bu,&localArray);CHKERRQ(mpiErr); //fetch raw pointer of PetscVector;
 
 	//mpiErr = MPI_Scatterv(root.rootuBuffer,sourceCount,offsets,MPI_DOUBLE,
@@ -434,7 +445,7 @@ int DataPartition::solveScarlar_GMRES(double tol,int maxIter,double const* xs){
 	}else{
 #ifdef PETSC_SOLVE_VERBOSE
 		KSPGetIterationNumber(ksp,&iters);
-		PetscPrintf(comm,"KSP GMRES - Pressure Correction converged in %d step! :)\n",iters);
+		PetscPrintf(comm,"KSP GMRES - Universal Scarlar Solver converged in %d step! :)\n",iters);
 #endif
 	}
 

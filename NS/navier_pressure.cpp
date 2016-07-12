@@ -49,7 +49,7 @@ int NavierStokesSolver::CalculatePressure( )
 
 	MPI_Bcast(&deltaP_reference,1,MPI_DOUBLE,root.rank,dataPartition->comm);//communicate to get reference point data;
 
-	for( int i=0; i<Ncel; i++ )//optimizeable
+	for( int i=0; i<Nfluid; i++ )//optimizeable
 	{
 		localRes[3] += fabs( deltaP[i] - deltaP_reference )*Cell[i].vol;
 	
@@ -101,13 +101,11 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 	int i,j, nj,in, cn[7], iface,bnd,rid;
 	double Acn[7], roapf,lambda,lambda2,valcen,bpv,tmp,tmp2,vol, rof,Tf,RUnormal;
 
-
-
-	for( i=0; i<Ncel; i++ )
+	for( i=0; i<Nfluid; i++ )
 	{
-        	valcen = 0.;
+        valcen = 0.;
 		bpv    = 0.;
-        	nj     = 0 ;
+        nj     = 0 ;
 		// compressible gas, perfect gas
 		// ?? d_ro/d_t = d_p/d_t /(RT) ?? source term and diagonal terms ,how to change?
 		if( !IfSteady && DensityModel==1 )
@@ -116,8 +114,9 @@ void NavierStokesSolver::BuildPressureMatrix(Mat& Ap, Vec& bp) //no second press
 			valcen += -Cell[i].vol/( dt*Rcpcv*Tn[i] );
 		}
 		for( j=0; j<Cell[i].nface; j++ )
-        	{
-            		iface= Cell[i].face[j];
+        {
+
+            iface= Cell[i].face[j];
 			// right hand side
 			if( i==Face[iface].cell1 )
 				bpv += RUFace[iface];
@@ -242,9 +241,10 @@ void NavierStokesSolver::CorrectRUFace2( double *dp )
 	// only for inner faces
 	for( i=0; i<Nfac; i++ )
 	{
+		if(Face[i].bnd==INNER_FACE_BOUNDARY_SOLID) continue;
 		c1= Face[i].cell1;
 		c2= Face[i].cell2;
-		if( c2<0 ){
+		if( Face[i].bnd>=0 ){
 			bnd = Face[i].bnd;
 			ruf = BU[bnd]*BRo[bnd];
 			rvf = BV[bnd]*BRo[bnd];

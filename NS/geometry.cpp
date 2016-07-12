@@ -211,6 +211,25 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
     }else{
         OutputGrid(); //output tecplot: grid.dat
     }
+
+    //configure solid part
+    if(SolveConjungateHeat){
+        int _nglobalsolid = 0;
+        for(int i=0;i!=Ncel;++i){
+            if(regionMap[ Cell[i].rid ].type1 == 5 && regionMap[Cell[i].rid].type2== 0 ){
+                //pass
+            }else if(regionMap[ Cell[i].rid ].type1 == 5 && regionMap[Cell[i].rid].type2== 1 ){
+                dataPartition->nLocal--;
+                dataPartition->nLocalSolid++;
+                _nglobalsolid++;
+            }else{
+                assert(false);
+            }
+        }  
+        MPI_Allreduce(&_nglobalsolid,&(dataPartition->nGlobalSolid),1,MPI_DOUBLE,MPI_SUM,dataPartition->comm);
+        dataPartition->nGlobal -= dataPartition->nGlobalSolid;
+    }
+
 	
 	PetscPrintf(dataPartition->comm,"done\n");
 	MPI_Barrier(dataPartition->comm);
@@ -255,7 +274,7 @@ int NavierStokesSolver::CreateFaces( )
        			Face[Nfac].vertices[j] = Bnd[i].vertices[j];
 	        Face[Nfac].bnd     = i   ;  // bnd(i)%rid CXY: Face.bnd is the idx of Bnd
        		Face[Nfac].cell2   = VOID_CELL_ON_BOUNDARY;  // cell1 is not known, set in FindFace
-		Face[Nfac].cell1   = -9999999;
+		    Face[Nfac].cell1   = -9999999;
         	for( j=0;j<4;j++ )
         	{
             		id = Face[Nfac].vertices[j];
@@ -325,7 +344,7 @@ void NavierStokesSolver::FindFace( int ic, int n1, int n2, int n3, int n4, int &
 
     if( fid<0 )
     {
-	Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) );//CXY: not a good idea
+	    Face = (FaceData*)realloc( Face, (Nfac+1)*sizeof(FaceData) );//CXY: not a good idea
         if(Face==NULL){
             errorHandler.fatalRuntimeError("allocate face array fail: system run out of memory") ;
         }
@@ -464,7 +483,7 @@ int NavierStokesSolver::CellFaceInfo()
         for( j=0; j<Cell[i].nface; j++ )
         {
         	iface = Cell[i].face[j];
-		nc    = Face[iface].cell1;
+		    nc    = Face[iface].cell1;
         	if( nc==i )
         		nc = Face[iface].cell2;
 		
@@ -479,53 +498,53 @@ int NavierStokesSolver::CellFaceInfo()
 	    Interface* interface = &iter->second;
 	    interface->recvposi = voidCellCounter;
 	    for(size_t i = 0;i!=interface->sendposis.size();++i){ //for each send posis
-		CellData* thisCell = &Cell[ interface->sendposis[i] ];
-		//debug
-		/*
-		 dataPartition->PRINT_LOG(iter->first);
-		 for(int i=0;i!=8;++i){
-			 dataPartition->PRINT_LOG(thisCell->vertices[i]);
-		 }
-		 set<int> debugset(thisCell->vertices,thisCell->vertices+8);
-		 vector<int> debugvec;
-		 set_intersection(debugset.begin(), debugset.end(),interface->boundNodes.begin(),interface->boundNodes.end(),back_inserter(debugvec));
-		 assert(debugvec.size()>=3);
-		 */
+    		CellData* thisCell = &Cell[ interface->sendposis[i] ];
+    		//debug
+    		/*
+    		 dataPartition->PRINT_LOG(iter->first);
+    		 for(int i=0;i!=8;++i){
+    			 dataPartition->PRINT_LOG(thisCell->vertices[i]);
+    		 }
+    		 set<int> debugset(thisCell->vertices,thisCell->vertices+8);
+    		 vector<int> debugvec;
+    		 set_intersection(debugset.begin(), debugset.end(),interface->boundNodes.begin(),interface->boundNodes.end(),back_inserter(debugvec));
+    		 assert(debugvec.size()>=3);
+    		 */
 
-		for(int k=0;k!=thisCell->nface;++k){
-			int iface = thisCell->face[k];
-			set<int> _st(Face[iface].vertices,Face[iface].vertices+4);
-			if(_st.size() < 3) continue; //not a actual face
-			//vector<int> _res;
-			//set_difference(_st.begin(),_st.end(),interface->boundNodes[i].begin(),interface->boundNodes[i].end(),back_inserter(_res));
-			if(_st == interface->boundNodes[i]){
-				/*
-				if(Face[iface].cell2!=VOID_CELL_ON_INTERFACE){
-					dataPartition->PRINT_LOG(*thisCell);
-					dataPartition->PRINT_LOG( Cell[thisCell->cell[k]] );
-				}
-				*/
-				assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE || Face[iface].cell2 == VOID_CELL_ON_BOUNDARY);
-				Face[iface].cell2 = voidCellCounter;
-				assert(thisCell->cell[k]== VOID_CELL_ON_INTERFACE || thisCell->cell[k]== VOID_CELL_ON_BOUNDARY);
-				thisCell->cell[k] = voidCellCounter;
-                if(Face[iface].bnd >=0 ){
-                    int boundarybid = Bnd[ Face[iface].bnd ].rid;
-                    assert(regionMap[boundarybid].type1==6);
-                    interface->needsTranslate.insert(make_pair(i,boundarybid));
-                }
- 
+    		for(int k=0;k!=thisCell->nface;++k){
+    			int iface = thisCell->face[k];
+    			set<int> _st(Face[iface].vertices,Face[iface].vertices+4);
+    			if(_st.size() < 3) continue; //not a actual face
+    			//vector<int> _res;
+    			//set_difference(_st.begin(),_st.end(),interface->boundNodes[i].begin(),interface->boundNodes[i].end(),back_inserter(_res));
+    			if(_st == interface->boundNodes[i]){
+    				/*
+    				if(Face[iface].cell2!=VOID_CELL_ON_INTERFACE){
+    					dataPartition->PRINT_LOG(*thisCell);
+    					dataPartition->PRINT_LOG( Cell[thisCell->cell[k]] );
+    				}
+    				*/
+    				assert(Face[iface].cell2==VOID_CELL_ON_INTERFACE || Face[iface].cell2 == VOID_CELL_ON_BOUNDARY);
+    				Face[iface].cell2 = voidCellCounter;
+    				assert(thisCell->cell[k]== VOID_CELL_ON_INTERFACE || thisCell->cell[k]== VOID_CELL_ON_BOUNDARY);
+    				thisCell->cell[k] = voidCellCounter;
+                    if(Face[iface].bnd >=0 ){
+                        int boundarybid = Bnd[ Face[iface].bnd ].rid;
+                        assert(regionMap[boundarybid].type1==6);
+                        interface->needsTranslate.insert(make_pair(i,boundarybid));
+                    }
+     
 
-				voidCellCounter++;
-				break;
-			}else {
-				if(k==thisCell->nface-1){
-					assert(false);//debug
-				}
+    				voidCellCounter++;
+    				break;
+    			}else {
+    				if(k==thisCell->nface-1){
+    					assert(false);//debug
+    				}
 
-			}
+    			}
 
-		}
+    		}
 	    }
 		    
     }
@@ -537,10 +556,19 @@ int NavierStokesSolver::CellFaceInfo()
 	PetscInt iStart,iEnd;	
 
 	MatGetOwnershipRange(dataPartition->Au,&iStart,&iEnd);	//global idx this part: [iStart, iEnd);
-	for(int i=0;i!=Ncel;++i){
+	for(i=0;i!=Nfluid;++i){
 		Cell[i].globalIdx = iStart + i;
 	}
-	assert(iEnd == i + iStart);
+    printf("i %d local %d ",i,dataPartition->nLocal);
+    assert(iEnd == i + iStart);
+    if(SolveConjungateHeat){
+        MatGetOwnershipRange(dataPartition->ASolid,&iStart,&iEnd);  //global idx for solid matrix
+        for(i=Nfluid;i!=Nfluid+Nsolid;++i){
+            Cell[i].globalIdx = iStart + i - Nfluid;
+        }
+        assert(iEnd == i + iStart - Nfluid);
+    }
+
 
 	//--------------interface communication to get gloabl index for virtual cell
 	dataPartition->interfaceCommunicationBegin(Cell,&regionMap);
@@ -849,6 +877,12 @@ int NavierStokesSolver::CheckAndAllocate()
 			Ncel,dataPartition->nGlobal,
 			Nbnd,Nvrt,dataPartition->interfaces.size()
 			);
+    if(SolveConjungateHeat){
+        printf("Conjungate Heat Sovler Info: Partition: %d Nfluid: %d(%d)l, NSolid: %d(%d)\n",
+            dataPartition->comRank,
+            Nfluid, dataPartition->nGlobal, Nsolid,dataPartition->nGlobalSolid);
+        
+    }
 	
 
 	return 0;

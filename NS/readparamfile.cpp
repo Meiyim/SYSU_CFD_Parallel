@@ -95,8 +95,15 @@ void NavierStokesSolver::ReadParamFile( )
 			else
 			{
 				char temp[256];
-				sprintf(temp,"Error in raading param.in\tline: %d\n unknown time scheme: %s\n",_linecounter,keyw[3]);
+				sprintf(temp,"Error in reading param.in\tline: %d\n unknown time scheme: %s\n",_linecounter,keyw[3]);
 				errorHandler.fatalLogicError(temp);
+			}
+		}
+		else if(strcmp(keyw[0],"conjungate_heat")==0){
+			if( strcmp(keyw[1],"on")==0){
+				SolveConjungateHeat = true;
+			}else{
+				SolveConjungateHeat = false;
 			}
 		}
 		else if( strcmp(keyw[0],"energy")==0 )
@@ -107,7 +114,7 @@ void NavierStokesSolver::ReadParamFile( )
 				SolveEnergy= false;
 			else{
 				char temp[256];
-				sprintf(temp,"Error in raading param.in\tline: %d\n unknown energy model\n",_linecounter);
+				sprintf(temp,"Error in reading param.in\tline: %d\n unknown energy model\n",_linecounter);
 				errorHandler.fatalLogicError(temp);
 			}
 		}
@@ -297,10 +304,11 @@ void NavierStokesSolver::ReadParamFile( )
 				regionMap[bid].name=keyw[3];
 				regionMap[bid].type1 = 5;
 				regionMap[bid].type2 = 1;//solid
-				if(ikey!=5){
+				if(ikey!=6){
 					errorHandler.fatalLogicError("solid field required 3 parameters");
 				}
 				for(int i=4;i<=ikey;++i){
+					// T, lamda, ro
 					regionMap[bid].initvalues[i-4]= atof( keyw[i] );
 				}
 			}
@@ -334,6 +342,8 @@ void NavierStokesSolver::ReadParamFile( )
 	}
 
 	if( DensityModel == 1 )
+		SolveEnergy = true;
+	if(SolveConjungateHeat)
 		SolveEnergy = true;
 
 	fin.close( );

@@ -142,7 +142,7 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     cout<<"\nLibrary Version used for file creation:"<<version<<endl;
 #endif
     
-    int  i,j, ier;
+    int  i,j;
     // read zone and grid types
     int        ibase = 1,
                zone  = 1;
@@ -154,7 +154,7 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
 
 #ifdef CGNS_VERBOSE
     cout<<"Name of Zone"<<zone<<" is"<<zonename<<endl;
-    printf("zone %d name: %s, size: %d\n",zone,zonename,size);
+    printf("zone %d name: %s, size: %ld\n",zone,zonename,size);
 #endif
     zone=1;
     if(cg_zone_type(icg, ibase, zone, &zonetype))
@@ -176,8 +176,7 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     
     // grid coordinates
     cgsize_t range_min=1,range_max=size;
-    int ncoords, NDim,
-        nnode     = size;
+    int ncoords, NDim;
     DataType_t  datatype;
     char        coordname[200];
     if( cg_ncoords(icg,ibase,zone, &ncoords) )
@@ -231,13 +230,12 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
         }
 
 #ifdef CGNS_VERBOSE
-        printf("%s: type: %s %d --> %d\n",coordname,DataTypeName[datatype],range_min,range_max);
+        printf("%s: type: %s %ld --> %ld\n",coordname,DataTypeName[datatype],range_min,range_max);
 #endif
     }
 
-    int ncell =0;
     // cell connectivity and boundary
-    int       nelem =0, nelem0,count, nsection, parent_flag;
+    int       nsection, parent_flag;
     cgsize_t  ElementDataSize, *elements;
     char      elementSectionName[100];
     cgsize_t  start,end;
@@ -260,7 +258,7 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     rootNElement = 0;
     rootNGlobal = 0;
     for(int section = 1;section<=nsection;++section){
-        ier = cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
+        cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
                  &start,&end,&nbndry,&parent_flag);
 
         if(sectionsToRead.find(string(elementSectionName)) == sectionsToRead.end()){
@@ -292,21 +290,22 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
     size_t iE = 0;
     for( int section=1; section<=nsection; section++ )
     {
-        ier = cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
+        cg_section_read(icg,ibase,zone,section, elementSectionName, &type,
                  &start,&end,&nbndry,&parent_flag);
         if(sectionsToRead.find(string(elementSectionName)) == sectionsToRead.end()){
         	printf("***********************  ignoring section: %s *********************\n",elementSectionName);
         	continue;
         }
 
- #ifdef CGNS_VERBOSE
-        cout<< elementSectionName << ", type:" << cg_ElementTypeName(type) << endl;
- #endif
 
-        ier = cg_ElementDataSize(icg,ibase,zone,section, &ElementDataSize);
+        cg_ElementDataSize(icg,ibase,zone,section, &ElementDataSize);
         elements = new cgsize_t[ElementDataSize];
-        ier = cg_elements_read(icg,ibase,zone,section, elements, NULL );
+        cg_elements_read(icg,ibase,zone,section, elements, NULL );
         int nelem_sec= end-start+1 ;
+
+ #ifdef CGNS_VERBOSE
+        printf("section: %s, type %s, Nelement: %d\n",elementSectionName,cg_ElementTypeName(type),nelem_sec);
+ #endif
         // single-type grids
         if( type != MIXED )
         {
@@ -315,7 +314,7 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
             if( NDim==3 && type>= 5)
             {
     			int _type = -1;
-	            ier = cg_npe(type, &npe);
+	            cg_npe(type, &npe);
 				switch (type){
 				case TRI_3:
 					_type = 2;
@@ -367,7 +366,7 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
             for( i=0; i<nelem_sec; i++ )
             {
                 type = (ElementType_t)elements[count++] ;
-                ier  = cg_npe( type, &npe );
+                cg_npe( type, &npe );
 				int _type = -1;
 				switch (type){
 				case TRI_3:
@@ -409,7 +408,7 @@ void RootProcess::readCGNS(DataPartition* dg, const string& title){
         delete [] elements;
     }
 #ifdef CGNS_VERBOSE
-    printf("nelement %d, nvert %d, nglobal %d\n",rootNElement,rootNVert,rootNGlobal);
+    printf("nelement %lu, nvert %lu, nglobal %lu\n",rootNElement,rootNVert,rootNGlobal);
 #endif
     cg_close(icg);
     cout<<"done"<<endl;
@@ -510,7 +509,7 @@ void RootProcess::buildPeriodicInterface(InputElement** elements,idx_t* xadj, id
 	//check period bc pair:
 	size_t nThisBnd = 0;
 	size_t nThatBnd = 0;
-	for(int i=0;i!=rootNElement;++i){
+	for(size_t i=0;i!=rootNElement;++i){
 		int bid = elements[i]->tag[0];
 		if(bid == thisbid) nThisBnd++;
 		if(bid == thatbid) nThatBnd++;
@@ -530,7 +529,7 @@ void RootProcess::buildPeriodicInterface(InputElement** elements,idx_t* xadj, id
 	double thisCenter[3] = {0.,0.,0.};
 	double thatCenter[3] = {0.,0.,0.};
 
-	for(int i=0;i!=rootNElement;++i){
+	for(size_t i=0;i!=rootNElement;++i){
 		int bid = elements[i]->tag[0];
 		if(bid == thisbid || bid == thatbid){
 			int elemType = elements[i]->type;
@@ -598,7 +597,7 @@ void RootProcess::buildPeriodicInterface(InputElement** elements,idx_t* xadj, id
 	(*regionMap)[thisbid].initvalues[2] = connectionVec[2];
 
 
-	for(int i=0;i!=nThisBnd;++i){ //move to origin point
+	for(size_t i=0;i!=nThisBnd;++i){ //move to origin point
 		for(int j=0;j!=3;++j){
 			thisBnds[i].x[j] -= thisCenter[j];
 			thatBnds[i].x[j] -= thatCenter[j];
@@ -614,8 +613,8 @@ void RootProcess::buildPeriodicInterface(InputElement** elements,idx_t* xadj, id
 	if(vec_len(cross,3) < CRITICAL){
 		//translation periodic
 		set<int> foundSet;
-		for(int i=0;i!=nThisBnd;++i){
-			for(int j=0;j!=nThatBnd;++j){
+		for(size_t i=0;i!=nThisBnd;++i){
+			for(size_t j=0;j!=nThatBnd;++j){
 				if(foundSet.find(j)!=foundSet.end()){
 					continue;
 				}
@@ -734,6 +733,7 @@ void RootProcess::partition(DataPartition* dg, int N){
 	if(ret!=METIS_OK) errorHandler.fatalRuntimeError("METIS Partition error!\n");
 
 
+/*
 	cout<<"start test"<<endl;
 	for(idx_t i=0;i!=_ne;++i){
 		if(xadj[i+1]-xadj[i] > 6){
@@ -746,12 +746,13 @@ void RootProcess::partition(DataPartition* dg, int N){
 					iset.insert(eind[k]);
 				vector<idx_t> inter;
 				std::set_intersection(iset.begin(),iset.end(),jset.begin(),jset.end(),back_inserter(inter));
-				printf("intersection at direction %d is %u",j,inter.size());
+				printf("intersection at direction %ld is %lu",j,inter.size());
 			}
 
 			errorHandler.fatalRuntimeError("METIS Has Problem");	
 		}
 	}
+*/
 
 	delete []eptr;delete [] eind; eptr=NULL;eptr=NULL;
 

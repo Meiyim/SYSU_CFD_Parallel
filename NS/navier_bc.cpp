@@ -180,7 +180,7 @@ void NavierStokesSolver::SetBCDeltaP(double*bp, double *dp)
 	}
 }
 
-void NavierStokesSolver::SetBCTemperature( double *bt )
+void NavierStokesSolver::SetBCTemperature( double *bt)
 {
 	int    i,rid,iface,ic;
 	for( i=0; i<Nbnd; i++ )
@@ -191,6 +191,10 @@ void NavierStokesSolver::SetBCTemperature( double *bt )
 		switch( regionMap[rid].type1 ){
 		case(1):  // wall
 			//remain initial
+			if(regionMap[rid].type2==2){//coupled boundary
+				int isolid = Face[iface].cell2;
+				bt[i] = Tn[isolid];
+			}
 			break;
 		case(2):  // inlet
 			//remain initial

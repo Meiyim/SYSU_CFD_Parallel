@@ -107,10 +107,10 @@ public:
 #define CHECK_ARRAY(arr,len) checkArray(arr,len,#arr)
 #define CHECK_MEMBER_ARRAY(arr,mem,len) checkMemberArray(arr,len,mem,#arr #mem)
 template<typename T>
-void checkArray(T* arr, size_t len,char* name){
+void checkArray(T* arr, size_t len,const char* name){
 	double ret = 0.0;
 	double reduceResult = 0.0;
-	for(int i=0;i!=len;++i){
+	for(size_t i=0;i!=len;++i){
 		ret += (arr[i])*(arr[i]);
 	}
 
@@ -122,7 +122,7 @@ void checkArray(T* arr, size_t len,char* name){
 }
 
 template<typename T>
-void checkMemberArray(T* arr, size_t len, double T::* m_ptr,char* name){
+void checkMemberArray(T* arr, size_t len, double T::* m_ptr,const char* name){
 	double ret = 0.0;
 	double reduceResult = 0.0;
 	for(int i=0;i!=len;++i){

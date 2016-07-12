@@ -101,7 +101,7 @@ double ttime (void)
 //WARNING: if string hash is used, Gmesh rid in param.in should not greeter than 9 !!!
 int stringHash(const std::string& str){
 	int ret = 1;
-	for(int i=0;i!=str.size();++i)
+	for(size_t i=0;i!=str.size();++i)
 		ret += (int)str[i] - (int)'0';
 	return ret;
 }

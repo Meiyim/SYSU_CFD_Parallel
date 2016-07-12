@@ -27,6 +27,7 @@ OBJSFILE		 +=$(BIN)gradient.o
 OBJSFILE		 +=$(BIN)velocity.o
 OBJSFILE		 +=$(BIN)geo.o
 OBJSFILE 		 +=$(BIN)io.o
+OBJSFILE 		 +=$(BIN)cheat.o
 
 MYLINKER = mpicxx ${PCC_LINKER_FLAGS} ${CPPFLAGS}
 
@@ -89,6 +90,9 @@ $(BIN)geo.o: $(NSSRC)geometry.cpp
 	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 $(BIN)io.o: $(NSSRC)navierIO.cpp
+	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
+
+$(BIN)cheat.o: $(NSSRC)ConjungateHeat.cpp
 	$(PETSC_CXXCOMPILE) -o $@ $^ $(CPPFLAGS) $(INCLUDE)
 
 include ${PETSC_DIR}/lib/petsc/conf/test

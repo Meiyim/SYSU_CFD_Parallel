@@ -302,8 +302,9 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	//VecView(bu,PETSC_VIEWER_STDOUT_WORLD);//debug
 
 #ifdef PETSC_SOLVE_VERBOSE
-	double unorm;
+	double unorm,bunorm;
 	VecNorm(xsol,NORM_2,&unorm);
+	VecNorm(bu,NORM_2,&bunorm);
 #endif
 
 	
@@ -337,8 +338,9 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 	}
 
 #ifdef PETSC_SOLVE_VERBOSE
-	double vnorm;
+	double vnorm,bvnorm;
 	VecNorm(xsol,NORM_2,&vnorm);
+	VecNorm(bv,NORM_2,&bvnorm);
 #endif
 
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
@@ -370,11 +372,12 @@ int DataPartition::solveVelocity_GMRES(double tol, int maxIter,double const *xu,
 #endif
 	}
 #ifdef PETSC_SOLVE_VERBOSE
-	double wnorm;
+	double wnorm,bwnorm;
 	VecNorm(xsol,NORM_2,&wnorm);
-	PetscPrintf(comm,"Unorm %f\n",unorm);
-	PetscPrintf(comm,"Vnorm %f\n",vnorm);
-	PetscPrintf(comm,"Wnorm %f\n",wnorm);
+	VecNorm(bw,NORM_2,&bwnorm);
+	PetscPrintf(comm,"Unorm %f bU_norm %f\n",unorm,bunorm);
+	PetscPrintf(comm,"Vnorm %f bV_norm %f\n",vnorm,bvnorm);
+	PetscPrintf(comm,"Wnorm %f bW_norm %f\n",wnorm,bwnorm);
 #endif	
 	ierr = VecDestroy(&xsol);CHKERRQ(ierr);
 

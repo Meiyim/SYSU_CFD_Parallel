@@ -62,10 +62,11 @@ int main(int argc, char* argv[]){
 	//build faces. same sequence as Original;
 	nsSolver->CreateFaces();
 	nsSolver->CellFaceInfo();
-	nsSolver->CheckAndAllocate();
 
 	//Reorder Fluid & Solid
 	nsSolver->buildCoupledFace();
+
+	nsSolver->CheckAndAllocate();
 
 	nsSolver->InitFlowField();
 	

@@ -159,13 +159,15 @@ public:
     double lambda;   // lambda for left, (1.-lambda) for right
     double rlencos;     // area/(|Xpn|*vect_cosangle(n,Xpn))
     double Xpac[3],Xnac[3]; // auxiliary points
+    void* info; //some auxiliary data...
     FaceData():
 	    bnd(CYCASHUGE_I),
 	    cell1(CYCASHUGE_I),
 	    cell2(CYCASHUGE_I),
 	    area(CYCASHUGE_D),
 	    lambda(CYCASHUGE_D),
-	    rlencos(CYCASHUGE_D)
+	    rlencos(CYCASHUGE_D),
+	    info(NULL)
 	{
 		for(int i=0;i!=4;++i)
 			vertices[i] = CYCASHUGE_I;
@@ -245,8 +247,12 @@ struct BoundaryData
     double  h;               // local heattransfer coef.
     double  q;               // local heat flux (in W/m2)
     double  T;               // local wall temperature
-    BoundaryData(){
-    	for(int i=0;i!=3;++i)	
+    void* info;	//some auxilary data...
+    BoundaryData():
+    yplus(0.0),uplus(0.0),h(0.0),q(0.0),T(0.0),
+    info(NULL)
+    {
+    		for(int i=0;i!=3;++i)	
     		shear[i] = 0.;
     }
 };

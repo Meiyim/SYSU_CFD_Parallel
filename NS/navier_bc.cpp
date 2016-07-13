@@ -10,11 +10,12 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 	int    i,rid,iface,ic;
 	double unormal,sav1n,sav2n,sav3n;
 
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
 		ic    = Face[iface].cell1;
+		assert(regionMap[Cell[ic].rid].type2 ==0);
 		switch( regionMap[rid].type1 ){
 		case(1):  // wall
 			br[i]= Rn[ic];
@@ -66,10 +67,11 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 		double &massflowin=localSum[0], &massflowout=localSum[1], &areaout=localSum[2];
 		double &massflowinGlobal = globalSum[0], &massflowoutGlobal=globalSum[1],&areaoutGlobal=globalSum[2];
 		double rate;
-		for( i=0; i<Nbnd; i++ )
+		for( i=0; i<NfluidBnd; i++ )
 		{
 			rid   = Bnd[i].rid;
 			iface = Bnd[i].face;
+			ic    = Face[iface].cell1;
 			if( regionMap[rid].type1==2 )
 				massflowin  += br[i]*( 	bu[i]*Face[iface].n[0] +
 						       bv[i]*Face[iface].n[1] +
@@ -86,7 +88,7 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 		//
 		if( fabs(massflowoutGlobal)>SMALL ){
 			rate = - massflowinGlobal / massflowoutGlobal;
-			for( i=0; i<Nbnd; i++ )
+			for( i=0; i<NfluidBnd; i++ )
 			{
 				rid   = Bnd[i].rid;
 				iface = Bnd[i].face;
@@ -102,7 +104,7 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 		else
 		{
 			rate = (-massflowinGlobal - massflowoutGlobal)/areaoutGlobal;
-			for( i=0; i<Nbnd; i++ )
+			for( i=0; i<NfluidBnd; i++ )
 			{
 				rid   = Bnd[i].rid;
 				iface = Bnd[i].face;
@@ -121,7 +123,7 @@ void NavierStokesSolver::SetBCVelocity( double *br, double *bu,double *bv,double
 void NavierStokesSolver::SetBCPressure(double*bp)
 {
 	int    i,rid,iface,ic;
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
@@ -157,7 +159,7 @@ void NavierStokesSolver::SetBCPressure(double*bp)
 void NavierStokesSolver::SetBCDeltaP(double*bp, double *dp)
 {
 	int    i,rid,iface,ic;
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
@@ -183,7 +185,7 @@ void NavierStokesSolver::SetBCDeltaP(double*bp, double *dp)
 void NavierStokesSolver::SetBCTemperature( double *bt)
 {
 	int    i,rid,iface,ic;
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
@@ -192,7 +194,8 @@ void NavierStokesSolver::SetBCTemperature( double *bt)
 		case(1):  // wall
 			//remain initial
 			if(regionMap[rid].type2==2){//coupled boundary
-				int isolid = Face[iface].cell2;
+				int cpface = COUPLED_FACE_ID(Face[iface].cell2);
+				int isolid = Face[cpface].cell1;
 				bt[i] = Tn[isolid];
 			}
 			break;
@@ -229,7 +232,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 
 	/*ofstream of;
 	of.open("wallcell.dat");
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
@@ -242,14 +245,14 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 	double* debugArray = new double[Nbnd];
 
 	CHECK_ARRAY(ED,Ncel);
-	for(i=0;i<Nbnd;++i){
+	for(i=0;i<NfluidBnd;++i){
 		debugArray[i] = 0.0;
 	}
 	*/
 
 	
 
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
@@ -290,7 +293,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		}
 	}
 
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
@@ -305,7 +308,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		}
 	}
 	
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
@@ -317,7 +320,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 		}
 	}
 
-	for( i=0; i<Nbnd; i++ )
+	for( i=0; i<NfluidBnd; i++ )
 	{
 		rid   = Bnd[i].rid;
 		iface = Bnd[i].face;
@@ -330,7 +333,7 @@ void NavierStokesSolver::SetBCKEpsilon(double *TESource,double *EDSource,double 
 	}
 
 	/*
-	for(int i=0;i!=Nbnd;++i){
+	for( i=0; i<NfluidBnd; i++ )
 		debugArray[i] = B[i];
 	}
 	*/

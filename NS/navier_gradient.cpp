@@ -20,15 +20,13 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
         		phigd[i][g]= 0.;
 
 
-	for( i=0; i<Nfac; i++ )
+	for( i=0; i<NfluidFac; i++ )
 	{
        	lambda = Face[i].lambda;
        	c1     = Face[i].cell1;
        	c2     = Face[i].cell2;
-        if(Face[i].bnd==INNER_FACE_BOUNDARY_SOLID){
-            //face in solid part;
-            continue;
-        }else if( Face[i].bnd<0){
+        assert(Face[i].bnd!=INNER_FACE_BOUNDARY_SOLID);
+        if( Face[i].bnd<0){
 			pf = lambda*phi[c1] + (1.-lambda)*phi[c2];
 			for( g=0;g<3;g++ ){
 				phigd[c1][g] += pf * Face[i].n[g];
@@ -45,7 +43,7 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 		}
 	}
 
-	CHECK_ARRAY(phi,Ncel);
+	CHECK_ARRAY(phi,Nfluid);
 	//CHECK_ARRAY(ED,Ncel);
 
    	for( i=0; i<Nfluid; i++ ){
@@ -70,7 +68,7 @@ int NavierStokesSolver::Gradient( double *phi, double *Bphif, double **phigd )
 	else
 		ErrorStop("no such limiter choice");
 
-	CHECK_ARRAY(phigd[0],3*Ncel);
+	CHECK_ARRAY(phigd[0],3*Nfluid);
 	dataPartition->interfaceCommunicationBegin(phigd);			
 	dataPartition->interfaceCommunicationEnd();
 	return 0;
@@ -239,7 +237,7 @@ int NavierStokesSolver::Limiter_MLP(double UC[],double **GradU)
 
 int NavierStokesSolver::Limiter_Barth(double UC[],double **GradU,size_t first,size_t last)
 {
-    int    i,j,iv,in;
+    int    j,iv,in;
     double *ficell, fi,umin,umax,dx,dy,dz,us;
     ficell = new double[last-first];
     ficell-= first;
@@ -271,7 +269,7 @@ int NavierStokesSolver::Limiter_Barth(double UC[],double **GradU,size_t first,si
         }
         ficell[i]= fi;
     }
-    for( i=0; i<Nfluid; i++ )
+    for( size_t i=first; i<last; i++ )
     {
         GradU[i][0] = ficell[i] * GradU[i][0];
         GradU[i][1] = ficell[i] * GradU[i][1];

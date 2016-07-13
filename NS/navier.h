@@ -15,9 +15,10 @@
 
 #define RESIDUAL_LEN 10
 #define VOID_CELL_ON_BOUNDARY -10
-#define VOID_CELL_ON_INTERFACE -20
+#define VOID_CELL_ON_INTERFACE -1
 #define INNER_FACE_BOUNDARY -10 
 #define INNER_FACE_BOUNDARY_SOLID -11
+#define COUPLED_FACE_ID(cellid) cellid-VOID_CELL_ON_BOUNDARY
 
 
 using std::cout;
@@ -107,6 +108,9 @@ public:
     BoundaryData *Bnd;
 
     int Nfluid, Nsolid;//Conjungate HeatTransfer: 0 ----> Nfluid ----> Nsolid+Nfluid(NCel)
+    int NfluidBnd;
+    int NfluidFac;
+
 
 
 	/**************POINTERS TO this->field*******************/
@@ -154,7 +158,7 @@ public:
 
 // Geometry
 
-	void OutputGrid      (); //modified by CXY
+	void OutputGrid      (const string&, int,int N); //modified by CXY
 	void OutputGridBinary();
 	int  CreateFaces     ( );
 	void FindFace( int, int,int,int,int, int&, set<int>* );

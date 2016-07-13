@@ -55,10 +55,9 @@ void NavierStokesSolver::OutputGridBinary(){
 
 
 // output grid to tecplot for validation
-void NavierStokesSolver::OutputGrid()
+void NavierStokesSolver::OutputGrid(const string& title,int type,int N)
 {
 	int i;
-	string title("tec/grid.dat");
 	ofstream of;
 	int head =0;
 	
@@ -75,7 +74,7 @@ void NavierStokesSolver::OutputGrid()
 
 	sbuffer="";
 	//sprintf(cbuffer,"ZONE T=part%d N=%d, E=%d, VARLOCATION=([1-3]=NODAL,[4-%d]=CELLCENTERED) DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n",dataPartition->comRank,Nvrt,Ncel,4);
-	sprintf(cbuffer,"zone n=%d, e=%d, f=fepoint, et=BRICK\n",Nvrt,Ncel);
+	sprintf(cbuffer,"zone n=%d, e=%d, f=fepoint, et=BRICK\n",Nvrt,N);
 	sbuffer=cbuffer;
 
 	map<int, set<int> > nodesSets;
@@ -103,6 +102,7 @@ void NavierStokesSolver::OutputGrid()
 	}
 
 	for( i=0; i<Ncel; i++ ){
+		if(regionMap[Cell[i].rid].type2 != type) continue;
 		sprintf(cbuffer,"%8d %8d %8d %8d %8d %8d %8d %8d\n",
 				Cell[i].vertices[0]+1,
 				Cell[i].vertices[1]+1,

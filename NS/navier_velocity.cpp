@@ -96,6 +96,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 		Limiter_WENO( Wn, dWdX );
 		Limiter_WENO( Pn, dPdX );
 	}*/
+	Checker ck("ck in velocity");
 
 	for( i=0; i<Nfluid; i++ )
 	{
@@ -131,6 +132,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 			if( in<0 ) // boundary, i=ip naturally
 			{
 				bnd= Face[iface].bnd;
+				assert(bnd>=0);
 				rid= Bnd[bnd].rid;
 				sav1   = Face[iface].n[0];
 				sav2   = Face[iface].n[1];
@@ -282,6 +284,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 				apn[nj]    += -ViscAreaLen;
 				ani[nj]     =  Cell[in].globalIdx;// in is the idx of virtual cell, cellglobalidx[in] is the global idx for matrix build
 				nj ++ ;
+				ck.check(Face[iface].rlencos);
 
 				// convection to source term. (high order schemes)
 				if( RUnormal>0. )
@@ -382,6 +385,7 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 
 	}
 
+	ck.report();
 	MatAssemblyBegin(Au,MAT_FINAL_ASSEMBLY);
 	VecAssemblyBegin(bu);
 	VecAssemblyBegin(bv);
@@ -396,12 +400,11 @@ void NavierStokesSolver::CalRUFace( )
 {
 	int i, bnd, c1,c2;
 	double ruf,rvf,rwf,lambda,lambda2;
-	for( i=0; i<Nfac; i++ )
+	for( i=0; i<NfluidFac; i++ )
 	{
 		c1 = Face[i].cell1;
 		c2 = Face[i].cell2;
-		if(Face[i].bnd==INNER_FACE_BOUNDARY_SOLID) continue;
-
+		assert(Face[i].bnd!=INNER_FACE_BOUNDARY_SOLID);
 		if( Face[i].bnd>=0 )
 		{
 			bnd= Face[i].bnd;
@@ -429,11 +432,11 @@ void NavierStokesSolver::CalRUFace2( )
 	int i, bnd, c1,c2;
 	double rf,ruf,rvf,rwf,lambda,lambda2, /*sav1n,sav2n,sav3n*/dpx,dpy,dpz,dpn,
 		dx[3],P1,P2,d12,aprf,vol;
-	for( i=0; i<Nfac; i++ )
+	for( i=0; i<NfluidFac; i++ )
 	{
 		c1 = Face[i].cell1;
 		c2 = Face[i].cell2;
-		if(Face[i].bnd==INNER_FACE_BOUNDARY_SOLID) continue;
+		assert(Face[i].bnd!=INNER_FACE_BOUNDARY_SOLID);
 		if((bnd=Face[i].bnd)>=0)
 		{
 			ruf= BU[bnd]*BRo[bnd];

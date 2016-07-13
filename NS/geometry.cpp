@@ -206,11 +206,6 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
 	delete[] elementBuffer;
 
 	MPI_Barrier(dataPartition->comm);
-    if(shouldOutputBinary){
-        OutputGridBinary();
-    }else{
-        OutputGrid(); //output tecplot: grid.dat
-    }
 
     //configure solid part
     if(SolveConjungateHeat){
@@ -230,7 +225,14 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
         dataPartition->nGlobal -= dataPartition->nGlobalSolid;
     }
 
+    if(shouldOutputBinary){
+        OutputGridBinary();
+    }else{
+        OutputGrid("tec/grid.dat",0,dataPartition->nLocal); //output tecplot: grid.dat
+        OutputGrid("tec/grid_solid.dat",1,dataPartition->nLocalSolid); //output tecplot: grid.dat
+    }
 	
+
 	PetscPrintf(dataPartition->comm,"done\n");
 	MPI_Barrier(dataPartition->comm);
    	return 0;
@@ -549,6 +551,11 @@ int NavierStokesSolver::CellFaceInfo()
 		    
     }
     assert(voidCellCounter==Ncel+dataPartition->nVirtualCell);
+    for(map<int,Interface>::iterator iter = dataPartition->interfaces.begin();iter!=dataPartition->interfaces.end();++iter){
+	    Interface* interface = &iter->second;
+	    interface->boundNodes.clear();
+    }
+
     /*************************************************
      *	configure cellGlobalIdx, CXY
      *************************************************/
@@ -559,7 +566,6 @@ int NavierStokesSolver::CellFaceInfo()
 	for(i=0;i!=Nfluid;++i){
 		Cell[i].globalIdx = iStart + i;
 	}
-    printf("i %d local %d ",i,dataPartition->nLocal);
     assert(iEnd == i + iStart);
     if(SolveConjungateHeat){
         MatGetOwnershipRange(dataPartition->ASolid,&iStart,&iEnd);  //global idx for solid matrix
@@ -789,7 +795,7 @@ int NavierStokesSolver::CheckAndAllocate()
 	{
 		c1= Face[i].cell1;
 		c2= Face[i].cell2;
-		if( c2==VOID_CELL_ON_BOUNDARY || c2>=0 ) continue;
+		if( c2<=VOID_CELL_ON_BOUNDARY || c2>=0 ) continue;
 		char temp[256];
 		sprintf(temp,"error in face right hand side\nfaceID: %d, cell1:%d cell2 %d\n",i,c1,c2);
 		errorHandler.fatalLogicError(temp);

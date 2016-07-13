@@ -239,9 +239,9 @@ void NavierStokesSolver::CorrectRUFace2( double *dp )
 	double ruf,rvf,rwf;
 
 	// only for inner faces
-	for( i=0; i<Nfac; i++ )
+	for( i=0; i<NfluidFac; i++ )
 	{
-		if(Face[i].bnd==INNER_FACE_BOUNDARY_SOLID) continue;
+		assert(Face[i].bnd!=INNER_FACE_BOUNDARY_SOLID);
 		c1= Face[i].cell1;
 		c2= Face[i].cell2;
 		if( Face[i].bnd>=0 ){
@@ -283,14 +283,14 @@ void NavierStokesSolver::CorrectRUFace2( double *dp )
 		sum[i] = 0.0;
 	}
 	
-	for(int i=0;i!=Nfac;++i){
+	for(int i=0;i!=NfluidFac;++i){
 		c1 = Face[i].cell1;
 		c2 = Face[i].cell2;
 		if(c2<0) continue;
 		sum[c1] -=  RUFace[i];
 		sum[c2] += RUFace[i];
 	}
-	for(int i=0;i!=Ncel;++i){
+	for(int i=0;i!=Nfluid;++i){
 		dataPartition->PRINT_LOG(sum[i]);
 	}
 	checkArray(sum,Ncel,"sumRUFace");

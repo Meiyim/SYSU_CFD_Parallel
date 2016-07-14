@@ -5,7 +5,7 @@ using namespace std;
 
 #define MAX_DOUBLE_ARRAY_COMMUNICATION 18
 #define MAX_CELL_COMMUNICATION 1
-#define PETSC_SOLVE_VERBOSE
+//#define PETSC_SOLVE_VERBOSE
 
 int DataPartition::initPetsc(){ //collcetive
 

@@ -1216,15 +1216,15 @@ void RootProcess::printSolutionNotGood(DataPartition* dg){
 	printf("********   Iteration exceed step limitaion  ******\n");	
 	printf("**************************************************\n");	
 }
-void RootProcess::printStepStatus(DataPartition*dg, int step,int piter ,double time,double dt,double res){
+void RootProcess::printStepStatus(DataPartition*dg, int step,int piter ,double time,double dt,double res,const std::string& reason){
 	if(dg->comRank!=rank) return;
-	printf("%15f\t%10d\t%10d\t%13.4f\t%15.10f\n",time,step,piter,dt,res);
+	printf("%10f\t%10d\t%10d\t%10.4f\t%10.6e%10s\n",time,step,piter,dt,res,reason.c_str());
 }
-void RootProcess::printSteadyStatus(DataPartition*dg,int outiter,double res){
+void RootProcess::printSteadyStatus(DataPartition*dg,int outiter,double res,const std::string& reason){
 	if(dg->comRank!=rank) return;
-	printf("%15s\t%10s\t%10d\t%13s\t%15.10f\n","---","---",outiter,"---",res);
+	printf("%10s\t%10s\t%10d\t%10s\t%10.6e%10s\n","---","---",outiter,"---",res,reason.c_str());
 }
 void RootProcess::printSectionHead(DataPartition* dg){
 	if(dg->comRank!=rank) return;
-		printf("%15s\t%10s\t%10s\t%13s\t%15s\n","TIME","CAL STEP","ITER","DELT","MAX RES");
+		printf("%10s\t%10s\t%10s\t%10s\t%10s%10s\n","TIME","CAL STEP","ITER","DELT","MAX RES","REASON");
 }

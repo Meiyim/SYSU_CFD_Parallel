@@ -22,6 +22,7 @@ double vec_dot   (double[], double[], int);
 double vec_len   (double[], int );
 void   vec_cross (double[], double[], double[]); // only for C[3]= A[3] x B[3];
 double vec_max   (double[], int );
+size_t vec_max_id   (double[], int );
 
 
 /*

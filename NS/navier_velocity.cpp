@@ -96,7 +96,6 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 		Limiter_WENO( Wn, dWdX );
 		Limiter_WENO( Pn, dPdX );
 	}*/
-	Checker ck("ck in velocity");
 
 	for( i=0; i<Nfluid; i++ )
 	{
@@ -284,7 +283,6 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 				apn[nj]    += -ViscAreaLen;
 				ani[nj]     =  Cell[in].globalIdx;// in is the idx of virtual cell, cellglobalidx[in] is the global idx for matrix build
 				nj ++ ;
-				ck.check(Face[iface].rlencos);
 
 				// convection to source term. (high order schemes)
 				if( RUnormal>0. )
@@ -385,7 +383,6 @@ void NavierStokesSolver::BuildVelocityMatrix(Mat& Au, Vec&bu, Vec& bv, Vec& bw)
 
 	}
 
-	ck.report();
 	MatAssemblyBegin(Au,MAT_FINAL_ASSEMBLY);
 	VecAssemblyBegin(bu);
 	VecAssemblyBegin(bv);

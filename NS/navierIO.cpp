@@ -419,6 +419,7 @@ void NavierStokesSolver::OutputMoniter( )
 			reg.vectorRecord[0]  += Bnd[i].shear[0];
 			reg.vectorRecord[1]  += Bnd[i].shear[1];
 			reg.vectorRecord[2]  += Bnd[i].shear[2];
+			reg.scarlarRecord += Bnd[i].q;
 		}
 	}
 

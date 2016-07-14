@@ -182,8 +182,10 @@ void NavierStokesSolver::SetBCDeltaP(double*bp, double *dp)
 	}
 }
 
+
 void NavierStokesSolver::SetBCTemperature( double *bt)
 {
+	double cpfacceRecord = 0.0;
 	int    i,rid,iface,ic;
 	for( i=0; i<NfluidBnd; i++ )
 	{
@@ -195,8 +197,11 @@ void NavierStokesSolver::SetBCTemperature( double *bt)
 			//remain initial
 			if(regionMap[rid].type2==2){//coupled boundary
 				int cpface = COUPLED_FACE_ID(Face[iface].cell2);
+				assert(cpface>=NfluidFac||cpface<Nfac);
 				int isolid = Face[cpface].cell1;
+				assert(isolid>=Nfluid);
 				bt[i] = Tn[isolid];
+				cpfacceRecord += Tn[isolid];
 			}
 			break;
 		case(2):  // inlet
@@ -218,6 +223,8 @@ void NavierStokesSolver::SetBCTemperature( double *bt)
 			errorHandler.fatalLogicError(temp);
 		}
 	}
+	printf("coupled boundary average tempearture %e\n",cpfacceRecord/(2*NcoupledBnd));
+
 }
 
 void NavierStokesSolver::SetBCSpecies ( double **brs )

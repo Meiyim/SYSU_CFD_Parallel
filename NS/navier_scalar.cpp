@@ -221,6 +221,7 @@ void NavierStokesSolver::UpdateEnergy( )
 
 	// part of viscous terms
 	if( DensityModel==1 ){
+	/*
 	int c1,c2;
 	double VisL,VisT,vmul,dudx,dudy,dudz,dvdx,dvdy,dvdz,dwdx,dwdy,dwdz,
 		vlac,div,txx,tyy,tzz,txy,txz,tyz, vxg,vyg,vzg,btx,bty,btz,fvis,lambda,lambda2;
@@ -285,6 +286,7 @@ void NavierStokesSolver::UpdateEnergy( )
 		ESource[c2] -= fvis; //CXY: dissipation source term due to compressibility
                              //CX: why is this integral done on face? i supposed it should be done in volumn
 	}
+		*/
 	}//end if : densityModel == 1
 
 	// boundary
@@ -308,6 +310,9 @@ void NavierStokesSolver::UpdateEnergy( )
 	}
 // build matrix
 	BuildScalarMatrix( 1, Tn,BTem,kcond,ESource,ApE,dataPartition->As,dataPartition->bs );
+	// record original solve
+	double* const _array = new double[Nfluid];
+	std::copy(Tn,Tn+Nfluid,_array);
 	// Solve equations
 	try{
 		dataPartition->solveScarlar_GMRES(1.e-8,500,Tn);
@@ -320,6 +325,11 @@ void NavierStokesSolver::UpdateEnergy( )
 	//********************MPI INTERFACE COMMUNICATION*****************************//
 	dataPartition->interfaceCommunicationBegin(Tn);
 	dataPartition->interfaceCommunicationEnd();
+
+	for(int i=0;i!=Nfluid;++i){
+		localRes[4] += fabs(_array[i] - Tn[i])*Cell[i].vol;
+	}
+	delete [] _array;
 
 	if(SolveConjungateHeat){
 		SetBCSolidTemperature(dPhidX,kcond);

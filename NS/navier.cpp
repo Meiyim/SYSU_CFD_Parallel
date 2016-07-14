@@ -21,6 +21,9 @@ void NavierStokesSolver::NSSolve( )
 	timeval tstart ={0,0};
 	timeval tCheckout = {0,0};
 	timeval tend ={0,0};
+	const char* convergeReason[7] = {
+		"u","v","w","p","t","speices","solidT"
+	};
 	
 	//profiling
 	PetscLogStage buildVelocityStage = 1;
@@ -83,7 +86,7 @@ void NavierStokesSolver::NSSolve( )
 			if( SolveEnergy  ) {
 				UpdateEnergy ( );
 				if(SolveConjungateHeat){
-					//UpdateSolidTempconjunerature();
+					UpdateSolidTemperature();
 				}
 			}
 
@@ -95,14 +98,15 @@ void NavierStokesSolver::NSSolve( )
 			/*-----------check if should break----------*/
 			MPI_Allreduce(localRes,Residual,RESIDUAL_LEN,MPI_DOUBLE,MPI_SUM,dataPartition->comm);
 			ResMax = vec_max( Residual,RESIDUAL_LEN );
-			
+			std::string reason(convergeReason[vec_max_id(Residual,RESIDUAL_LEN)]);
+
 			if( IfSteady ){
 				//steady
-				root.printSteadyStatus(dataPartition,step,ResMax);
+				root.printSteadyStatus(dataPartition,step,ResMax,reason);
 				break;
 			}else{
 				//unsteady
-				root.printStepStatus(dataPartition,step,iter,cur_time,dt,ResMax);
+				root.printStepStatus(dataPartition,step,iter,cur_time,dt,ResMax,reason);
 				if( iter == 1 ) ResMax0 = ResMax;
 				if( /*ResMax<1.e-4 ||*/ ResMax0/(ResMax+1.e-16)>100. ){
 					break; // more reasonal to break : order drop 2

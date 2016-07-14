@@ -18,7 +18,7 @@
 #define VOID_CELL_ON_INTERFACE -1
 #define INNER_FACE_BOUNDARY -10 
 #define INNER_FACE_BOUNDARY_SOLID -11
-#define COUPLED_FACE_ID(cellid) cellid-VOID_CELL_ON_BOUNDARY
+#define COUPLED_FACE_ID(cellid) VOID_CELL_ON_BOUNDARY-cellid
 
 
 using std::cout;

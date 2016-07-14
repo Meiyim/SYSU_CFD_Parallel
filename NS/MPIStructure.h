@@ -403,8 +403,8 @@ public:
 	 * *************************************************/
 	void printStarter(DataPartition*);
 	void printEnding(DataPartition*, double);
-	void printStepStatus(DataPartition* , int,int,double,double,double);
-	void printSteadyStatus(DataPartition*,int,double);
+	void printStepStatus(DataPartition* , int,int,double,double,double,const std::string&);
+	void printSteadyStatus(DataPartition*,int,double,const std::string&);
 	void printSectionHead(DataPartition*);
 	void printSolutionNotGood(DataPartition*);
 

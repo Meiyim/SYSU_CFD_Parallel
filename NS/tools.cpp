@@ -49,6 +49,16 @@ double vec_max   (double *a, int n)
         s = CYCASMAX( s, a[i] );
     return s;
 }
+size_t vec_max_id   (double *a, int n){
+     size_t s=0;
+     double max = 0.;
+    for( int i=0; i<n; i++ )
+	    if(a[i]>max){
+		    max = a[i];
+		    s = i;
+	    }
+    return s;
+}
 
 // solution procedure : JacobiIter, SORForwIter, SORBackwIter, and SSORIter
 //               ChebyshevIter, CGIter, CGNIter, GMRESIter, BiCGIter, QMRIter, CGSIter, BiCGSTABIter

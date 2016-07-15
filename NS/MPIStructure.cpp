@@ -5,7 +5,9 @@ using namespace std;
 
 #define MAX_DOUBLE_ARRAY_COMMUNICATION 18
 #define MAX_CELL_COMMUNICATION 1
-//#define PETSC_SOLVE_VERBOSE
+#define PETSC_SOLVE_VERBOSE
+
+
 
 int DataPartition::initPetsc(){ //collcetive
 
@@ -429,11 +431,13 @@ int DataPartition::solveScarlar_GMRES(double tol,int maxIter,double const* xs){
 	 ***************************************/
 	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xs,&xsol);CHKERRQ(ierr); 
 	ierr = VecAssemblyBegin(xsol);			CHKERRQ(ierr);
+	ierr = VecAssemblyEnd(xsol);
 	
 #ifdef PETSC_SOLVE_VERBOSE
-	//double snorm;
-	//VecNorm(bs,NORM_2,&snorm);
-	//PetscPrintf(comm,"snorm %e\n",spnorm);
+	double sbnorm,snorm;
+	VecNorm(bs,NORM_2,&sbnorm);
+	VecNorm(xsol,NORM_2,&snorm);
+	PetscPrintf(comm,"snorm %e, sbnorm %e\n",snorm,sbnorm);
 #endif
 	ierr = KSPSolve(ksp,bs,xsol);CHKERRQ(ierr);
 
@@ -500,6 +504,7 @@ int DataPartition::solvePressureCorrection(double tol, int maxIter,double const*
 	 ***************************************/
 	ierr = VecCreateMPIWithArray(comm,1,nLocal,nGlobal,xp,&xsol);CHKERRQ(ierr); 
 	ierr = VecAssemblyBegin(xsol);			CHKERRQ(ierr);
+	ierr = VecAssemblyEnd(xsol);			CHKERRQ(ierr);
 	
 #ifdef PETSC_SOLVE_VERBOSE
 	double bpnorm;

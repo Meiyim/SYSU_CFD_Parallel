@@ -510,7 +510,7 @@ void NavierStokesSolver::initSolverParam()
 	URF[4]= 0.8;  // T
 	URF[5]= 0.8;  // k
 	URF[6]= 0.8;  // e
-	URF[7]= 0.8;  // scalar
+	URF[7]= 0.8;  // solidT
 
 	limiter = 0;
 

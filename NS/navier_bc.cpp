@@ -223,7 +223,12 @@ void NavierStokesSolver::SetBCTemperature( double *bt)
 			errorHandler.fatalLogicError(temp);
 		}
 	}
-	printf("coupled boundary average tempearture %e\n",cpfacceRecord/(2*NcoupledBnd));
+	double totTemp=0.0;
+	int totncp = 0;
+
+	MPI_Reduce(&cpfacceRecord,&totTemp,1,MPI_DOUBLE,MPI_SUM,root.rank,dataPartition->comm);
+	MPI_Reduce(&NcoupledBnd,&totncp,1,MPI_INT,MPI_SUM,root.rank,dataPartition->comm);
+	PetscPrintf(dataPartition->comm,"Average Coupled Boundary Temperature : %f\n",totTemp/double(totncp));
 
 }
 

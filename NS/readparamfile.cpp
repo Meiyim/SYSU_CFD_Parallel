@@ -151,7 +151,22 @@ void NavierStokesSolver::ReadParamFile( )
 		{
 			URF[0] = URF[1] = URF[2] = atof( keyw[1] );
 			URF[3] = atof( keyw[2] );
-			URF[4] = atof( keyw[3] );
+			if(SolveEnergy){
+				if(ikey<=2)
+					errorHandler.fatalLogicError("not enough relaxation factor for Energy");
+				URF[4] = atof( keyw[3] );
+			}
+			if(TurModel==1){
+				if(ikey<=4)	
+					errorHandler.fatalLogicError("not enough relaxation factor for turbulence model 1");
+				URF[5] = atof( keyw[4] );
+				URF[6] = atof( keyw[5] );
+			}
+			if(SolveConjungateHeat){
+				if(ikey<=5)
+					errorHandler.fatalLogicError("not enough relaxation factor for Solid Temperature");
+				URF[7] = atof(keyw[6]);
+			}
 		}
 		else if( strcmp(keyw[0],"limiter")==0 )
 		{

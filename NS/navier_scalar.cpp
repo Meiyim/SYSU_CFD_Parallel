@@ -216,7 +216,8 @@ void NavierStokesSolver::UpdateEnergy( )
 	// prepare the diffusion coefficient and source terms
 	for( i=0; i<Nfluid; i++ )
 	{
-		kcond[i] = cp*(VisLam[i]/prl + VisTur[i]/prte)/cp;//only for gas i surpose
+		//kcond[i] = cp*(VisLam[i]/prl + VisTur[i]/prte)/cp;//only for gas i surpose
+		kcond[i] = 0.6; // water heat conductivity;
 	}
 
 	// part of viscous terms
@@ -471,6 +472,9 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 					app += ViscAreaLen;
 					fde  = Visc*( dphidx*sav1 + dphidy*sav2 + dphidz*sav3 );
 					fdi  = ViscAreaLen*( dphidx*dxc[0] + dphidy*dxc[1] + dphidz*dxc[2] - BPhi[bnd] );
+					if(iSca==1&&boundaryType==2){
+						dataPartition->PRINT_LOG(BPhi[bnd]);
+					}
 					break;
 				default:
 					ErrorStop("no such bid");
@@ -582,7 +586,19 @@ void NavierStokesSolver::BuildScalarMatrix( int iSca, double *Phi,double *BPhi,d
 		
 		// central cell coef is stored for later use
 		
-		app   /= URF[5];  // relaxation
+		double urf = 0.0;
+		switch(iSca){
+		case 1://t
+			urf = URF[4];	
+			break;
+		case 2://te
+			urf = URF[5];	
+		case 3://ed
+			urf = URF[6];	
+		default:
+			assert(false);
+		}
+		app   /= urf;  // relaxation
 
 
 		PetscInt row = Cell[i].globalIdx;

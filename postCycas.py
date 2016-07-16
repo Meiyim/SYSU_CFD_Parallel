@@ -41,10 +41,10 @@ def readBuf(directory):
     connectivity = [];
     gridDim = [];
     while True:
-        data = geofile.read(struct.calcsize('4i'));
-        rank, nProcess,nc,nv = struct.unpack('4i',data)
-        print 'processing rank: %d/%d nc: %d, nv: %d' %(rank,nProcess,nc,nv)
-        gridDim.append((nc,nv));
+        data = geofile.read(struct.calcsize('5i'));
+        rank, nProcess,nc,nf,nv = struct.unpack('5i',data)
+        print 'processing rank: %d/%d nc: %d,nf: %d, nv: %d' %(rank,nProcess,nc,nf,nv)
+        gridDim.append((nc,nf,nv));
         _grid = np.zeros((nv,3));
         for i in range(0,nv):
             data = geofile.read(struct.calcsize('3d'));
@@ -68,23 +68,31 @@ def readBuf(directory):
     #process data file
     datafile = open(directory+'data','rb')
     fluidData = [] 
+    solidData = [] 
     rank = 0;
     while True:
-        data = datafile.read(struct.calcsize('2i'));
-        rank,nvar = struct.unpack('2i',data);
-        print 'processing rank: %d nvar:%d' % (rank,nvar)
+        data = datafile.read(struct.calcsize('3i'));
+        rank,nvarF,nvarS = struct.unpack('3i',data);
+        print 'processing rank: %d nvarfluid:%d, nvarrsolid %d' % (rank,nvarF,nvarS)
         nc = gridDim[rank][0];
-        _fluidData = np.zeros((nvar,nc));
-        for i in range(0,nvar):
-            for j in range(0,nc):
+        nf = gridDim[rank][1];
+        _fluidData = np.zeros((nvarF,nf));
+        for i in range(0,nvarF):
+            for j in range(0,nf):
                 data = datafile.read(struct.calcsize('d'));
                 _fluidData[i,j], = struct.unpack('d',data);
-        #print _fluidData;
         fluidData.append(_fluidData)
+        _solidData = np.zeros((nvarS,nc-nf));
+        for i in range(0,nvarS):
+            for j in range(nf,nc):
+                data = datafile.read(struct.calcsize('d'));
+                _solidData[i,j-nf], = struct.unpack('d',data);
+        solidData.append(_solidData)
+        #print _fluidData;
         if rank == nProcess-1:
             break;
     datafile.close();
-    return gridDim, grid,connectivity,fluidData
+    return gridDim, grid,connectivity,fluidData,solidData
 
 def writeArray2File(f,array):
     for i,number in enumerate(array):
@@ -98,19 +106,30 @@ def calcMach(u,v,w):
         yield i**2 + j**2 + k**2
 
 def buildTec(directory):
-    gridDim, grid, connectivity,fluidData = readBuf(directory)
+    gridDim, grid, connectivity,fluidData,solidData = readBuf(directory)
     of = open('tec.dat','w')
     of.write('variables= "x","y","z","p","u","v","w","ro","T"')
     if fluidData[0].shape[0] >6 :
         of.write('",te","ed"')
     of.write('",Mach"\n')
+    #print fluid part...
     for rank in range(0,len(gridDim)):
-        nc, nv = gridDim[rank];
+        nc,nf, nv = gridDim[rank];
         nvar = fluidData[rank].shape[0];
-        of.write("ZONE N=%d, E=%d, VARLOCATION=([1-3]=NODAL,[4-%d]=CELLCENTERED) DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n"%(nv,nc,3+nvar+1) );
-        writeArray2File(of,grid[rank][:,0]); # x
-        writeArray2File(of,grid[rank][:,1]); # y      
-        writeArray2File(of,grid[rank][:,2]); # z       
+
+        nodePool = {};
+        icounter = 0;
+        for i in range(0,nf):
+            for connidx in connectivity[rank][i]:
+                nodePool[connidx] = icounter++
+        subgridx = filter(lambda (i,j): i in nodePool, enumerate(grid[rank][:,0]))
+        subgridy = filter(lambda (i,j): i in nodePool, enumerate(grid[rank][:,1]))
+        subgridz = filter(lambda (i,j): i in nodePool, enumerate(grid[rank][:,2]))
+
+        of.write("ZONE N=%d, E=%d, VARLOCATION=([1-3]=NODAL,[4-%d]=CELLCENTERED) DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n"%(len(subgridx),nf,3+nvar+1) );
+        writeArray2File(of,subgridx); # x
+        writeArray2File(of,subgridy); # y      
+        writeArray2File(of,subgridz); # z       
         for i in range(0,nvar):
             writeArray2File(of,fluidData[rank][i,:]);
         #calc param goes here...
@@ -119,11 +138,38 @@ def buildTec(directory):
                                     fluidData[rank][2,:])\
                        )
 
-        for i in range(0,nc):
-            for connidx in connectivity[rank][i]:
+        for i in range(0,nf):
+            for connidx in map(lambda i : nodePool[i], connectivity[rank][i]): # map to local index
                 of.write(str(connidx)+' ');
             of.write('\n')
         of.write('\n')
+
+    #print solid part...
+    for rank in range(0,len(gridDim)):
+        nc,nf, nv = gridDim[rank];
+        nvar = solidData[rank].shape[0];
+        nodePool = {};
+        icounter = 0;
+        for i in range(nf,nc):
+            for connidx in connectivity[rank][i]:
+                nodePool[connidx] = icounter++
+        subgridx = filter(lambda (i,j): i in nodePool, enumerate(grid[rank][:,0]))
+        subgridy = filter(lambda (i,j): i in nodePool, enumerate(grid[rank][:,1]))
+        subgridz = filter(lambda (i,j): i in nodePool, enumerate(grid[rank][:,2]))
+
+        of.write("ZONE N=%d, E=%d, VARLOCATION=([1-3]=NODAL,[4-%d]=CELLCENTERED) DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n"%(len(subgridx),nc-nf,3+1) );
+        writeArray2File(of,subgridx); # x
+        writeArray2File(of,subgridy); # y      
+        writeArray2File(of,subgridz); # z       
+        #for i in range(0,nvar):
+        writeArray2File(of,solidData[rank][0,:]);
+                       )
+        for i in range(nf,nc):
+            for connidx in map(lambda i : nodePool[i], connectivity[rank][i]): # map to local index
+                of.write(str(connidx)+' ');
+            of.write('\n')
+        of.write('\n')
+ 
     
     of.close()
 

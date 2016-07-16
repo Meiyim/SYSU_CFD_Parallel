@@ -217,7 +217,7 @@ void NavierStokesSolver::UpdateEnergy( )
 	for( i=0; i<Nfluid; i++ )
 	{
 		//kcond[i] = cp*(VisLam[i]/prl + VisTur[i]/prte)/cp;//only for gas i surpose
-		kcond[i] = 0.6; // water heat conductivity;
+		kcond[i] = 0.6/4200; // water heat conductivity / cp;
 	}
 
 	// part of viscous terms

@@ -27,7 +27,7 @@ void outputVTKScalar( const char name[], double arr[],int N, ofstream &of)
 
 
 void NavierStokesSolver::OutputGridBinary(){
-	size_t numberofInt = 8*Ncel+4; //partition info 3
+	size_t numberofInt = 8*Ncel+5; //partition info 3
 	size_t numberofDouble = 3*Nvrt;
 	size_t bufferSize = sizeof(int)*numberofInt + sizeof(double)*numberofDouble;
 	char* buffer = new char[bufferSize];
@@ -35,7 +35,8 @@ void NavierStokesSolver::OutputGridBinary(){
 	_ptr[0] = dataPartition->comRank;
 	_ptr[1] = dataPartition->nProcess;
 	_ptr[2] = Ncel;
-	_ptr[3] = Nvrt;
+	_ptr[3] = Nfluid;
+	_ptr[4] = Nvrt;
 
 	double* _dptr = (double*)(buffer+4*sizeof(int));
 	for(int i=0;i!=Nvrt;++i)
@@ -123,32 +124,43 @@ void NavierStokesSolver::OutputGrid(const string& title,int type,int N)
 	//PetscPrintf(dataPartition->comm,"complete writing grid.dat\n");
 }
 
-void OutArray2Buffer(const double* val, double* buffer,int& iptr,int N){
-	for(int i=0;i!=N;++i)
+void OutArray2Buffer(const double* val, double* buffer,int& iptr,int first,int N){
+	for(int i=first;i!=N;++i)
 		buffer[iptr+i] = val[i];
 	iptr+=N;
 }
 
 void NavierStokesSolver::Output2TecplotBinary(){
 	PetscPrintf(dataPartition->comm,"*****************************    OUTPUT TECPLOT   *********************************\n");
-	size_t bufferSize = 2 * sizeof(int) + field->nVar*Ncel*sizeof(double);
-	char* buffer = new char[bufferSize];
+	size_t solidVar = 0;
+	size_t bufferSize = 3 * sizeof(int) + field->nVar*Nfluid*sizeof(double);
+	size_t solidBufferSize = 0;
+	if(SolveConjungateHeat){
+		solidVar =  1;
+		solidBufferSize = (Ncel-Nfluid)*sizeof(double);
+	}
+	char* buffer = new char[bufferSize + solidBufferSize];
 	int* ptr = (int*)buffer;
 	ptr[0] = dataPartition->comRank;
 	ptr[1] = field->nVar;
-	double* dptr = (double*)(buffer+2*sizeof(int));
+	ptr[2] = solidVar;
+	double* dptr = (double*)(buffer+3*sizeof(int));
 	int iptr = 0;
-	OutArray2Buffer(Pn,dptr,iptr,Ncel);	
-	OutArray2Buffer(Un,dptr,iptr,Ncel);	
-	OutArray2Buffer(Vn,dptr,iptr,Ncel);	
-	OutArray2Buffer(Wn,dptr,iptr,Ncel);	
-	OutArray2Buffer(Rn,dptr,iptr,Ncel);	
-	OutArray2Buffer(Tn,dptr,iptr,Ncel);	
+	OutArray2Buffer(Pn,dptr,iptr,0,Nfluid);	
+	OutArray2Buffer(Un,dptr,iptr,0,Nfluid);	
+	OutArray2Buffer(Vn,dptr,iptr,0,Nfluid);	
+	OutArray2Buffer(Wn,dptr,iptr,0,Nfluid);	
+	OutArray2Buffer(Rn,dptr,iptr,0,Nfluid);	
+	OutArray2Buffer(Tn,dptr,iptr,0,Nfluid);	
 	if(TurModel==1){
-		OutArray2Buffer(TE,dptr,iptr,Ncel);
-		OutArray2Buffer(ED,dptr,iptr,Ncel);
+		OutArray2Buffer(TE,dptr,iptr,0,Nfluid);
+	       	OutArray2Buffer(ED,dptr,iptr,0,Nfluid);
 	}
-	assert(iptr==Ncel*field->nVar);
+	assert(iptr==Nfluid*field->nVar);
+
+	if(SolveConjungateHeat){//only 1 solid var
+	       	OutArray2Buffer(Tn,dptr,iptr,Nfluid,Ncel);
+	}
 	ofstream of;
 	of.open("tec/data",ios::binary);
 	/*****************MPI PARALLEL I/O APIs*************************/
@@ -159,6 +171,7 @@ void NavierStokesSolver::Output2TecplotBinary(){
 }
 
 void NavierStokesSolver::Output2Tecplot()
+
 {
 	PetscPrintf(dataPartition->comm,"*****************************    OUTPUT TECPLOT   *********************************\n");
 

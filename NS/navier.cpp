@@ -589,6 +589,8 @@ void NavierStokesSolver::readyToSolve(){  // call right befor NS Loop
 		root.writeMonitorFile(dataPartition,"\n");
 	}
 	MPI_Barrier(dataPartition->comm);
+	//Init binary out geometry part;
+	OutputGridBinary();
 
 }
 

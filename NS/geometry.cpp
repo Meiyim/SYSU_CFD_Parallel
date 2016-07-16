@@ -225,9 +225,7 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
         dataPartition->nGlobal -= dataPartition->nGlobalSolid;
     }
 
-    if(shouldOutputBinary){
-        OutputGridBinary();
-    }else{
+    if(!shouldOutputBinary){
         OutputGrid("tec/grid.dat",0,dataPartition->nLocal); //output tecplot: grid.dat
         OutputGrid("tec/grid_solid.dat",1,dataPartition->nLocalSolid); //output tecplot: grid.dat
     }

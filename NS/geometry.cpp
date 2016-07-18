@@ -210,6 +210,7 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
     //configure solid part
     if(SolveConjungateHeat){
         int _nglobalsolid = 0;
+	dataPartition->nLocalSolid=0;
         for(int i=0;i!=Ncel;++i){
             if(regionMap[ Cell[i].rid ].type1 == 5 && regionMap[Cell[i].rid].type2== 0 ){
                 //pass
@@ -221,7 +222,7 @@ int NavierStokesSolver::ReadGridFile(int* elementBuffer,double* vertexBuffer,int
                 assert(false);
             }
         }  
-        MPI_Allreduce(&_nglobalsolid,&(dataPartition->nGlobalSolid),1,MPI_DOUBLE,MPI_SUM,dataPartition->comm);
+        MPI_Allreduce(&_nglobalsolid,&(dataPartition->nGlobalSolid),1,MPI_INT,MPI_SUM,dataPartition->comm);
         dataPartition->nGlobal -= dataPartition->nGlobalSolid;
     }
 

@@ -590,7 +590,9 @@ void NavierStokesSolver::readyToSolve(){  // call right befor NS Loop
 	}
 	MPI_Barrier(dataPartition->comm);
 	//Init binary out geometry part;
-	OutputGridBinary();
+	if(shouldOutputBinary){
+		OutputGridBinary();
+	}
 
 }
 

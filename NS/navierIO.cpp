@@ -38,12 +38,12 @@ void NavierStokesSolver::OutputGridBinary(){
 	_ptr[3] = Nfluid;
 	_ptr[4] = Nvrt;
 
-	double* _dptr = (double*)(buffer+4*sizeof(int));
+	double* _dptr = (double*)(buffer+5*sizeof(int));
 	for(int i=0;i!=Nvrt;++i)
 		for(int j=0;j!=3;++j)
 			_dptr[i*3+j] = Vert[i][j];
 
-	_ptr = (int*)(buffer + 4*sizeof(int)+ + 3*Nvrt*sizeof(double));
+	_ptr = (int*)(buffer + 5*sizeof(int)+ + 3*Nvrt*sizeof(double));
 	for(int i=0;i!=Ncel;++i)
 		for(int j=0;j!=8;++j)
 			_ptr[i*8+j] = Cell[i].vertices[j] + 1;
@@ -126,20 +126,20 @@ void NavierStokesSolver::OutputGrid(const string& title,int type,int N)
 
 void OutArray2Buffer(const double* val, double* buffer,int& iptr,int first,int N){
 	for(int i=first;i!=N;++i)
-		buffer[iptr+i] = val[i];
-	iptr+=N;
+		buffer[iptr+i-first] = val[i];
+	iptr+=(N-first);
 }
+
 
 void NavierStokesSolver::Output2TecplotBinary(){
 	PetscPrintf(dataPartition->comm,"*****************************    OUTPUT TECPLOT   *********************************\n");
 	size_t solidVar = 0;
 	size_t bufferSize = 3 * sizeof(int) + field->nVar*Nfluid*sizeof(double);
-	size_t solidBufferSize = 0;
 	if(SolveConjungateHeat){
 		solidVar =  1;
-		solidBufferSize = (Ncel-Nfluid)*sizeof(double);
+		bufferSize+=(Ncel-Nfluid)*sizeof(double);
 	}
-	char* buffer = new char[bufferSize + solidBufferSize];
+	char* buffer = new char[bufferSize];
 	int* ptr = (int*)buffer;
 	ptr[0] = dataPartition->comRank;
 	ptr[1] = field->nVar;
@@ -161,6 +161,8 @@ void NavierStokesSolver::Output2TecplotBinary(){
 	if(SolveConjungateHeat){//only 1 solid var
 	       	OutArray2Buffer(Tn,dptr,iptr,Nfluid,Ncel);
 	}
+	assert(iptr==Nfluid*field->nVar+Ncel-Nfluid);
+	assert(iptr*sizeof(double) == bufferSize - 3*sizeof(int));
 	ofstream of;
 	of.open("tec/data",ios::binary);
 	/*****************MPI PARALLEL I/O APIs*************************/

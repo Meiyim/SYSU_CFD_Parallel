@@ -161,6 +161,8 @@ def buildTec(directory):
     #print solid part...
     for rank in range(0,len(gridDim)):
         nc,nf, nv = gridDim[rank];
+        if nc==nf:
+            continue
         nvar = fluidData[rank].shape[0];
         nodePool = {};
         for i in range(nf,nc):
